@@ -265,7 +265,7 @@ namespace ClassicUO.Game.Managers
             if (World.Instance.Player?.FindItemByGraphic(BandageGraphic) is { } bandage)
                 return bandage;
 
-            return World.Instance.Player?.FindBandage();
+            return World.Instance.Player?.FindBandage(BandageGraphic);
         }
 
         /// <summary>
