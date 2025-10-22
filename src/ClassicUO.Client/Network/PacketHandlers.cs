@@ -6840,12 +6840,7 @@ sealed class PacketHandlers
             return null;
         }
 
-        Gump gump = UIManager.GetGumpServer(gumpID);
-        if (gump != null && gump.LocalSerial == sender)
-        {
-            gump.Dispose();
-            gump = null;
-        }
+        UIManager.GetGumpServer(gumpID)?.Dispose();
 
         bool mustBeAdded = true;
 
@@ -6859,19 +6854,17 @@ sealed class PacketHandlers
             UIManager.SavePosition(gumpID, new Point(x, y));
         }
 
-        if (gump == null)
+        Gump gump = new Gump(world, sender, gumpID)
         {
-            gump = new Gump(world, sender, gumpID)
-            {
-                X = x,
-                Y = y,
-                CanMove = true,
-                CanCloseWithRightClick = true,
-                CanCloseWithEsc = true,
-                InvalidateContents = false,
-                IsFromServer = true
-            };
-        }
+            X = x,
+            Y = y,
+            CanMove = true,
+            CanCloseWithRightClick = true,
+            CanCloseWithEsc = true,
+            InvalidateContents = false,
+            IsFromServer = true
+        };
+
         StringBuilder gumpTextBuilder = new StringBuilder(string.Join("\n", lines));
 
         int group = 0;
