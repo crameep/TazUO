@@ -36,10 +36,7 @@ public class SpellRangeInfo
 
     public SpellRangeInfo() { }
 
-    public static SpellRangeInfo FromSpellDef(SpellDefinition spell)
-    {
-        return new SpellRangeInfo() { ID = spell.ID, Name = spell.Name, PowerWords = spell.PowerWords };
-    }
+    public static SpellRangeInfo FromSpellDef(SpellDefinition spell) => new SpellRangeInfo() { ID = spell.ID, Name = spell.Name, PowerWords = spell.PowerWords };
 
     /// <summary>
     /// Calculates the effective cast time for this spell, accounting for the player's Faster Casting stat

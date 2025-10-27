@@ -26,7 +26,7 @@ public class CastTimerProgressBar : Gump
         CanCloseWithEsc = false;
         CanCloseWithRightClick = false;
 
-        ref readonly var gi = ref Client.Game.UO.Gumps.GetGump(0x0805);
+        ref readonly SpriteInfo gi = ref Client.Game.UO.Gumps.GetGump(0x0805);
         background = gi.Texture;
         barBounds = gi.UV;
 

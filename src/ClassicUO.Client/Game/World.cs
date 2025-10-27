@@ -663,9 +663,7 @@ namespace ClassicUO.Game
             bool doesExplode,
             bool hasparticles,
             GraphicEffectBlendMode blendmode
-        )
-        {
-            _effectManager.CreateEffect
+        ) => _effectManager.CreateEffect
             (
                 type,
                 source,
@@ -685,7 +683,6 @@ namespace ClassicUO.Game
                 hasparticles,
                 blendmode
             );
-        }
 
         public uint FindNearest(ScanTypeObject scanType)
         {
@@ -759,7 +756,7 @@ namespace ClassicUO.Game
 
             if (scanType == ScanTypeObject.Objects)
             {
-                var items = reverse ? Items.Values.Reverse() : Items.Values;
+                IEnumerable<Item> items = reverse ? Items.Values.Reverse() : Items.Values;
                 foreach (Item item in items)
                 {
                     if (item.IsMulti || item.IsDestroyed || !item.OnGround)

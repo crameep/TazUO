@@ -319,7 +319,7 @@ namespace ClassicUO.Game.Scenes
 
         private void OnLoadingGumpButtonClick(int buttonId)
         {
-            LoginButtons butt = (LoginButtons)buttonId;
+            var butt = (LoginButtons)buttonId;
 
             if (butt == LoginButtons.OK || butt == LoginButtons.Cancel)
             {
@@ -349,10 +349,7 @@ namespace ClassicUO.Game.Scenes
             }
         }
 
-        public int GetServerIndexByName(string name)
-        {
-            return LoginHandshake.Instance.GetServerIndexByName(name);
-        }
+        public int GetServerIndexByName(string name) => LoginHandshake.Instance.GetServerIndexByName(name);
 
         public int GetServerIndexFromSettings()
         {
@@ -466,10 +463,7 @@ namespace ClassicUO.Game.Scenes
             }
         }
 
-        public CityInfo GetCity(int index)
-        {
-            return LoginHandshake.Instance.GetCity(index);
-        }
+        public CityInfo GetCity(int index) => LoginHandshake.Instance.GetCity(index);
 
         private void UpdateCharacterList()
         {

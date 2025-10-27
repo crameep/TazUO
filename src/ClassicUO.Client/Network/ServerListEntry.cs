@@ -21,7 +21,7 @@ public class ServerListEntry
 
     public static ServerListEntry Create(ref StackDataReader p)
     {
-        ServerListEntry entry = new ServerListEntry()
+        var entry = new ServerListEntry()
         {
             Index = p.ReadUInt16BE(),
             Name = p.ReadASCII(32, true),

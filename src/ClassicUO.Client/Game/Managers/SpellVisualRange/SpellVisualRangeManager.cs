@@ -73,30 +73,24 @@ namespace ClassicUO.Game.Managers
             spellRangePowerWordCache[info.PowerWords] = info;
         }
 
-        private void OnRawMessageReceived(object sender, MessageEventArgs e)
-        {
-            Task.Run(() =>
-            {
-                if (loaded && e.Parent != null && ReferenceEquals(e.Parent, World.Player))
-                {
-                    if (spellRangePowerWordCache.TryGetValue(e.Text.Trim(), out SpellRangeInfo spell))
-                    {
-                        SetCasting(spell);
-                    }
-                }
-            });
-        }
+        private void OnRawMessageReceived(object sender, MessageEventArgs e) => Task.Run(() =>
+                                                                                         {
+                                                                                             if (loaded && e.Parent != null && ReferenceEquals(e.Parent, World.Player))
+                                                                                             {
+                                                                                                 if (spellRangePowerWordCache.TryGetValue(e.Text.Trim(), out SpellRangeInfo spell))
+                                                                                                 {
+                                                                                                     SetCasting(spell);
+                                                                                                 }
+                                                                                             }
+                                                                                         });
 
-        public void OnClilocReceived(int cliloc)
-        {
-            Task.Factory.StartNew(() =>
-            {
-                if (isCasting && stopAtClilocs.Contains(cliloc))
-                {
-                    ClearCasting();
-                }
-            });
-        }
+        public void OnClilocReceived(int cliloc) => Task.Factory.StartNew(() =>
+                                                             {
+                                                                 if (isCasting && stopAtClilocs.Contains(cliloc))
+                                                                 {
+                                                                     ClearCasting();
+                                                                 }
+                                                             });
 
         private void SetCasting(SpellRangeInfo spell)
         {
@@ -120,16 +114,10 @@ namespace ClassicUO.Game.Managers
             World.Player.Flags &= ~Flags.Frozen;
         }
 
-        public SpellRangeInfo GetCurrentSpell()
-        {
-            return currentSpell;
-        }
+        public SpellRangeInfo GetCurrentSpell() => currentSpell;
 
         #region Load and unload
-        public void OnSceneLoad()
-        {
-            EventSink.RawMessageReceived += OnRawMessageReceived;
-        }
+        public void OnSceneLoad() => EventSink.RawMessageReceived += OnRawMessageReceived;
 
         public void OnSceneUnload()
         {
@@ -258,15 +246,15 @@ namespace ClassicUO.Game.Managers
                 if (!File.Exists(savePath))
                 {
                     //CreateAndLoadDataFile();
-                    var assembly = GetType().Assembly;
+                    System.Reflection.Assembly assembly = GetType().Assembly;
 
-                    var resourceName = "ClassicUO.Game.Managers.DefaultSpellIndicatorConfig.json";
+                    string resourceName = "ClassicUO.Game.Managers.DefaultSpellIndicatorConfig.json";
 
                     try
                     {
                         using Stream stream = assembly.GetManifestResourceStream(resourceName);
 
-                        using StreamReader reader = new StreamReader(stream);
+                        using var reader = new StreamReader(stream);
 
                         LoadFromString(reader.ReadToEnd());
                     }
@@ -287,7 +275,7 @@ namespace ClassicUO.Game.Managers
                         string data = File.ReadAllText(savePath);
                         SpellRangeInfo[] fileData = JsonSerializer.Deserialize(data, SpellRangeInfoJsonContext.Default.SpellRangeInfoArray);
 
-                        foreach (var entry in fileData)
+                        foreach (SpellRangeInfo entry in fileData)
                         {
                             spellRangeCache.Add(entry.ID, entry);
                         }
@@ -316,16 +304,16 @@ namespace ClassicUO.Game.Managers
                     string data = File.ReadAllText(overridePath);
                     SpellRangeInfo[] fileData = JsonSerializer.Deserialize(data, SpellRangeInfoJsonContext.Default.SpellRangeInfoArray);
 
-                    foreach (var entry in fileData)
+                    foreach (SpellRangeInfo entry in fileData)
                     {
                         spellRangeOverrideCache.Add(entry.ID, entry);
                     }
 
-                    foreach (var entry in spellRangeOverrideCache.Values)
+                    foreach (SpellRangeInfo entry in spellRangeOverrideCache.Values)
                     {
                         if (string.IsNullOrEmpty(entry.PowerWords))
                         {
-                            SpellDefinition spellD = SpellDefinition.FullIndexGetSpell(entry.ID);
+                            var spellD = SpellDefinition.FullIndexGetSpell(entry.ID);
                             if (spellD == SpellDefinition.EmptySpell)
                             {
                                 SpellDefinition.TryGetSpellFromName(entry.Name, out spellD);
@@ -365,7 +353,7 @@ namespace ClassicUO.Game.Managers
                 loaded = false;
                 spellRangeCache.Clear();
 
-                foreach (var entry in fileData)
+                foreach (SpellRangeInfo entry in fileData)
                 {
                     spellRangeCache.Add(entry.ID, entry);
                 }
@@ -385,11 +373,11 @@ namespace ClassicUO.Game.Managers
         private void AfterLoad()
         {
             spellRangePowerWordCache.Clear();
-            foreach (var entry in spellRangeCache.Values)
+            foreach (SpellRangeInfo entry in spellRangeCache.Values)
             {
                 if (string.IsNullOrEmpty(entry.PowerWords))
                 {
-                    SpellDefinition spellD = SpellDefinition.FullIndexGetSpell(entry.ID);
+                    var spellD = SpellDefinition.FullIndexGetSpell(entry.ID);
                     if (spellD == SpellDefinition.EmptySpell)
                     {
                         SpellDefinition.TryGetSpellFromName(entry.Name, out spellD);
@@ -410,35 +398,35 @@ namespace ClassicUO.Game.Managers
 
         private void CreateAndLoadDataFile()
         {
-            foreach (var entry in SpellsMagery.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsMagery.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsNecromancy.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsNecromancy.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsChivalry.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsChivalry.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsBushido.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsBushido.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsNinjitsu.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsNinjitsu.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsSpellweaving.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsSpellweaving.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsMysticism.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsMysticism.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }
-            foreach (var entry in SpellsMastery.GetAllSpells)
+            foreach (KeyValuePair<int, SpellDefinition> entry in SpellsMastery.GetAllSpells)
             {
                 spellRangeCache.Add(entry.Value.ID, SpellRangeInfo.FromSpellDef(entry.Value));
             }

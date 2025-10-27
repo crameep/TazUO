@@ -13,19 +13,13 @@ public static class MainThreadQueue
     /// <summary>
     /// Must be called from main thread
     /// </summary>
-    public static void Load()
-    {
-        _threadId = Thread.CurrentThread.ManagedThreadId;
-    }
+    public static void Load() => _threadId = Thread.CurrentThread.ManagedThreadId;
 
     /// <summary>
     /// This will not wait for the action to complete.
     /// </summary>
     /// <param name="action"></param>
-    public static void EnqueueAction(Action action)
-    {
-        _queuedActions.Enqueue(action);
-    }
+    public static void EnqueueAction(Action action) => _queuedActions.Enqueue(action);
 
     /// <summary>
     /// This will wait for the returned result.
@@ -72,7 +66,7 @@ public static class MainThreadQueue
     /// </summary>
     public static void ProcessQueue()
     {
-        while (_queuedActions.TryDequeue(out var action))
+        while (_queuedActions.TryDequeue(out Action action))
         {
             action();
         }
