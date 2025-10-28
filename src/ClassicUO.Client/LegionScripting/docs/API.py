@@ -463,6 +463,7 @@ class PyStatic:
     IsImpassible: bool = None
     IsTree: bool = None
     IsVegetation: bool = None
+    IsCave: bool = None
     Name: str = None
     __class__: str = None
 
