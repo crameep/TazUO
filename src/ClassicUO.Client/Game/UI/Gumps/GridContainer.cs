@@ -46,6 +46,7 @@ using System.Linq;
 using System.Xml;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -552,7 +553,7 @@ namespace ClassicUO.Game.UI.Gumps
             if (autoSortContainer)
                 overrideSort = true;
 
-            List<Item> sortedContents = ProfileManager.CurrentProfile is null || ProfileManager.CurrentProfile.GridContainerSearchMode == 0
+            List<Item> sortedContents = (ProfileManager.CurrentProfile is null || ProfileManager.CurrentProfile.GridContainerSearchMode == 0) && !string.IsNullOrEmpty(searchBox.Text)
                 ? SlotManager.SearchResults(searchBox.Text)
                 : GridSlotManager.GetItemsInContainer(World, container, sortMode, overrideSort);
 
@@ -687,7 +688,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (SlotManager != null)
             {
-                SlotManager.UpdateItems();
                 containerName += $" ({SlotManager.ContainerContents.Count})";
             }
 
@@ -1731,17 +1731,17 @@ namespace ClassicUO.Game.UI.Gumps
                 return false;
             }
 
-            public void UpdateItems() => containerContents = GetItemsInContainer(world, container, gridContainer.SortMode, gridContainer.AutoSortContainer);
+            private void UpdateItems() => containerContents = GetItemsInContainer(world, container, gridContainer.SortMode, gridContainer.AutoSortContainer);
 
-            public static List<Item> GetItemsInContainer(World World, Item _container, GridSortMode sortMode = GridSortMode.GraphicAndHue, bool shouldSort = true)
+            public static List<Item> GetItemsInContainer(World world, Item container, GridSortMode sortMode = GridSortMode.GraphicAndHue, bool shouldSort = true)
             {
                 var contents = new List<Item>();
-                for (LinkedObject i = _container.Items; i != null; i = i.Next)
+                for (LinkedObject i = container.Items; i != null; i = i.Next)
                 {
                     var item = (Item)i;
                     var layer = (Layer)item.ItemData.Layer;
 
-                    if (_container.IsCorpse && item.Layer > 0 && !Constants.BAD_CONTAINER_LAYERS[(int)layer])
+                    if (container.IsCorpse && item.Layer > 0 && !Constants.BAD_CONTAINER_LAYERS[(int)layer])
                         continue;
 
                     if (item.ItemData.IsWearable && (layer == Layer.Face || layer == Layer.Beard || layer == Layer.Hair))
@@ -1750,7 +1750,7 @@ namespace ClassicUO.Game.UI.Gumps
                     if (item.IsDestroyed)
                         continue;
 
-                    World.OPL.Contains(item); //Request tooltip data
+                    world.OPL.Contains(item); //Request tooltip data
 
                     contents.Add(item);
                 }
