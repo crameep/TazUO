@@ -372,7 +372,10 @@ namespace ClassicUO.Game.Scenes
 
         public void SelectServer(byte index)
         {
-            if (Servers != null && Servers.Length > 0)
+            if (Servers == null || index < 0 || index >= Servers.Length)
+                return;
+
+            if (Servers is { Length: > 0 })
             {
                 _world.ServerName = Servers[index].Name;
             }
