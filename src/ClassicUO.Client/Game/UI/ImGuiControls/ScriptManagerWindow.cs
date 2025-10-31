@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Game.UI.ImGuiControls.Legion;
 using ClassicUO.Input;
 using ClassicUO.LegionScripting;
 using ClassicUO.Utility.Logging;
@@ -793,6 +794,9 @@ while True:
         {
             ImGui.Text(script.FileName);
             ImGui.SeparatorText("Options:");
+
+            if(ImGui.MenuItem("Edit Constants"))
+                ImGuiManager.AddWindow(new ScriptConstantsEditorWindow(script));
 
             if (ImGui.MenuItem("Rename"))
             {

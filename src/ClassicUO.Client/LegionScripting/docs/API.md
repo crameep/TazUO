@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `10/28/25`.*
+*This was generated on `10/30/25`.*
 
 ## Properties
 ### `JournalEntries`
