@@ -65,7 +65,320 @@ class Events:
         """
         pass
 
+class Gumps:
+
+    def CreateGump(self, acceptMouseInput: bool = True, canMove: bool = True, keepOpen: bool = False) -> PyBaseGump:
+        """
+         Get a blank gump.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         g.Add(API.CreateGumpLabel("Hello World!"))
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateModernGump(self, x: int, y: int, width: int, height: int, resizable: bool = True, minWidth: int = 50, minHeight: int = 50, onResized: Any = None) -> PyNineSliceGump:
+        """
+         Creates a modern nine-slice gump using ModernUIConstants for consistent styling.
+         The gump uses the standard modern UI panel texture and border size internally.
+        
+        """
+        pass
+
+    def AddGump(self, g: Any) -> None:
+        """
+         Add a gump to the players screen.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         g.Add(API.CreateGumpLabel("Hello World!"))
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpCheckbox(self, text: str = "", hue: int = 0, isChecked: bool = False) -> PyCheckbox:
+        """
+         Create a checkbox for gumps.
+          Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         cb = API.CreateGumpCheckbox("Check me?!")
+         g.Add(cb)
+         API.AddGump(g)
+        
+         API.SysMsg("Checkbox checked: " + str(cb.IsChecked))
+         ```
+        
+        """
+        pass
+
+    def CreateGumpLabel(self, text: str, hue: int = 996) -> PyLabel:
+        """
+         Create a label for a gump.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         g.Add(API.CreateGumpLabel("Hello World!"))
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpColorBox(self, opacity: float = 0.7, color: str = "#000000") -> PyAlphaBlendControl:
+        """
+         Get a transparent color box for gumps.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         cb = API.CreateGumpColorBox(0.5, "#000000")
+         cb.SetWidth(200)
+         cb.SetHeight(200)
+         g.Add(cb)
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpItemPic(self, graphic: int, width: int, height: int) -> PyResizableStaticPic:
+        """
+         Create a picture of an item.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         g.Add(API.CreateGumpItemPic(0x0E78, 50, 50))
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpButton(self, text: str = "", hue: int = 996, normal: int = 0x00EF, pressed: int = 0x00F0, hover: int = 0x00EE) -> PyButton:
+        """
+         Create a button for gumps.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         button = API.CreateGumpButton("Click Me!")
+         g.Add(button)
+         API.AddGump(g)
+        
+         while True:
+           API.SysMsg("Button currently clicked?: " + str(button.IsClicked))
+           API.SysMsg("Button clicked since last check?: " + str(button.HasBeenClicked()))
+           API.Pause(0.2)
+         ```
+        
+        """
+        pass
+
+    def CreateSimpleButton(self, text: str, width: int, height: int) -> PyNiceButton:
+        """
+         Create a simple button, does not use graphics.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         button = API.CreateSimpleButton("Click Me!", 100, 20)
+         g.Add(button)
+         API.AddGump(g)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpRadioButton(self, text: str = "", group: int = 0, inactive: int = 0x00D0, active: int = 0x00D1, hue: int = 0xFFFF, isChecked: bool = False) -> PyRadioButton:
+        """
+         Create a radio button for gumps, use group numbers to only allow one item to be checked at a time.
+         Example:
+         ```py
+         g = API.CreateGump()
+         g.SetRect(100, 100, 200, 200)
+         rb = API.CreateGumpRadioButton("Click Me!", 1)
+         g.Add(rb)
+         API.AddGump(g)
+         API.SysMsg("Radio button checked?: " + str(rb.IsChecked))
+         ```
+        
+        """
+        pass
+
+    def CreateGumpTextBox(self, text: str = "", width: int = 200, height: int = 30, multiline: bool = False) -> PyTTFTextInputField:
+        """
+         Create a text area control.
+         Example:
+         ```py
+         w = 500
+         h = 600
+        
+         gump = API.CreateGump(True, True)
+         gump.SetWidth(w)
+         gump.SetHeight(h)
+         gump.CenterXInViewPort()
+         gump.CenterYInViewPort()
+        
+         bg = API.CreateGumpColorBox(0.7, "#D4202020")
+         bg.SetWidth(w)
+         bg.SetHeight(h)
+        
+         gump.Add(bg)
+        
+         textbox = API.CreateGumpTextBox("Text example", w, h, True)
+        
+         gump.Add(textbox)
+        
+         API.AddGump(gump)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpTTFLabel(self, text: str, size: float, color: str = "#FFFFFF", font: str = TrueTypeLoader.EMBEDDED_FONT, aligned: str = "let", maxWidth: int = 0, applyStroke: bool = False) -> PyTextBox:
+        """
+         Create a TTF label with advanced options.
+         Example:
+         ```py
+         gump = API.CreateGump()
+         gump.SetRect(100, 100, 200, 200)
+        
+         ttflabel = API.CreateGumpTTFLabel("Example label", 25, "#F100DD", "alagard")
+         ttflabel.SetRect(10, 10, 180, 30)
+         gump.Add(ttflabel)
+        
+         API.AddGump(gump) #Add the gump to the players screen
+         ```
+        
+        """
+        pass
+
+    def CreateGumpSimpleProgressBar(self, width: int, height: int, backgroundColor: str = "#616161", foregroundColor: str = "#212121", value: int = 100, max: int = 100) -> PySimpleProgressBar:
+        """
+         Create a progress bar. Can be updated as needed with `bar.SetProgress(current, max)`.
+         Example:
+         ```py
+         gump = API.CreateGump()
+         gump.SetRect(100, 100, 400, 200)
+        
+         pb = API.CreateGumpSimpleProgressBar(400, 200)
+         gump.Add(pb)
+        
+         API.AddGump(gump)
+        
+         cur = 0
+         max = 100
+        
+         while True:
+           pb.SetProgress(cur, max)
+           if cur >= max:
+           break
+           cur += 1
+           API.Pause(0.5)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpScrollArea(self, x: int, y: int, width: int, height: int) -> PyScrollArea:
+        """
+         Create a scrolling area, add and position controls to it directly.
+         Example:
+         ```py
+         sa = API.CreateGumpScrollArea(0, 60, 200, 140)
+         gump.Add(sa)
+        
+         for i in range(10):
+             label = API.CreateGumpTTFLabel(f"Label {i + 1}", 20, "#FFFFFF", "alagard")
+             label.SetRect(5, i * 20, 180, 20)
+             sa.Add(label)
+         ```
+        
+        """
+        pass
+
+    def CreateGumpPic(self, graphic: int, x: int = 0, y: int = 0, hue: int = 0) -> PyGumpPic:
+        """
+         Create a gump pic(Use this for gump art, not item art)
+         Example:
+         ```py
+         gumpPic = API.CreateGumpPic(0xafb)
+         gump.Add(gumpPic)
+        
+        """
+        pass
+
+    def CreateDropDown(self, width: int, items: list[str], selectedIndex: int = 0) -> PyControlDropDown:
+        """
+         Creates a dropdown control (combobox) with the specified width and items.
+        
+        """
+        pass
+
+    def AddControlOnClick(self, control: Any, onClick: Any, leftOnly: bool = True) -> Any:
+        """
+         Add an onClick callback to a control.
+         Example:
+         ```py
+         def myfunc:
+           API.SysMsg("Something clicked!")
+         bg = API.CreateGumpColorBox(0.7, "#D4202020")
+         API.AddControlOnClick(bg, myfunc)
+         while True:
+           API.ProcessCallbacks()
+         ```
+        
+        """
+        pass
+
+    def AddControlOnDisposed(self, control: PyBaseControl, onDispose: Any) -> PyBaseControl:
+        """
+         Add onDispose(Closed) callback to a control.
+         Example:
+         ```py
+         def onClose():
+             API.Stop()
+        
+         gump = API.CreateGump()
+         gump.SetRect(100, 100, 200, 200)
+        
+         bg = API.CreateGumpColorBox(opacity=0.7, color="#000000")
+         gump.Add(bg.SetRect(0, 0, 200, 200))
+        
+         API.AddControlOnDisposed(gump, onClose)
+         ```
+        
+        """
+        pass
+
+class PyAlphaBlendControl:
+    Hue: int = None
+    Alpha: float = None
+    BaseColorR: int = None
+    BaseColorG: int = None
+    BaseColorB: int = None
+    BaseColorA: int = None
+
+    def SetBaseColor(self, r: int, g: int, b: int, a: int = 255) -> None:
+        """
+         Sets the base color of the alpha blend control using RGBA values (0-255)
+        
+        """
+        pass
+
 class PyBaseControl:
+    CanMove: bool = None
     IsVisible: bool = None
 
     def Add(self, childControl: Any) -> None:
@@ -204,6 +517,21 @@ class PyBaseGump:
         """
         pass
 
+class PyButton:
+    ButtonID: int = None
+    IsClicked: bool = None
+    ButtonAction: int = None
+    ToPage: int = None
+    ButtonGraphicNormal: int = None
+    ButtonGraphicPressed: int = None
+    ButtonGraphicOver: int = None
+    Hue: int = None
+    FontCenter: bool = None
+    ContainsByBounds: bool = None
+
+    def HasBeenClicked(self) -> bool:
+        pass
+
 class PyCheckbox:
     IsChecked: bool = None
     Text: str = None
@@ -303,6 +631,12 @@ class PyGameObject:
         """
         pass
 
+class PyGumpPic:
+    Graphic: int = None
+    Hue: int = None
+    IsPartialHue: bool = None
+    ContainsByBounds: bool = None
+
 class PyItem:
     Amount: int = None
     Opened: bool = None
@@ -322,6 +656,10 @@ class PyJournalEntry:
     Time: datetime = None
     MessageType = None
     Disposed: bool = None
+
+class PyLabel:
+    Text: str = None
+    Hue: int = None
 
 class PyLand:
     __class__: str = None
@@ -350,6 +688,30 @@ class PyMobile:
 
 class PyMulti:
     __class__: str = None
+
+class PyNiceButton:
+    ButtonParameter: int = None
+    IsSelectable: bool = None
+    IsSelected: bool = None
+    DisplayBorder: bool = None
+    AlwaysShowBackground: bool = None
+    Text: str = None
+    TextHue: int = None
+    BackgroundHue: int = None
+
+    def SetBackgroundColor(self, r: int | None, g: int | None, b: int | None, a: int | None = 255) -> None:
+        """
+         Sets the background color of the button. Pass null to clear.
+        
+        """
+        pass
+
+    def ClearBackgroundColor(self) -> None:
+        """
+         Clears the background color of the button.
+        
+        """
+        pass
 
 class PyNineSliceGump:
     NineSliceGump = None
@@ -471,7 +833,42 @@ class PyProfile:
     MoveItemDelay: int = None
     AutoLootEnabled: bool = None
 
+class PyRadioButton:
+    GroupIndex: int = None
+
+    def GetGroupIndex(self) -> int:
+        """
+         Gets the group index of the radio button.
+         Radio buttons with the same group index are mutually exclusive.
+         Used in python API
+        
+        """
+        pass
+
+    def SetGroupIndex(self, groupIndex: int) -> None:
+        """
+         Sets the group index of the radio button.
+         Radio buttons with the same group index are mutually exclusive.
+         Used in python API
+        
+        """
+        pass
+
+class PyResizableStaticPic:
+    Hue: int = None
+    Graphic: int = None
+    DrawBorder: bool = None
+
 class PyScrollArea:
+
+class PySimpleProgressBar:
+
+    def SetProgress(self, value: float, max: float) -> None:
+        """
+         Sets the progress value for the progress bar.
+        
+        """
+        pass
 
 class PyStatic:
     IsImpassible: bool = None
@@ -480,6 +877,32 @@ class PyStatic:
     IsCave: bool = None
     Name: str = None
     __class__: str = None
+
+class PyTextBox:
+    Text: str = None
+    Hue: int = None
+    Font: str = None
+    FontSize: float = None
+    MultiLine: bool = None
+
+class PyTTFTextInputField:
+    Text: str = None
+    CaretIndex: int = None
+    NumbersOnly: bool = None
+    AcceptKeyboardInput: bool = None
+    ConvertHtmlColors: bool = None
+
+    def SetText(self, text: str) -> None:
+        pass
+
+    def SetPlaceholder(self, text: str) -> None:
+        pass
+
+    def SetFocus(self) -> None:
+        pass
+
+    def UpdateSize(self, width: int, height: int) -> None:
+        pass
 
 JournalEntries = None
 Backpack: int = None
@@ -492,6 +915,7 @@ LastTargetGraphic: int = None
 Found: int = None
 PyProfile: PyProfile = None
 Events = None
+Gumps: Gumps = None
 StopRequested: bool = None
 CancellationToken = None
 
@@ -2065,295 +2489,126 @@ def GetAllFriends() -> list:
 
 def CreateGump(acceptMouseInput: bool = True, canMove: bool = True, keepOpen: bool = False) -> PyBaseGump:
     """
-     Get a blank gump.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     g.Add(API.CreateGumpLabel("Hello World!"))
-     API.AddGump(g)
-     ```
+     Use API.Gumps.CreateGump instead
     
     """
     pass
 
 def AddGump(g: Any) -> None:
     """
-     Add a gump to the players screen.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     g.Add(API.CreateGumpLabel("Hello World!"))
-     API.AddGump(g)
-     ```
+     Use API.Gumps.AddGump instead
     
     """
     pass
 
-def CreateGumpCheckbox(text: str = "", hue: int = 0, isChecked: bool = False) -> Any:
+def CreateGumpCheckbox(text: str = "", hue: int = 0, isChecked: bool = False) -> PyCheckbox:
     """
-     Create a checkbox for gumps.
-      Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     cb = API.CreateGumpCheckbox("Check me?!")
-     g.Add(cb)
-     API.AddGump(g)
-    
-     API.SysMsg("Checkbox checked: " + str(cb.IsChecked))
-     ```
+     Use API.Gumps.CreateGumpCheckbox instead.
     
     """
     pass
 
-def CreateGumpLabel(text: str, hue: int = 996) -> PyBaseControl:
+def CreateGumpLabel(text: str, hue: int = 996) -> PyLabel:
     """
-     Create a label for a gump.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     g.Add(API.CreateGumpLabel("Hello World!"))
-     API.AddGump(g)
-     ```
+     Use API.Gumps.CreateGumpLabel instead.
     
     """
     pass
 
-def CreateGumpColorBox(opacity: float = 0.7, color: str = "#000000") -> PyBaseControl:
+def CreateGumpColorBox(opacity: float = 0.7, color: str = "#000000") -> PyAlphaBlendControl:
     """
-     Get a transparent color box for gumps.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     cb = API.CreateGumpColorBox(0.5, "#000000")
-     cb.SetWidth(200)
-     cb.SetHeight(200)
-     g.Add(cb)
-     API.AddGump(g)
-     ```
+     Use API.Gumps.CreateGumpColorBox instead.
     
     """
     pass
 
-def CreateGumpItemPic(graphic: int, width: int, height: int) -> PyBaseControl:
+def CreateGumpItemPic(graphic: int, width: int, height: int) -> PyResizableStaticPic:
     """
-     Create a picture of an item.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     g.Add(API.CreateGumpItemPic(0x0E78, 50, 50))
-     API.AddGump(g)
-     ```
+     Use API.Gumps.CreateGumpItemPic instead.
     
     """
     pass
 
-def CreateGumpButton(text: str = "", hue: int = 996, normal: int = 0x00EF, pressed: int = 0x00F0, hover: int = 0x00EE) -> PyBaseControl:
+def CreateGumpButton(text: str = "", hue: int = 996, normal: int = 0x00EF, pressed: int = 0x00F0, hover: int = 0x00EE) -> PyButton:
     """
-     Create a button for gumps.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     button = API.CreateGumpButton("Click Me!")
-     g.Add(button)
-     API.AddGump(g)
-    
-     while True:
-       API.SysMsg("Button currently clicked?: " + str(button.IsClicked))
-       API.SysMsg("Button clicked since last check?: " + str(button.HasBeenClicked()))
-       API.Pause(0.2)
-     ```
+     Use API.Gumps.CreateGumpButton instead.
     
     """
     pass
 
-def CreateSimpleButton(text: str, width: int, height: int) -> PyBaseControl:
+def CreateSimpleButton(text: str, width: int, height: int) -> PyNiceButton:
     """
-     Create a simple button, does not use graphics.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     button = API.CreateSimpleButton("Click Me!", 100, 20)
-     g.Add(button)
-     API.AddGump(g)
-     ```
+     Use API.Gumps.CreateSimpleButton instead.
     
     """
     pass
 
-def CreateGumpRadioButton(text: str = "", group: int = 0, inactive: int = 0x00D0, active: int = 0x00D1, hue: int = 0xFFFF, isChecked: bool = False) -> PyBaseControl:
+def CreateGumpRadioButton(text: str = "", group: int = 0, inactive: int = 0x00D0, active: int = 0x00D1, hue: int = 0xFFFF, isChecked: bool = False) -> PyRadioButton:
     """
-     Create a radio button for gumps, use group numbers to only allow one item to be checked at a time.
-     Example:
-     ```py
-     g = API.CreateGump()
-     g.SetRect(100, 100, 200, 200)
-     rb = API.CreateGumpRadioButton("Click Me!", 1)
-     g.Add(rb)
-     API.AddGump(g)
-     API.SysMsg("Radio button checked?: " + str(rb.IsChecked))
-     ```
+     Use API.Gumps.CreateGumpRadioButton instead.
     
     """
     pass
 
-def CreateGumpTextBox(text: str = "", width: int = 200, height: int = 30, multiline: bool = False) -> PyBaseControl:
+def CreateGumpTextBox(text: str = "", width: int = 200, height: int = 30, multiline: bool = False) -> PyTTFTextInputField:
     """
-     Create a text area control.
-     Example:
-     ```py
-     w = 500
-     h = 600
-    
-     gump = API.CreateGump(True, True)
-     gump.SetWidth(w)
-     gump.SetHeight(h)
-     gump.CenterXInViewPort()
-     gump.CenterYInViewPort()
-    
-     bg = API.CreateGumpColorBox(0.7, "#D4202020")
-     bg.SetWidth(w)
-     bg.SetHeight(h)
-    
-     gump.Add(bg)
-    
-     textbox = API.CreateGumpTextBox("Text example", w, h, True)
-    
-     gump.Add(textbox)
-    
-     API.AddGump(gump)
-     ```
+     Use API.Gumps.CreateGumpTextBox instead.
     
     """
     pass
 
-def CreateGumpTTFLabel(text: str, size: float, color: str = "#FFFFFF", font: str = TrueTypeLoader.EMBEDDED_FONT, aligned: str = "let", maxWidth: int = 0, applyStroke: bool = False) -> PyBaseControl:
+def CreateGumpTTFLabel(text: str, size: float, color: str = "#FFFFFF", font: str = TrueTypeLoader.EMBEDDED_FONT, aligned: str = "let", maxWidth: int = 0, applyStroke: bool = False) -> PyTextBox:
     """
-     Create a TTF label with advanced options.
-     Example:
-     ```py
-     gump = API.CreateGump()
-     gump.SetRect(100, 100, 200, 200)
-    
-     ttflabel = API.CreateGumpTTFLabel("Example label", 25, "#F100DD", "alagard")
-     ttflabel.SetRect(10, 10, 180, 30)
-     gump.Add(ttflabel)
-    
-     API.AddGump(gump) #Add the gump to the players screen
-     ```
+     Use API.Gumps.CreateGumpTTFLabel instead.
     
     """
     pass
 
-def CreateGumpSimpleProgressBar(width: int, height: int, backgroundColor: str = "#616161", foregroundColor: str = "#212121", value: int = 100, max: int = 100) -> PyBaseControl:
+def CreateGumpSimpleProgressBar(width: int, height: int, backgroundColor: str = "#616161", foregroundColor: str = "#212121", value: int = 100, max: int = 100) -> PySimpleProgressBar:
     """
-     Create a progress bar. Can be updated as needed with `bar.SetProgress(current, max)`.
-     Example:
-     ```py
-     gump = API.CreateGump()
-     gump.SetRect(100, 100, 400, 200)
-    
-     pb = API.CreateGumpSimpleProgressBar(400, 200)
-     gump.Add(pb)
-    
-     API.AddGump(gump)
-    
-     cur = 0
-     max = 100
-    
-     while True:
-       pb.SetProgress(cur, max)
-       if cur >= max:
-       break
-       cur += 1
-       API.Pause(0.5)
-     ```
+     Use API.Gumps.CreateGumpSimpleProgressBar instead.
     
     """
     pass
 
 def CreateGumpScrollArea(x: int, y: int, width: int, height: int) -> PyScrollArea:
     """
-     Create a scrolling area, add and position controls to it directly.
-     Example:
-     ```py
-     sa = API.CreateGumpScrollArea(0, 60, 200, 140)
-     gump.Add(sa)
-    
-     for i in range(10):
-         label = API.CreateGumpTTFLabel(f"Label {i + 1}", 20, "#FFFFFF", "alagard")
-         label.SetRect(5, i * 20, 180, 20)
-         sa.Add(label)
-     ```
+     Use API.Gumps.CreateGumpScrollArea instead.
     
     """
     pass
 
-def CreateGumpPic(graphic: int, x: int = 0, y: int = 0, hue: int = 0) -> PyBaseControl:
+def CreateGumpPic(graphic: int, x: int = 0, y: int = 0, hue: int = 0) -> PyGumpPic:
     """
-     Create a gump pic(Use this for gump art, not item art)
-     Example:
-     ```py
-     gumpPic = API.CreateGumpPic(0xafb)
-     gump.Add(gumpPic)
+     Use API.Gumps.CreateGumpPic instead.
     
     """
     pass
 
 def CreateDropDown(width: int, items: list[str], selectedIndex: int = 0) -> PyControlDropDown:
     """
-     Creates a dropdown control (combobox) with the specified width and items.
+     Use API.Gumps.CreateDropDown instead.
     
     """
     pass
 
-def CreateModernGump(x: int, y: int, width: int, height: int, resizable: bool = True, minWidth: int = 50, minHeight: int = 50, onResized: Any = None) -> Any:
+def CreateModernGump(x: int, y: int, width: int, height: int, resizable: bool = True, minWidth: int = 50, minHeight: int = 50, onResized: Any = None) -> PyNineSliceGump:
     """
-     Creates a modern nine-slice gump using ModernUIConstants for consistent styling.
-     The gump uses the standard modern UI panel texture and border size internally.
+     Use API.Gumps.CreateModernGump instead.
     
     """
     pass
 
 def AddControlOnClick(control: Any, onClick: Any, leftOnly: bool = True) -> Any:
     """
-     Add an onClick callback to a control.
-     Example:
-     ```py
-     def myfunc:
-       API.SysMsg("Something clicked!")
-     bg = API.CreateGumpColorBox(0.7, "#D4202020")
-     API.AddControlOnClick(bg, myfunc)
-     while True:
-       API.ProcessCallbacks()
-     ```
+     Use API.Gumps.AddControlOnClick instead.
     
     """
     pass
 
 def AddControlOnDisposed(control: PyBaseControl, onDispose: Any) -> PyBaseControl:
     """
-     Add onDispose(Closed) callback to a control.
-     Example:
-     ```py
-     def onClose():
-         API.Stop()
-    
-     gump = API.CreateGump()
-     gump.SetRect(100, 100, 200, 200)
-    
-     bg = API.CreateGumpColorBox(opacity=0.7, color="#000000")
-     gump.Add(bg.SetRect(0, 0, 200, 200))
-    
-     API.AddControlOnDisposed(gump, onClose)
-     ```
+     Use API.Gumps.AddControlOnDisposed instead.
     
     """
     pass
