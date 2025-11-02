@@ -248,25 +248,33 @@ namespace ClassicUO.Game.Managers
             {
                 MakeDefault();
 
-                using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read))
-                using (var writer = new StreamWriter(stream))
+                try
                 {
-                    writer.WriteLine("# FORMAT");
-                    writer.WriteLine(
-                        "# GRAPHIC OPEN_SOUND_ID CLOSE_SOUND_ID LEFT TOP RIGHT BOTTOM ICONIZED_GRAPHIC [0 if not exists] MINIMIZER_AREA_X [0 if not exists] MINIMIZER_AREA_Y [0 if not exists]"
-                    );
-                    writer.WriteLine(
-                        "# LEFT = X,  TOP = Y,  RIGHT = X + WIDTH,  BOTTOM = Y + HEIGHT"
-                    );
-                    writer.WriteLine();
-                    writer.WriteLine();
-
-                    foreach (KeyValuePair<ushort, ContainerData> e in _data)
+                    using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+                    using (var writer = new StreamWriter(stream))
                     {
+                        writer.WriteLine("# FORMAT");
                         writer.WriteLine(
-                            $"{e.Value.Graphic} {e.Value.OpenSound} {e.Value.ClosedSound} {e.Value.Bounds.X} {e.Value.Bounds.Y} {e.Value.Bounds.Width} {e.Value.Bounds.Height} {e.Value.IconizedGraphic} {e.Value.MinimizerArea.X} {e.Value.MinimizerArea.Y}"
+                            "# GRAPHIC OPEN_SOUND_ID CLOSE_SOUND_ID LEFT TOP RIGHT BOTTOM ICONIZED_GRAPHIC [0 if not exists] MINIMIZER_AREA_X [0 if not exists] MINIMIZER_AREA_Y [0 if not exists]"
                         );
+                        writer.WriteLine(
+                            "# LEFT = X,  TOP = Y,  RIGHT = X + WIDTH,  BOTTOM = Y + HEIGHT"
+                        );
+                        writer.WriteLine();
+                        writer.WriteLine();
+
+                        foreach (KeyValuePair<ushort, ContainerData> e in _data)
+                        {
+                            writer.WriteLine(
+                                $"{e.Value.Graphic} {e.Value.OpenSound} {e.Value.ClosedSound} {e.Value.Bounds.X} {e.Value.Bounds.Y} {e.Value.Bounds.Width} {e.Value.Bounds.Height} {e.Value.IconizedGraphic} {e.Value.MinimizerArea.X} {e.Value.MinimizerArea.Y}"
+                            );
+                        }
                     }
+                }
+                catch (IOException ex)
+                {
+                    // If file creation fails (e.g., another process is writing), we still have the defaults in memory
+                    Log.Warn($"Unable to write containers.txt, using defaults: {ex.Message}");
                 }
 
                 // Data is already in _data from MakeDefault(), no need to read file
