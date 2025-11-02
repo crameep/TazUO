@@ -700,6 +700,9 @@ class PyNiceButton:
     TextHue: int = None
     BackgroundHue: int = None
 
+    def SetBackgroundHue(self, hue: int) -> None:
+        pass
+
     def SetBackgroundColor(self, r: int | None, g: int | None, b: int | None, a: int | None = 255) -> None:
         """
          Sets the background color of the button. Pass null to clear.

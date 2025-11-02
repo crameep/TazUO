@@ -134,6 +134,8 @@ public class PyNiceButton(NiceButton button) : PyBaseControl(button)
         }
     }
 
+    public void SetBackgroundHue(ushort hue) => BackgroundHue = hue;
+
     /// <summary>
     /// Sets the background color of the button. Pass null to clear.
     /// </summary>

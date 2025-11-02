@@ -43,6 +43,18 @@ description: PyNiceButton class documentation
 *No enums found.*
 
 ## Methods
+### SetBackgroundHue
+`(hue)`
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `hue` | `ushort` | ❌ No |  |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### SetBackgroundColor
 `(r, g, b, a)`
  Sets the background color of the button. Pass null to clear.
