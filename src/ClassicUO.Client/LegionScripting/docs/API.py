@@ -307,6 +307,8 @@ class PyItem:
     Amount: int = None
     Opened: bool = None
     Container: int = None
+    RootContainer: int = None
+    RootEntity = None
     __class__: str = None
     IsCorpse: bool = None
     MatchingHighlightName: str = None
@@ -843,6 +845,13 @@ def Dress(name: str) -> None:
      ```py
      API.Dress("PvP Gear")
      ```
+    
+    """
+    pass
+
+def UndressAll(kr: bool = False) -> None:
+    """
+     Undress all your equipment
     
     """
     pass

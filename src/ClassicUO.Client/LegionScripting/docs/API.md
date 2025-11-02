@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `10/31/25`.*
+*This was generated on `11/2/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -656,6 +656,21 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `name` | `string` | ❌ No | The name of the dress configuration |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### UndressAll
+`(kr)`
+ Undress all your equipment
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `kr` | `bool` | ✅ Yes | True to use the faster KR packet(not supported everywhere) |
 
 **Return Type:** `void` *(Does not return anything)*
 

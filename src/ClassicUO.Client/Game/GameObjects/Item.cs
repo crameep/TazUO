@@ -77,7 +77,8 @@ namespace ClassicUO.Game.GameObjects
         /// <param name="world"></param>
         public Item(World world) : base(world, 0)
         {
-            _isLight = ItemData.IsLight;
+            if(!Client.UnitTestingActive)
+                _isLight = ItemData.IsLight;
         }
 
         public bool IsCoin => Graphic == 0x0EEA || Graphic == 0x0EED || Graphic == 0x0EF0;
