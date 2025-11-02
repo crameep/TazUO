@@ -276,75 +276,73 @@ namespace ClassicUO.Game.Managers
             // File exists and no force rebuild, read from file
             _data.Clear();
 
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var reader = new StreamReader(stream))
+            string c = File.ReadAllText(path);
+
+            var containersParser = new TextFileParser(
+                c,
+                new[] { ' ', '\t', ',' },
+                new[] { '#', ';' },
+                new[] { '"', '"' }
+            );
+
+            int line = 0;
+
+            while (!containersParser.IsEOF())
             {
-                var containersParser = new TextFileParser(
-                    reader.ReadToEnd(),
-                    new[] { ' ', '\t', ',' },
-                    new[] { '#', ';' },
-                    new[] { '"', '"' }
-                );
+                List<string> ss = containersParser.ReadTokens();
 
-                int line = 0;
-
-                while (!containersParser.IsEOF())
+                if (ss != null && ss.Count != 0)
                 {
-                    List<string> ss = containersParser.ReadTokens();
-
-                    if (ss != null && ss.Count != 0)
+                    if (
+                        ss.Count >= 7
+                        && ushort.TryParse(ss[0], out ushort graphic)
+                        && ushort.TryParse(ss[1], out ushort openSoundId)
+                        && ushort.TryParse(ss[2], out ushort closeSoundId)
+                        && int.TryParse(ss[3], out int x)
+                        && int.TryParse(ss[4], out int y)
+                        && int.TryParse(ss[5], out int w)
+                        && int.TryParse(ss[6], out int h)
+                    )
                     {
-                        if (
-                            ss.Count >= 7
-                            && ushort.TryParse(ss[0], out ushort graphic)
-                            && ushort.TryParse(ss[1], out ushort openSoundId)
-                            && ushort.TryParse(ss[2], out ushort closeSoundId)
-                            && int.TryParse(ss[3], out int x)
-                            && int.TryParse(ss[4], out int y)
-                            && int.TryParse(ss[5], out int w)
-                            && int.TryParse(ss[6], out int h)
-                        )
+                        ushort iconizedGraphic = 0;
+                        int minimizerX = 0;
+                        int minimizerY = 0;
+
+                        if (ss.Count >= 8)
                         {
-                            ushort iconizedGraphic = 0;
-                            int minimizerX = 0;
-                            int minimizerY = 0;
-
-                            if (ss.Count >= 8)
-                            {
-                                ushort.TryParse(ss[7], out iconizedGraphic);
-                            }
-
-                            if (ss.Count >= 9)
-                            {
-                                int.TryParse(ss[8], out minimizerX);
-                            }
-
-                            if (ss.Count >= 10)
-                            {
-                                int.TryParse(ss[9], out minimizerY);
-                            }
-
-                            _data[graphic] = new ContainerData(
-                                graphic,
-                                openSoundId,
-                                closeSoundId,
-                                x,
-                                y,
-                                w,
-                                h,
-                                iconizedGraphic,
-                                minimizerX,
-                                minimizerY
-                            );
+                            ushort.TryParse(ss[7], out iconizedGraphic);
                         }
-                        else
+
+                        if (ss.Count >= 9)
                         {
-                            Log.Warn($"Error parsing container data at line {line}: {string.Join(" ", ss)}");
+                            int.TryParse(ss[8], out minimizerX);
                         }
+
+                        if (ss.Count >= 10)
+                        {
+                            int.TryParse(ss[9], out minimizerY);
+                        }
+
+                        _data[graphic] = new ContainerData(
+                            graphic,
+                            openSoundId,
+                            closeSoundId,
+                            x,
+                            y,
+                            w,
+                            h,
+                            iconizedGraphic,
+                            minimizerX,
+                            minimizerY
+                        );
                     }
-
-                    line++;
+                    else
+                    {
+                        Log.Warn($"Error parsing container data at line {line}: {string.Join(" ", ss)}");
+                    }
                 }
+
+                line++;
             }
         }
 
