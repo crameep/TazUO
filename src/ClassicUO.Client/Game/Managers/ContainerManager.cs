@@ -276,7 +276,12 @@ namespace ClassicUO.Game.Managers
             // File exists and no force rebuild, read from file
             _data.Clear();
 
-            string c = File.ReadAllText(path);
+            string c;
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var reader = new StreamReader(stream))
+            {
+                c = reader.ReadToEnd();
+            }
 
             var containersParser = new TextFileParser(
                 c,
