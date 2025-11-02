@@ -804,6 +804,15 @@ namespace ClassicUO.LegionScripting
         });
 
         /// <summary>
+        /// Undress all your equipment
+        /// </summary>
+        /// <param name="kr">True to use the faster KR packet(not supported everywhere)</param>
+        public void UndressAll(bool kr = false) => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            DressAgentManager.Instance.UndressAll(kr);
+        });
+
+        /// <summary>
         /// Get all available dress configurations.
         /// Example:
         /// ```py

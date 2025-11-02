@@ -528,7 +528,7 @@ namespace ClassicUO.Game.UI.Controls
             }
         }
 
-        private void CleanUpDisposedChildren()
+        internal void CleanUpDisposedChildren()
         {
             bool childRemoved = false;
             for (int i = Children.Count - 1; i >= 0; i--)

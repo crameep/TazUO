@@ -661,6 +661,21 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### UndressAll
+`(kr)`
+ Undress all your equipment
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `kr` | `bool` | ✅ Yes | True to use the faster KR packet(not supported everywhere) |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### GetAvailableDressOutfits
 
  Get all available dress configurations.

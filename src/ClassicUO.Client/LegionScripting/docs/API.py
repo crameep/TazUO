@@ -849,6 +849,13 @@ def Dress(name: str) -> None:
     """
     pass
 
+def UndressAll(kr: bool = False) -> None:
+    """
+     Undress all your equipment
+    
+    """
+    pass
+
 def GetAvailableDressOutfits() -> list:
     """
      Get all available dress configurations.
