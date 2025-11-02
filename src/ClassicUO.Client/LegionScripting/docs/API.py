@@ -5,7 +5,235 @@ class Buff:
     Type = None
     Title: str = None
 
-class Events:
+class PyAlphaBlendControl:
+    Hue: int = None
+    Alpha: float = None
+    BaseColorR: int = None
+    BaseColorG: int = None
+    BaseColorB: int = None
+    BaseColorA: int = None
+
+    def SetBaseColor(self, r: int, g: int, b: int, a: int = 255) -> None:
+        """
+         Sets the base color of the alpha blend control using RGBA values (0-255)
+        
+        """
+        pass
+
+class PyBaseControl:
+    CanMove: bool = None
+    IsVisible: bool = None
+
+    def Add(self, childControl: Any) -> None:
+        """
+         Adds a child control to this control. Works with gumps too (gump.Add(control)).
+         Used in python API
+        
+        """
+        pass
+
+    def GetX(self) -> int:
+        """
+         Returns the control's X position.
+         Used in python API
+        
+        """
+        pass
+
+    def GetY(self) -> int:
+        """
+         Returns the control's Y position.
+         Used in python API
+        
+        """
+        pass
+
+    def SetX(self, x: int) -> None:
+        """
+         Sets the control's X position.
+         Used in python API
+        
+        """
+        pass
+
+    def SetY(self, y: int) -> None:
+        """
+         Sets the control's Y position.
+         Used in python API
+        
+        """
+        pass
+
+    def SetPos(self, x: int, y: int) -> None:
+        """
+         Sets the control's X and Y positions.
+         Used in python API
+        
+        """
+        pass
+
+    def SetWidth(self, width: int) -> None:
+        """
+         Sets the control's width.
+         Used in python API
+        
+        """
+        pass
+
+    def SetHeight(self, height: int) -> None:
+        """
+         Sets the control's height.
+         Used in python API
+        
+        """
+        pass
+
+    def SetRect(self, x: int, y: int, width: int, height: int) -> None:
+        """
+         Sets the control's position and size in one operation.
+         Used in python API
+        
+        """
+        pass
+
+    def CenterXInViewPort(self) -> None:
+        """
+         Centers a GUMP horizontally in the viewport. Only works on Gump instances.
+         Used in python API
+        
+        """
+        pass
+
+    def CenterYInViewPort(self) -> None:
+        """
+         Centers a GUMP vertically in the viewport. Only works on Gump instances.
+         Used in python API
+        
+        """
+        pass
+
+    def Clear(self) -> None:
+        """
+         Clears all child controls from this control.
+         Used in python API
+        
+        """
+        pass
+
+    def Dispose(self) -> None:
+        """
+         Close/Destroy the control
+        
+        """
+        pass
+
+class PyBaseGump:
+    IsDisposed: bool = None
+    PacketGumpText: str = None
+    CanCloseWithRightClick: bool = None
+    Gump: PyBaseGump = None
+
+    def SetInScreen(self) -> None:
+        """
+         Ensures the gump is fully visible within the screen boundaries.
+         Adjusts the gump's position if it extends beyond the screen edges.
+         Used in python API
+        
+        """
+        pass
+
+    def CenterYInScreen(self) -> None:
+        """
+         Centers the gump vertically within the entire screen.
+         This accounts for the full screen dimensions, including all UI elements.
+         Used in python API
+        
+        """
+        pass
+
+    def CenterXInScreen(self) -> None:
+        """
+         Centers the gump horizontally within the entire screen.
+         This accounts for the full screen dimensions, including all UI elements.
+         Used in python API
+        
+        """
+        pass
+
+class PyButton:
+    ButtonID: int = None
+    IsClicked: bool = None
+    ButtonAction: int = None
+    ToPage: int = None
+    ButtonGraphicNormal: int = None
+    ButtonGraphicPressed: int = None
+    ButtonGraphicOver: int = None
+    Hue: int = None
+    FontCenter: bool = None
+    ContainsByBounds: bool = None
+
+    def HasBeenClicked(self) -> bool:
+        pass
+
+class PyCheckbox:
+    IsChecked: bool = None
+    Text: str = None
+
+    def GetIsChecked(self) -> bool:
+        """
+         Gets the checked state of the checkbox.
+         Used in python API
+        
+        """
+        pass
+
+    def SetIsChecked(self, isChecked: bool) -> None:
+        """
+         Sets the checked state of the checkbox.
+         Used in python API
+        
+        """
+        pass
+
+    def GetText(self) -> str:
+        """
+         Gets the text label displayed next to the checkbox.
+         Used in python API
+        
+        """
+        pass
+
+class PyControlDropDown:
+
+    def GetSelectedIndex(self) -> int:
+        """
+         Get the selected index of the dropdown. The first entry is 0.
+        
+        """
+        pass
+
+class PyEntity:
+    Name: str = None
+    __class__: str = None
+    Serial: int = None
+
+    def ToString(self) -> str:
+        """
+         Returns a readable string representation of the entity.
+         Used when printing or converting the object to a string in Python scripts.
+        
+        """
+        pass
+
+    def Destroy(self) -> None:
+        """
+         This will remove the item from the client, it will reappear if you leave the area and come back.
+         This object will also no longer be available and may cause issues if you try to interact with it further.
+        
+        """
+        pass
+
+class PyEvents:
 
     def OnPlayerHitsChanged(self, callback: Any) -> None:
         """
@@ -65,7 +293,54 @@ class Events:
         """
         pass
 
-class Gumps:
+class PyGameObject:
+    Impassible: bool = None
+    X: int = None
+    Y: int = None
+    Z: int = None
+    Graphic: int = None
+    Hue: int = None
+    Distance: int = None
+    __class__: str = None
+
+    def SetHue(self, hue: int) -> None:
+        """
+         Set the hue of a game object.
+        
+        """
+        pass
+
+    def HasLineOfSightFrom(self, observer: PyGameObject = None) -> bool:
+        """
+         Determines if there is line of sight from the specified observer to this object.
+         If no observer is specified, it defaults to the player.
+        
+        """
+        pass
+
+    def ToString(self) -> str:
+        """
+         Returns a readable string representation of the game object.
+         Used when printing or converting the object to a string in Python scripts.
+        
+        """
+        pass
+
+    def __repr__(self) -> str:
+        """
+         Returns a detailed string representation of the object.
+         This string is used by Python’s built-in <c>repr()</c> function.
+        
+        """
+        pass
+
+class PyGumpPic:
+    Graphic: int = None
+    Hue: int = None
+    IsPartialHue: bool = None
+    ContainsByBounds: bool = None
+
+class PyGumps:
 
     def CreateGump(self, acceptMouseInput: bool = True, canMove: bool = True, keepOpen: bool = False) -> PyBaseGump:
         """
@@ -362,281 +637,6 @@ class Gumps:
         """
         pass
 
-class PyAlphaBlendControl:
-    Hue: int = None
-    Alpha: float = None
-    BaseColorR: int = None
-    BaseColorG: int = None
-    BaseColorB: int = None
-    BaseColorA: int = None
-
-    def SetBaseColor(self, r: int, g: int, b: int, a: int = 255) -> None:
-        """
-         Sets the base color of the alpha blend control using RGBA values (0-255)
-        
-        """
-        pass
-
-class PyBaseControl:
-    CanMove: bool = None
-    IsVisible: bool = None
-
-    def Add(self, childControl: Any) -> None:
-        """
-         Adds a child control to this control. Works with gumps too (gump.Add(control)).
-         Used in python API
-        
-        """
-        pass
-
-    def GetX(self) -> int:
-        """
-         Returns the control's X position.
-         Used in python API
-        
-        """
-        pass
-
-    def GetY(self) -> int:
-        """
-         Returns the control's Y position.
-         Used in python API
-        
-        """
-        pass
-
-    def SetX(self, x: int) -> None:
-        """
-         Sets the control's X position.
-         Used in python API
-        
-        """
-        pass
-
-    def SetY(self, y: int) -> None:
-        """
-         Sets the control's Y position.
-         Used in python API
-        
-        """
-        pass
-
-    def SetPos(self, x: int, y: int) -> None:
-        """
-         Sets the control's X and Y positions.
-         Used in python API
-        
-        """
-        pass
-
-    def SetWidth(self, width: int) -> None:
-        """
-         Sets the control's width.
-         Used in python API
-        
-        """
-        pass
-
-    def SetHeight(self, height: int) -> None:
-        """
-         Sets the control's height.
-         Used in python API
-        
-        """
-        pass
-
-    def SetRect(self, x: int, y: int, width: int, height: int) -> None:
-        """
-         Sets the control's position and size in one operation.
-         Used in python API
-        
-        """
-        pass
-
-    def CenterXInViewPort(self) -> None:
-        """
-         Centers a GUMP horizontally in the viewport. Only works on Gump instances.
-         Used in python API
-        
-        """
-        pass
-
-    def CenterYInViewPort(self) -> None:
-        """
-         Centers a GUMP vertically in the viewport. Only works on Gump instances.
-         Used in python API
-        
-        """
-        pass
-
-    def Clear(self) -> None:
-        """
-         Clears all child controls from this control.
-         Used in python API
-        
-        """
-        pass
-
-    def Dispose(self) -> None:
-        """
-         Close/Destroy the control
-        
-        """
-        pass
-
-class PyBaseGump:
-    IsDisposed: bool = None
-    PacketGumpText: str = None
-    CanCloseWithRightClick: bool = None
-    Gump: PyBaseGump = None
-
-    def SetInScreen(self) -> None:
-        """
-         Ensures the gump is fully visible within the screen boundaries.
-         Adjusts the gump's position if it extends beyond the screen edges.
-         Used in python API
-        
-        """
-        pass
-
-    def CenterYInScreen(self) -> None:
-        """
-         Centers the gump vertically within the entire screen.
-         This accounts for the full screen dimensions, including all UI elements.
-         Used in python API
-        
-        """
-        pass
-
-    def CenterXInScreen(self) -> None:
-        """
-         Centers the gump horizontally within the entire screen.
-         This accounts for the full screen dimensions, including all UI elements.
-         Used in python API
-        
-        """
-        pass
-
-class PyButton:
-    ButtonID: int = None
-    IsClicked: bool = None
-    ButtonAction: int = None
-    ToPage: int = None
-    ButtonGraphicNormal: int = None
-    ButtonGraphicPressed: int = None
-    ButtonGraphicOver: int = None
-    Hue: int = None
-    FontCenter: bool = None
-    ContainsByBounds: bool = None
-
-    def HasBeenClicked(self) -> bool:
-        pass
-
-class PyCheckbox:
-    IsChecked: bool = None
-    Text: str = None
-
-    def GetIsChecked(self) -> bool:
-        """
-         Gets the checked state of the checkbox.
-         Used in python API
-        
-        """
-        pass
-
-    def SetIsChecked(self, isChecked: bool) -> None:
-        """
-         Sets the checked state of the checkbox.
-         Used in python API
-        
-        """
-        pass
-
-    def GetText(self) -> str:
-        """
-         Gets the text label displayed next to the checkbox.
-         Used in python API
-        
-        """
-        pass
-
-class PyControlDropDown:
-
-    def GetSelectedIndex(self) -> int:
-        """
-         Get the selected index of the dropdown. The first entry is 0.
-        
-        """
-        pass
-
-class PyEntity:
-    Name: str = None
-    __class__: str = None
-    Serial: int = None
-
-    def ToString(self) -> str:
-        """
-         Returns a readable string representation of the entity.
-         Used when printing or converting the object to a string in Python scripts.
-        
-        """
-        pass
-
-    def Destroy(self) -> None:
-        """
-         This will remove the item from the client, it will reappear if you leave the area and come back.
-         This object will also no longer be available and may cause issues if you try to interact with it further.
-        
-        """
-        pass
-
-class PyGameObject:
-    Impassible: bool = None
-    X: int = None
-    Y: int = None
-    Z: int = None
-    Graphic: int = None
-    Hue: int = None
-    Distance: int = None
-    __class__: str = None
-
-    def SetHue(self, hue: int) -> None:
-        """
-         Set the hue of a game object.
-        
-        """
-        pass
-
-    def HasLineOfSightFrom(self, observer: PyGameObject = None) -> bool:
-        """
-         Determines if there is line of sight from the specified observer to this object.
-         If no observer is specified, it defaults to the player.
-        
-        """
-        pass
-
-    def ToString(self) -> str:
-        """
-         Returns a readable string representation of the game object.
-         Used when printing or converting the object to a string in Python scripts.
-        
-        """
-        pass
-
-    def __repr__(self) -> str:
-        """
-         Returns a detailed string representation of the object.
-         This string is used by Python’s built-in <c>repr()</c> function.
-        
-        """
-        pass
-
-class PyGumpPic:
-    Graphic: int = None
-    Hue: int = None
-    IsPartialHue: bool = None
-    ContainsByBounds: bool = None
-
 class PyItem:
     Amount: int = None
     Opened: bool = None
@@ -681,6 +681,7 @@ class PyMobile:
     Mana: int = None
     IsRenamable: bool = None
     IsHuman: bool = None
+    IsYellowHits: bool = None
     InWarMode: bool = None
     Backpack: PyItem = None
     Mount: PyItem = None
@@ -914,8 +915,9 @@ LastTargetPos = None
 LastTargetGraphic: int = None
 Found: int = None
 PyProfile: PyProfile = None
-Events = None
-Gumps: Gumps = None
+Profile: PyProfile = None
+Events: PyEvents = None
+Gumps: PyGumps = None
 StopRequested: bool = None
 CancellationToken = None
 

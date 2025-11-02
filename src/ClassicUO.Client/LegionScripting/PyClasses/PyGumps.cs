@@ -9,7 +9,7 @@ using FontStashSharp.RichText;
 
 namespace ClassicUO.LegionScripting.PyClasses;
 
-public class Gumps(API api)
+public class PyGumps(API api)
 {
     /// <summary>
     /// Get a blank gump.

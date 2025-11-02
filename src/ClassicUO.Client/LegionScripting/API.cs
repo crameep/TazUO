@@ -42,8 +42,8 @@ namespace ClassicUO.LegionScripting
         public API(ScriptEngine engine)
         {
             this.engine = engine;
-            Events = new Events(engine, this);
-            Gumps = new Gumps(this);
+            Events = new PyEvents(engine, this);
+            Gumps = new PyGumps(this);
         }
 
         internal ScriptEngine engine;
@@ -247,13 +247,18 @@ namespace ClassicUO.LegionScripting
         public uint Found { get; set; }
 
         /// <summary>
+        /// Use API.Profile instead
+        /// </summary>
+        public static PyProfile PyProfile = Profile;
+
+        /// <summary>
         /// Access useful player settings.
         /// </summary>
-        public static PyProfile PyProfile = new();
+        public static PyProfile Profile = new();
 
-        public Events Events;
+        public PyEvents Events;
 
-        public Gumps Gumps;
+        public PyGumps Gumps;
 
         /// <summary>
         /// Check if the script has been requested to stop.

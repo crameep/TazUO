@@ -584,7 +584,7 @@ public static class GenDoc
             "PyScrollArea" => "PyScrollArea",
             "PythonList" => "List",
             "PyPlayer" => "PyPlayer",
-            "Gumps" => "Gumps",
+            "PyGumps" => "PyGumps",
             "PyLabel" => "PyLabel",
             "PyRadioButton" => "PyRadioButton",
             "PyNiceButton" => "PyNiceButton",
@@ -597,6 +597,7 @@ public static class GenDoc
             "PyGumpPic" => "PyGumpPic",
             "PyNineSliceGump" => "PyNineSliceGump",
             "PyCheckbox" => "PyCheckbox",
+            "PyEvents" => "PyEvents",
 
             // Fallback for unknown types
             _ => noMatch

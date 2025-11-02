@@ -9,7 +9,7 @@ using Xunit;
 
 namespace ClassicUO.UnitTests.Game.LegionScript;
 
-public class GumpsTests
+public class PyGumpsTests
 {
     public class CreateGump
     {

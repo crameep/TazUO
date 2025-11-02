@@ -91,16 +91,23 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 **Type:** `PyProfile`
 
+ Use API.Profile instead
+
+
+### `Profile`
+
+**Type:** `PyProfile`
+
  Access useful player settings.
 
 
 ### `Events`
 
-**Type:** `Events`
+**Type:** `PyEvents`
 
 ### `Gumps`
 
-**Type:** `Gumps`
+**Type:** `PyGumps`
 
 ### `StopRequested`
 
