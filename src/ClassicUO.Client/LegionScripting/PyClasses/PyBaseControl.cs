@@ -41,6 +41,17 @@ public class PyBaseControl(Control control)
     }
 
     /// <summary>
+    /// Check if this control has been disposed(delete/removed/etc)
+    /// </summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            return VerifyIntegrity() && control.IsDisposed;
+        }
+    }
+
+    /// <summary>
     /// Adds a child control to this control. Works with gumps too (gump.Add(control)).
     /// Used in python API
     /// </summary>

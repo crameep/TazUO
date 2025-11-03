@@ -15,6 +15,13 @@ description: PyBaseControl class documentation
 
 **Type:** `bool`
 
+### `IsDisposed`
+
+**Type:** `bool`
+
+ Check if this control has been disposed(delete/removed/etc)
+
+
 
 *No fields found.*
 

@@ -243,11 +243,6 @@ namespace ClassicUO.LegionScripting
         public uint Found { get; set; }
 
         /// <summary>
-        /// Use API.Profile instead
-        /// </summary>
-        public static PyProfile PyProfile = Profile;
-
-        /// <summary>
         /// Access useful player settings.
         /// </summary>
         public static PyProfile Profile = new();

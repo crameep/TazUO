@@ -279,7 +279,7 @@ namespace ClassicUO.Game.Managers
 
                     // Check if the item is already equipped on the player
                     Item item = World.Instance.Items.Get(dressItem.Serial);
-                    
+
                     if(item == null) continue;
 
                     if (item.Container == World.Instance.Player?.Serial || _forbiddenLayers.Contains(item.Layer)) continue;
