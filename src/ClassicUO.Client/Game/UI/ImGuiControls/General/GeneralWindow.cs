@@ -190,11 +190,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Text("FPS: " + CUOEnviroment.CurrentRefreshRate);
             ImGui.Spacing();
             ImGui.Text(_lastObjectString);
-            if(ImGui.IsItemClicked())
-            {
-                SDL3.SDL.SDL_SetClipboardText($"0x{_lastObject:X8}");
-                GameActions.Print("Copied last object to clipboard.", 62);
-            }
+            ClipboardOnClick(_lastObjectString);
             ImGui.Spacing();
             ImGui.Text(_version);
         }
