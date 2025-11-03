@@ -43,6 +43,18 @@ description: PyNiceButton class documentation
 *No enums found.*
 
 ## Methods
+### SetText
+`(text)`
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `text` | `string` | ❌ No |  |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### SetBackgroundHue
 `(hue)`
 **Parameters:**

@@ -102,6 +102,8 @@ public class PyNiceButton(NiceButton button) : PyBaseControl(button)
         }
     }
 
+    public void SetText(string text) => Text = text;
+
     public ushort TextHue
     {
         get

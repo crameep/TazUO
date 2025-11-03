@@ -700,6 +700,9 @@ class PyNiceButton:
     TextHue: int = None
     BackgroundHue: int = None
 
+    def SetText(self, text: "str") -> None:
+        pass
+
     def SetBackgroundHue(self, hue: "int") -> None:
         pass
 
