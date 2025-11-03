@@ -291,7 +291,7 @@ public static class GenDoc
                 string pySpace = isMainAPI ? string.Empty : "    ";
                 string pyReturn = MapCSharpTypeToPython(method.ReturnType.ToString());
 
-                if (pyReturn == classDeclaration.Identifier.Text)
+                if (pyReturn != "None")
                     pyReturn = $"\"{pyReturn}\"";
 
                 python.AppendLine($"{pySpace}def {method.Identifier.Text}({GetPythonParameters(method.ParameterList.Parameters, !isMainAPI)})"
@@ -441,6 +441,9 @@ public static class GenDoc
         foreach (ParameterSyntax param in parameters)
         {
             string pythonType = MapCSharpTypeToPython(param.Type!.ToString());
+
+            if (pythonType != "None")
+                    pythonType = $"\"{pythonType}\"";
 
             string defaultValue = param.Default != null ? $" = {MapDefaultToPython(param.Default.ToString())}" : string.Empty;
 
