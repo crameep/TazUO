@@ -264,6 +264,9 @@ namespace ClassicUO.Game.Managers
 
         private void Dress(DressConfig config)
         {
+            if (World.Instance == null || World.Instance.Player == null)
+                return;
+                
             if (config.UseKREquipPacket)
             {
 
