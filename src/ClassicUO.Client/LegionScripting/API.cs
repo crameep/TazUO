@@ -1596,7 +1596,10 @@ namespace ClassicUO.LegionScripting
         ///   API.CancelAutoFollow()
         /// ```
         /// </summary>
-        public void CancelAutoFollow() => MainThreadQueue.InvokeOnMainThread(() => ProfileManager.CurrentProfile.FollowingMode = false);
+        public void CancelAutoFollow() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            if (ProfileManager.CurrentProfile != null) ProfileManager.CurrentProfile.FollowingMode = false;
+        });
 
         /// <summary>
         /// Run in a direction.

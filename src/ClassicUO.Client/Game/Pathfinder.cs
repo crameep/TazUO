@@ -462,17 +462,13 @@ namespace ClassicUO.Game
             else
             {
                 if (_world.Player.IsGargoyle && _world.Player.IsFlying)
-                {
                     stepState = (int)PATH_STEP_STATE.PSS_FLYING;
-                }
                 else
                 {
                     Item mount = _world.Player.FindItemByLayer(Layer.Mount);
 
                     if (mount != null && mount.Graphic == 0x3EB3) // sea horse
-                    {
                         stepState = (int)PATH_STEP_STATE.PSS_ON_SEA_HORSE;
-                    }
                 }
             }
 
@@ -490,10 +486,7 @@ namespace ClassicUO.Game
                 stepState
             );
 
-            foreach (PathObject o in _reusableList)
-            {
-                o.Return();
-            }
+            foreach (PathObject o in _reusableList) o.Return();
             _reusableList.Clear();
 
             if (_world.CustomHouseManager != null)
@@ -513,17 +506,16 @@ namespace ClassicUO.Game
 
             _reusableList.Sort();
 
-            _reusableList.Add
-            (
-                PathObject.Get
-                (
-                    (uint)PATH_OBJECT_FLAGS.POF_IMPASSABLE_OR_SURFACE,
-                    128,
-                    128,
-                    128,
-                    null
-                )
+            var pathObj = PathObject.Get(
+                (uint)PATH_OBJECT_FLAGS.POF_IMPASSABLE_OR_SURFACE,
+                128,
+                128,
+                128,
+                null
             );
+
+            if(pathObj != null)
+                _reusableList.Add(pathObj);
 
             int resultZ = -128;
 
