@@ -13,6 +13,10 @@ namespace ClassicUO.Game
     {
         private const int CLOSE_DISTANCE_THRESHOLD = 10;
         private const int MAX_PATHFIND_ATTEMPTS = 100;
+        private const int REGULAR_PATHFINDER_MAX_RANGE = 15;
+        private const int MIN_TILES_TO_START_WALKING = 5;
+        private const int INITIAL_CHUNK_SIZE = 10;
+        private const int MAX_PATHFINDING_TIME_MS = 30000; // 30 seconds
 
         // Thread synchronization
         private static readonly object _stateLock = new object();
@@ -28,6 +32,7 @@ namespace ClassicUO.Game
         private static int _currentChunkSize = 10;
         private static readonly List<Point> _failedTiles = new();
         private static long _nextAttempt = 0;
+        private static long _pathfindingStartTime;
 
         public static bool WalkLongDistance(int targetX, int targetY)
         {
@@ -42,8 +47,8 @@ namespace ClassicUO.Game
             if (!WalkableManager.Instance.IsMapGenerationComplete(World.Instance.MapIndex) && Time.Ticks > _nextAttempt)
             {
                 (int current, int total) val = WalkableManager.Instance.GetCurrentMapGenerationProgress();
-                GameActions.Print("Long distance pathfinding is in process, pathfinding may be degraded untiled completed.");
-                GameActions.Print($"Generating pathfinding cache. {Utility.MathHelper.PercetangeOf(val.current, val.total)}% ({val.current}/{val.total})", 84);
+                GameActions.Print("Long distance pathfinding is in process, pathfinding may be degraded until completed.");
+                GameActions.Print($"Generating pathfinding cache. {Utility.MathHelper.PercentageOf(val.current, val.total)}% ({val.current}/{val.total})", 84);
             }
 
             // If we're currently processing chunks, don't allow new long distance pathfinding
@@ -81,7 +86,8 @@ namespace ClassicUO.Game
                 _pathfindingInProgress = true;
                 _pathGenerationComplete = false;
                 _walkingStarted = false;
-                _currentChunkSize = 10; // Start with 10 tiles
+                _currentChunkSize = INITIAL_CHUNK_SIZE;
+                _pathfindingStartTime = Time.Ticks;
 
                 // Dispose old cancellation token and create new one
                 _pathfindingCancellation?.Dispose();
@@ -197,7 +203,7 @@ namespace ClassicUO.Game
                 int distance = Math.Max(Math.Abs(tile.X - World.Instance.Player.X), Math.Abs(tile.Y - World.Instance.Player.Y));
 
                 // Only try tiles that are within reasonable regular pathfinding range
-                if (distance <= 15)
+                if (distance <= REGULAR_PATHFINDER_MAX_RANGE)
                 {
                     targetTile = tile;
                     targetIndex = i;
@@ -237,8 +243,8 @@ namespace ClassicUO.Game
             if (success)
             {
                 Log.Info($"[LongDistancePathfinder] Successfully started walking to chunk target ({targetTile.Value.X}, {targetTile.Value.Y})");
-                // Reset chunk size to 10 on success
-                _currentChunkSize = 10;
+                // Reset chunk size on success
+                _currentChunkSize = INITIAL_CHUNK_SIZE;
 
                 // Put any tiles after the target back as failed (tiles beyond where we're walking)
                 if (targetIndex < chunkTiles.Count - 1)
@@ -283,7 +289,7 @@ namespace ClassicUO.Game
             //Log.Info($"[LongDistancePathfinder] Update() - walkingStarted: {_walkingStarted}, pathComplete: {_pathGenerationComplete}, tileCount: {_fullTilePath.Count}, failedTiles: {_failedTiles.Count}, chunkSize: {_currentChunkSize}, autoWalking: {Pathfinder.AutoWalking}");
 
             // Start walking once we have some tiles or path generation is complete
-            if (!_walkingStarted && (_fullTilePath.Count >= 5 || _pathGenerationComplete))
+            if (!_walkingStarted && (_fullTilePath.Count >= MIN_TILES_TO_START_WALKING || _pathGenerationComplete))
             {
                 _walkingStarted = true;
                 GameActions.Print($"Path ready! Starting movement...");
@@ -296,10 +302,6 @@ namespace ClassicUO.Game
                 Log.Info("[LongDistancePathfinder] Processing next tile chunk");
                 ProcessTileChunks();
             }
-            // else if (_walkingStarted && Pathfinder.AutoWalking)
-            // {
-            //     Log.Info("[LongDistancePathfinder] Waiting for regular pathfinder to complete current chunk...");
-            // }
         }
 
         public static void StopPathfinding()
@@ -325,7 +327,7 @@ namespace ClassicUO.Game
             _pathfindingInProgress = false;
             _pathGenerationComplete = false;
             _walkingStarted = false;
-            _currentChunkSize = 10;
+            _currentChunkSize = INITIAL_CHUNK_SIZE;
 
             // Clear the full tile path queue and failed tiles
             int queueSize = _fullTilePath.Count;
@@ -346,6 +348,16 @@ namespace ClassicUO.Game
 
             StopPathfinding();
             GameActions.Print("Long distance pathfinding stopped");
+        }
+
+        /// <summary>
+        /// Resets the pathfinder state to initial values. For testing purposes only.
+        /// </summary>
+        internal static void Reset()
+        {
+            StopPathfinding();
+            _nextAttempt = 0;
+            Interlocked.Exchange(ref _disableLongDistanceForWaypoints, 0);
         }
 
         private static bool CallRegularPathfinder(int x, int y, int z, int distance)
@@ -447,6 +459,14 @@ namespace ClassicUO.Game
 
             while (openSet.Count > 0 && !cancellationToken.IsCancellationRequested)
             {
+                // Check for timeout
+                if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS)
+                {
+                    Log.Warn("[LongDistancePathfinder] Pathfinding timeout - exceeded maximum time");
+                    GameActions.Print("Pathfinding timeout - path too complex");
+                    return;
+                }
+
                 LongPathNode currentNode = openSet.Dequeue();
                 (int X, int Y) key = (currentNode.X, currentNode.Y);
 
@@ -609,21 +629,8 @@ namespace ClassicUO.Game
             // Try preferred directions first
             foreach (int dir in directions)
             {
-                int newX = currentNode.X;
-                int newY = currentNode.Y;
-
                 // Calculate direction offsets (single tile moves)
-                switch (dir)
-                {
-                    case 0: newY -= stepSize; break;           // North
-                    case 1: newX += stepSize; newY -= stepSize; break; // Northeast
-                    case 2: newX += stepSize; break;           // East
-                    case 3: newX += stepSize; newY += stepSize; break; // Southeast
-                    case 4: newY += stepSize; break;           // South
-                    case 5: newX -= stepSize; newY += stepSize; break; // Southwest
-                    case 6: newX -= stepSize; break;           // West
-                    case 7: newX -= stepSize; newY -= stepSize; break; // Northwest
-                }
+                (int newX, int newY) = ApplyDirectionOffset(currentNode.X, currentNode.Y, dir, stepSize);
 
                 // Check bounds
                 if (newX < 0 || newY < 0 || newX >= 65536 || newY >= 65536)
@@ -664,21 +671,8 @@ namespace ClassicUO.Game
                 {
                     if (directions.Contains(dir)) continue; // Already tried
 
-                    int newX = currentNode.X;
-                    int newY = currentNode.Y;
-
                     // Calculate direction offsets (single tile moves)
-                    switch (dir)
-                    {
-                        case 0: newY -= stepSize; break;           // North
-                        case 1: newX += stepSize; newY -= stepSize; break; // Northeast
-                        case 2: newX += stepSize; break;           // East
-                        case 3: newX += stepSize; newY += stepSize; break; // Southeast
-                        case 4: newY += stepSize; break;           // South
-                        case 5: newX -= stepSize; newY += stepSize; break; // Southwest
-                        case 6: newX -= stepSize; break;           // West
-                        case 7: newX -= stepSize; newY -= stepSize; break; // Northwest
-                    }
+                    (int newX, int newY) = ApplyDirectionOffset(currentNode.X, currentNode.Y, dir, stepSize);
 
                     // Check bounds
                     if (newX < 0 || newY < 0 || newX >= 65536 || newY >= 65536)
@@ -716,6 +710,23 @@ namespace ClassicUO.Game
         }
 
         private static bool IsGenerallyWalkable(int x, int y) => WalkableManager.Instance.IsWalkable(x, y);
+
+        private static (int newX, int newY) ApplyDirectionOffset(int x, int y, int direction, int stepSize)
+        {
+            int newX = x, newY = y;
+            switch (direction)
+            {
+                case 0: newY -= stepSize; break;           // North
+                case 1: newX += stepSize; newY -= stepSize; break; // Northeast
+                case 2: newX += stepSize; break;           // East
+                case 3: newX += stepSize; newY += stepSize; break; // Southeast
+                case 4: newY += stepSize; break;           // South
+                case 5: newX -= stepSize; newY += stepSize; break; // Southwest
+                case 6: newX -= stepSize; break;           // West
+                case 7: newX -= stepSize; newY -= stepSize; break; // Northwest
+            }
+            return (newX, newY);
+        }
 
         private static List<Point> ReconstructPath(LongPathNode goalNode)
         {
