@@ -185,6 +185,32 @@ description: PyBaseControl class documentation
 
 ---
 
+### GetAlpha
+
+ Returns the control's Alpha value.
+ Used in python API
+
+
+**Return Type:** `float`
+
+---
+
+### SetAlpha
+`(alpha)`
+ Sets the control's Alpha value.
+ Used in python API
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `alpha` | `float` | ❌ No | The new Alpha value |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### Clear
 
  Clears all child controls from this control.
