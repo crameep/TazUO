@@ -211,7 +211,7 @@ public class PyBaseControl(Control control)
     /// Sets the control's Alpha value.
     /// Used in python API
     /// </summary>
-    /// <param name="x">The new Alpha value</param>
+    /// <param name="alpha">The new Alpha value</param>
     public void SetAlpha(float alpha)
     {
         if (VerifyIntegrity())
