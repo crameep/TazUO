@@ -95,14 +95,14 @@ namespace ClassicUO.Game
                 if (world?.Player?.Pathfinder != null)
                     world.Player.Pathfinder.AutoWalking = true;
 
-                // Start full path generation in background
-                StartFullPathGeneration(playerX, playerY, targetX, targetY);
+                // Start full path generation in background (fire-and-forget)
+                _ = StartFullPathGeneration(playerX, playerY, targetX, targetY);
             }
 
             return true;
         }
 
-        private static async void StartFullPathGeneration(int startX, int startY, int targetX, int targetY)
+        private static async Task StartFullPathGeneration(int startX, int startY, int targetX, int targetY)
         {
             try
             {
@@ -139,7 +139,13 @@ namespace ClassicUO.Game
                 // No more tiles available
                 if (_pathGenerationComplete)
                 {
-                    if((World.Instance.Player.X == _targetX && World.Instance.Player.Y == _targetY) || !World.Instance.Player.Pathfinder.WalkTo(_targetX, _targetY, World.Instance.Player.Z, 0))
+                    // Check if player is within 1 tile of target (using Chebyshev distance)
+                    int distanceToTarget = Math.Max(
+                        Math.Abs(World.Instance.Player.X - _targetX),
+                        Math.Abs(World.Instance.Player.Y - _targetY)
+                    );
+
+                    if (distanceToTarget <= 1 || !World.Instance.Player.Pathfinder.WalkTo(_targetX, _targetY, World.Instance.Player.Z, 0))
                     {
                         GameActions.Print("Destination reached!");
                         Log.Info("[LongDistancePathfinder] Path completed successfully");
