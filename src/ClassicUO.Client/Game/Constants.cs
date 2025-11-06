@@ -119,6 +119,7 @@ namespace ClassicUO.Game
             public const string IMGUI_ALPHA = "imgui_window_alpha";
             public const string IMGUI_THEME = "imgui_theme";
             public const string USE_LONG_DISTANCE_PATHING = "use_long_distance_pathing";
+            public const string LONG_DISTANCE_PATHING_SPEED = "long_distance_pathing_speed";
         }
     }
 }

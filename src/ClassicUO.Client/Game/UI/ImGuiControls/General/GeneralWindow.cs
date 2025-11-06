@@ -17,6 +17,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private int _currentThemeIndex;
         private string[] _themeNames;
+        private int _pathfindingGenerationTimeMs;
         private GeneralWindow() : base("General Tab")
         {
             WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
@@ -27,6 +28,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
             _useLongDistancePathing = World.Instance?.Player?.Pathfinder.UseLongDistancePathfinding ?? false;
+            _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -184,6 +186,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
             }
             ImGuiComponents.Tooltip("This is currently in beta.");
+
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.SliderInt("Pathfinding Gen Time", ref _pathfindingGenerationTimeMs, 1, 50, "%d ms"))
+            {
+                _pathfindingGenerationTimeMs = Math.Clamp(_pathfindingGenerationTimeMs, 1, 50);
+                Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED,  _pathfindingGenerationTimeMs);
+                if (Managers.WalkableManager.Instance != null) Managers.WalkableManager.Instance.TARGET_GENERATION_TIME_MS = _pathfindingGenerationTimeMs;
+            }
+            ImGuiComponents.Tooltip("Target time in milliseconds for pathfinding cache generation per cycle. Higher values generate cache faster but may cause performance issues.");
+
             ImGui.EndGroup();
         }
 
