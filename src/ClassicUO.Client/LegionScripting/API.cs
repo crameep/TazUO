@@ -1669,9 +1669,9 @@ namespace ClassicUO.LegionScripting
                 if (World.Player.FindItemByLayer(Layer.Mount) != null)
                 {
                     if (skipQueue)
-                        GameActions.DoubleClick(World, World.Player);
+                        GameActions.DoubleClick(World, World.Player, true);
                     else
-                        GameActions.DoubleClickQueued(World.Player);
+                        GameActions.DoubleClickQueued(World.Player, true);
                 }
             }
         );
@@ -1692,9 +1692,9 @@ namespace ClassicUO.LegionScripting
                     serial = ProfileManager.CurrentProfile.SavedMountSerial;
 
                 if (skipQueue)
-                    GameActions.DoubleClick(World, serial);
+                    GameActions.DoubleClick(World, serial, true);
                 else
-                    GameActions.DoubleClickQueued(serial);
+                    GameActions.DoubleClickQueued(serial, true);
             }
         );
 
