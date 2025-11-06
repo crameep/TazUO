@@ -6798,9 +6798,7 @@ sealed class PacketHandlers
         int cmdlen = cmdlist.Count;
 
         if (cmdlen <= 0)
-        {
             return null;
-        }
 
         UIManager.GetGumpServer(gumpID)?.Dispose();
 
@@ -6812,9 +6810,7 @@ sealed class PacketHandlers
             y = pos.Y;
         }
         else
-        {
             UIManager.SavePosition(gumpID, new Point(x, y));
-        }
 
         var gump = new Gump(world, sender, gumpID)
         {

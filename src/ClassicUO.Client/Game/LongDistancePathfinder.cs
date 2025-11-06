@@ -85,6 +85,9 @@ namespace ClassicUO.Game
             while (_fullTilePath.TryDequeue(out _)) { }
             _failedTiles.Clear();
 
+            World world = World.Instance;
+            if (world != null) world.Player.Pathfinder.AutoWalking = true;
+
             // Start full path generation in background
             StartFullPathGeneration(playerX, playerY, targetX, targetY);
             return true;
@@ -292,6 +295,9 @@ namespace ClassicUO.Game
             int queueSize = _fullTilePath.Count;
             while (_fullTilePath.TryDequeue(out _)) { }
             _failedTiles.Clear();
+
+            World world = World.Instance;
+            if (world != null) world.Player.Pathfinder.AutoWalking = false;
 
             Log.Info($"[LongDistancePathfinder] Pathfinding stopped - cleared {queueSize} tiles from queue");
         }
