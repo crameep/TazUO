@@ -404,7 +404,7 @@ namespace ClassicUO.Game
 
             // Local collections for this pathfinding operation (thread-safe by design)
             var closedSet = new Dictionary<(int x, int y), LongPathNode>();
-            var openSet = new PriorityQueue<LongPathNode>();
+            var openSet = new PriorityQueue<LongPathNode, int>();
 
             // If we're already within close distance, use regular pathfinder and add to queue
             int distance = Math.Max(Math.Abs(targetX - startX), Math.Abs(targetY - startY));
@@ -556,7 +556,7 @@ namespace ClassicUO.Game
             }
         }
 
-        private static void GenerateNeighborsForFullPath(LongPathNode currentNode, PriorityQueue<LongPathNode> openSet, Dictionary<(int x, int y), LongPathNode> closedSet)
+        private static void GenerateNeighborsForFullPath(LongPathNode currentNode, PriorityQueue<LongPathNode, int> openSet, Dictionary<(int x, int y), LongPathNode> closedSet)
         {
             // Use single-tile steps for full path generation
             const int stepSize = 1;
@@ -832,36 +832,6 @@ namespace ClassicUO.Game
             public int DistToGoal { get; set; }
             public int Cost { get; set; }
             public LongPathNode Parent { get; set; }
-        }
-
-        private class PriorityQueue<T>
-        {
-            private readonly List<(T item, int priority)> _items = new();
-
-            public int Count => _items.Count;
-
-            public void Enqueue(T item, int priority) => _items.Add((item, priority));
-
-            public T Dequeue()
-            {
-                if (_items.Count == 0)
-                    throw new InvalidOperationException("Queue is empty");
-
-                int bestIndex = 0;
-                for (int i = 1; i < _items.Count; i++)
-                {
-                    if (_items[i].priority < _items[bestIndex].priority)
-                    {
-                        bestIndex = i;
-                    }
-                }
-
-                (T item, int priority) best = _items[bestIndex];
-                _items.RemoveAt(bestIndex);
-                return best.item;
-            }
-
-            public void Clear() => _items.Clear();
         }
     }
 }
