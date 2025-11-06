@@ -196,6 +196,29 @@ public class PyBaseControl(Control control)
     }
 
     /// <summary>
+    /// Returns the control's Alpha value.
+    /// Used in python API
+    /// </summary>
+    /// <returns>The Alpha value of the control</returns>
+    public float GetAlpha()
+    {
+        if (!VerifyIntegrity())
+            return 0;
+        return control.Alpha;
+    }
+
+    /// <summary>
+    /// Sets the control's Alpha value.
+    /// Used in python API
+    /// </summary>
+    /// <param name="x">The new Alpha value</param>
+    public void SetAlpha(float alpha)
+    {
+        if (VerifyIntegrity())
+            MainThreadQueue.EnqueueAction(() => control.Alpha = alpha);
+    }
+
+    /// <summary>
     /// Clears all child controls from this control.
     /// Used in python API
     /// </summary>
