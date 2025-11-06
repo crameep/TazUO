@@ -11,7 +11,7 @@ namespace ClassicUO.Game.Managers
 {
     public sealed class WalkableManager
     {
-        private static readonly object _lock = new object();
+        private static readonly Lazy<WalkableManager> _instance = new Lazy<WalkableManager>(() => new WalkableManager());
         private const int CHUNK_SIZE = 8;
         private const int MAX_MAP_COUNT = 6;
 
@@ -19,6 +19,8 @@ namespace ClassicUO.Game.Managers
         private readonly Dictionary<int, WalkableMapData> _sessionModifications = new();
         private readonly Dictionary<int, bool> _mapGenerationComplete = new();
         private readonly Dictionary<int, int> _mapChunkGenerationIndex = new();
+        private readonly object _mapDataLock = new object();
+        private readonly object _sessionModificationsLock = new object();
         private int _lastMapIndex = -1;
         private int _updateCounter = 0;
         private volatile bool _isGenerating = false;
@@ -27,28 +29,14 @@ namespace ClassicUO.Game.Managers
         public int TARGET_GENERATION_TIME_MS = 2;
         private const int MIN_CHUNKS_PER_CYCLE = 1;
         private const int MAX_CHUNKS_PER_CYCLE = 500;
-        private readonly List<double> _recentGenerationTimes = new();
+        private readonly Queue<double> _recentGenerationTimes = new();
         private const int PERFORMANCE_SAMPLE_SIZE = 5;
 
         private WalkableManager()
         {
         }
 
-        public static WalkableManager Instance
-        {
-            get
-            {
-                if (field == null)
-                {
-                    lock (_lock)
-                    {
-                        if (field == null)
-                            field = new WalkableManager();
-                    }
-                }
-                return field;
-            }
-        }
+        public static WalkableManager Instance => _instance.Value;
 
         public void Initialize()
         {
@@ -66,20 +54,26 @@ namespace ClassicUO.Game.Managers
             int mapIndex = World.Instance.Map.Index;
 
             // Check session modifications first
-            if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
+            lock (_sessionModificationsLock)
             {
-                if (sessionData.HasDataForTile(x, y))
+                if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
                 {
-                    return sessionData.GetWalkable(x, y);
+                    if (sessionData.HasDataForTile(x, y))
+                    {
+                        return sessionData.GetWalkable(x, y);
+                    }
                 }
             }
 
             // Check persistent data
-            if (_mapData.TryGetValue(mapIndex, out WalkableMapData mapData))
+            lock (_mapDataLock)
             {
-                if (mapData.HasDataForTile(x, y))
+                if (_mapData.TryGetValue(mapIndex, out WalkableMapData mapData))
                 {
-                    return mapData.GetWalkable(x, y);
+                    if (mapData.HasDataForTile(x, y))
+                    {
+                        return mapData.GetWalkable(x, y);
+                    }
                 }
             }
 
@@ -94,13 +88,16 @@ namespace ClassicUO.Game.Managers
 
             int mapIndex = World.Instance.Map.Index;
 
-            if (!_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
+            lock (_sessionModificationsLock)
             {
-                sessionData = new WalkableMapData(mapIndex);
-                _sessionModifications[mapIndex] = sessionData;
-            }
+                if (!_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
+                {
+                    sessionData = new WalkableMapData(mapIndex);
+                    _sessionModifications[mapIndex] = sessionData;
+                }
 
-            sessionData.SetWalkable(x, y, walkable);
+                sessionData.SetWalkable(x, y, walkable);
+            }
         }
 
         public void ClearSessionWalkable(int x, int y)
@@ -110,9 +107,12 @@ namespace ClassicUO.Game.Managers
 
             int mapIndex = World.Instance.Map.Index;
 
-            if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
+            lock (_sessionModificationsLock)
             {
-                sessionData.ClearWalkable(x, y);
+                if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
+                {
+                    sessionData.ClearWalkable(x, y);
+                }
             }
         }
 
@@ -190,27 +190,31 @@ namespace ClassicUO.Game.Managers
             {
                 int mapIndex = World.Instance.Map.Index;
 
-                if (!_mapData.TryGetValue(mapIndex, out WalkableMapData mapData))
+                WalkableMapData mapData;
+                lock (_mapDataLock)
                 {
-                    mapData = new WalkableMapData(mapIndex);
-
-                    // Set checksum for new map data
-                    try
+                    if (!_mapData.TryGetValue(mapIndex, out mapData))
                     {
-                        string currentChecksum = MapChecksumCalculator.CalculateMapChecksum(
-                            mapIndex,
-                            Client.Game.UO.FileManager.Maps.MapBlocksSize,
-                            Client.Game.UO.FileManager.Maps.MapsDefaultSize,
-                            Client.Game.UO.FileManager.Version.ToString()
-                        );
-                        mapData.MapChecksum = currentChecksum;
-                    }
-                    catch (Exception checksumEx)
-                    {
-                        Log.Warn($"[WalkableManager] Failed to calculate checksum for new map {mapIndex}: {checksumEx.Message}");
-                    }
+                        mapData = new WalkableMapData(mapIndex);
 
-                    _mapData[mapIndex] = mapData;
+                        // Set checksum for new map data
+                        try
+                        {
+                            string currentChecksum = MapChecksumCalculator.CalculateMapChecksum(
+                                mapIndex,
+                                Client.Game.UO.FileManager.Maps.MapBlocksSize,
+                                Client.Game.UO.FileManager.Maps.MapsDefaultSize,
+                                Client.Game.UO.FileManager.Version.ToString()
+                            );
+                            mapData.MapChecksum = currentChecksum;
+                        }
+                        catch (Exception checksumEx)
+                        {
+                            Log.Warn($"[WalkableManager] Failed to calculate checksum for new map {mapIndex}: {checksumEx.Message}");
+                        }
+
+                        _mapData[mapIndex] = mapData;
+                    }
                 }
 
                 // Calculate chunks to generate
@@ -266,10 +270,10 @@ namespace ClassicUO.Game.Managers
                 return;
 
             // Add to recent generation times for smoothing
-            _recentGenerationTimes.Add(elapsedMs);
+            _recentGenerationTimes.Enqueue(elapsedMs);
             if (_recentGenerationTimes.Count > PERFORMANCE_SAMPLE_SIZE)
             {
-                _recentGenerationTimes.RemoveAt(0);
+                _recentGenerationTimes.Dequeue();
             }
 
             // Only adjust after we have enough samples
@@ -331,7 +335,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        private static Direction _unreleventDirection = Direction.NONE;
+        private static Direction _irrelevantDirection = Direction.NONE;
 
         private bool CalculateWalkabilityForTile(int x, int y)
         {
@@ -340,6 +344,12 @@ namespace ClassicUO.Game.Managers
                 if (World.Instance.Map == null)
                 {
                     Log.Debug($"[WalkableManager] World.Instance.Map is null");
+                    return false;
+                }
+
+                if (World.Instance.Player == null || World.Instance.Player.Pathfinder == null)
+                {
+                    Log.Debug($"[WalkableManager] Player or Pathfinder is null");
                     return false;
                 }
 
@@ -359,7 +369,7 @@ namespace ClassicUO.Game.Managers
                 //     return true; // Very permissive for now
                 // }
                 sbyte z = World.Instance.Map.GetTileZ(x, y);
-                return World.Instance.Player.Pathfinder.CanWalk(ref _unreleventDirection, ref x, ref y, ref z, true);
+                return World.Instance.Player.Pathfinder.CanWalk(ref _irrelevantDirection, ref x, ref y, ref z, true);
             }
             catch (Exception ex)
             {
@@ -476,7 +486,10 @@ namespace ClassicUO.Game.Managers
                     }
 
                     // Checksum is valid, proceed with normal loading
-                    _mapData[mapIndex] = mapData;
+                    lock (_mapDataLock)
+                    {
+                        _mapData[mapIndex] = mapData;
+                    }
 
                     // Check if this map was fully generated
                     int totalChunksX = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 0];
@@ -528,7 +541,10 @@ namespace ClassicUO.Game.Managers
                 Log.Warn($"[WalkableManager] Failed to calculate checksum for new map {mapIndex}: {checksumEx.Message}");
             }
 
-            _mapData[mapIndex] = mapData;
+            lock (_mapDataLock)
+            {
+                _mapData[mapIndex] = mapData;
+            }
 
             // Reset generation state to start from beginning
             _mapChunkGenerationIndex[mapIndex] = 0;
@@ -541,28 +557,32 @@ namespace ClassicUO.Game.Managers
         {
             try
             {
-                if (_mapData.TryGetValue(mapIndex, out WalkableMapData mapData))
+                WalkableMapData mapData;
+                lock (_mapDataLock)
                 {
-                    // Ensure checksum is current before saving
-                    try
-                    {
-                        string currentChecksum = MapChecksumCalculator.CalculateMapChecksum(
-                            mapIndex,
-                            Client.Game.UO.FileManager.Maps.MapBlocksSize,
-                            Client.Game.UO.FileManager.Maps.MapsDefaultSize,
-                            Client.Game.UO.FileManager.Version.ToString()
-                        );
-                        mapData.MapChecksum = currentChecksum;
-                    }
-                    catch (Exception checksumEx)
-                    {
-                        Log.Warn($"[WalkableManager] Failed to calculate checksum for map {mapIndex} before saving: {checksumEx.Message}");
-                        // Continue with save even if checksum calculation fails
-                    }
-
-                    string filename = GetMapDataFileName(mapIndex);
-                    mapData.SaveToFile(filename);
+                    if (!_mapData.TryGetValue(mapIndex, out mapData))
+                        return;
                 }
+
+                // Ensure checksum is current before saving
+                try
+                {
+                    string currentChecksum = MapChecksumCalculator.CalculateMapChecksum(
+                        mapIndex,
+                        Client.Game.UO.FileManager.Maps.MapBlocksSize,
+                        Client.Game.UO.FileManager.Maps.MapsDefaultSize,
+                        Client.Game.UO.FileManager.Version.ToString()
+                    );
+                    mapData.MapChecksum = currentChecksum;
+                }
+                catch (Exception checksumEx)
+                {
+                    Log.Warn($"[WalkableManager] Failed to calculate checksum for map {mapIndex} before saving: {checksumEx.Message}");
+                    // Continue with save even if checksum calculation fails
+                }
+
+                string filename = GetMapDataFileName(mapIndex);
+                mapData.SaveToFile(filename);
             }
             catch (Exception ex)
             {
@@ -572,21 +592,42 @@ namespace ClassicUO.Game.Managers
 
         public void SaveAllMapData()
         {
-            foreach (KeyValuePair<int, WalkableMapData> kvp in _mapData)
+            int[] mapIndices;
+            lock (_mapDataLock)
             {
-                SaveMapData(kvp.Key);
+                mapIndices = new int[_mapData.Count];
+                _mapData.Keys.CopyTo(mapIndices, 0);
+            }
+
+            foreach (int mapIndex in mapIndices)
+            {
+                SaveMapData(mapIndex);
             }
         }
 
         private string GetMapDataFileName(int mapIndex) => Path.Combine(CUOEnviroment.ExecutablePath, "Data", FileSystemHelper.RemoveInvalidChars(World.Instance.ServerName), $"walkable_map_{mapIndex}.dat");
 
-        public void ClearSessionModifications() => _sessionModifications.Clear();
+        public void ClearSessionModifications()
+        {
+            lock (_sessionModificationsLock)
+            {
+                _sessionModifications.Clear();
+            }
+        }
 
         public void Shutdown()
         {
             SaveAllMapData();
-            _mapData.Clear();
-            _sessionModifications.Clear();
+
+            lock (_mapDataLock)
+            {
+                _mapData.Clear();
+            }
+
+            lock (_sessionModificationsLock)
+            {
+                _sessionModifications.Clear();
+            }
         }
     }
 
@@ -612,16 +653,21 @@ namespace ClassicUO.Game.Managers
 
         public bool HasDataForTile(int x, int y)
         {
-            long chunkKey = GetChunkKey(x >> 3, y >> 3); // Changed from >> 5 to >> 3 for 8x8 chunks
             lock (_dataLock)
             {
-                if (_chunks.TryGetValue(chunkKey, out BitArray8x8 chunk))
-                {
-                    // Check if this specific tile has been set (not just if the chunk exists)
-                    return chunk.IsSet(x & 7, y & 7);
-                }
-                return false;
+                return HasDataForTileUnsafe(x, y);
             }
+        }
+
+        private bool HasDataForTileUnsafe(int x, int y)
+        {
+            long chunkKey = GetChunkKey(x >> 3, y >> 3); // Changed from >> 5 to >> 3 for 8x8 chunks
+            if (_chunks.TryGetValue(chunkKey, out BitArray8x8 chunk))
+            {
+                // Check if this specific tile has been set (not just if the chunk exists)
+                return chunk.IsSet(x & 7, y & 7);
+            }
+            return false;
         }
 
         public bool GetWalkable(int x, int y)
@@ -686,7 +732,7 @@ namespace ClassicUO.Game.Managers
                     {
                         for (int y = chunkY * 8; y < (chunkY + 1) * 8 && !hasData; y++)
                         {
-                            if (HasDataForTile(x, y))
+                            if (HasDataForTileUnsafe(x, y))
                             {
                                 hasData = true;
                             }

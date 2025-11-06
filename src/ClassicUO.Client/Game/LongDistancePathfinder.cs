@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
@@ -166,11 +167,11 @@ namespace ClassicUO.Game
                 return;
             }
 
-            var player = world.Player;
-            var pathfinder = player.Pathfinder;
+            PlayerMobile player = world.Player;
+            Pathfinder pathfinder = player.Pathfinder;
 
             // Capture target position atomically
-            var target = _target;
+            TargetPosition target = _target;
 
             // Check if we have tiles to process
             if (_fullTilePath.Count == 0)
@@ -338,7 +339,7 @@ namespace ClassicUO.Game
                 return;
             }
 
-            var pathfinder = world.Player.Pathfinder;
+            Pathfinder pathfinder = world.Player.Pathfinder;
 
             //Log.Info($"[LongDistancePathfinder] Update() - walkingStarted: {walkingStarted}, pathComplete: {pathComplete}, tileCount: {tileCount}, failedTiles: {_failedTiles.Count}, chunkSize: {_currentChunkSize}, autoWalking: {pathfinder.AutoWalking}");
 
@@ -366,7 +367,7 @@ namespace ClassicUO.Game
         private static void CleanupCancelledTokens()
         {
             // Dispose tokens from previous operations (keep at least 1 in queue for safety)
-            while (_disposalQueue.Count > 1 && _disposalQueue.TryDequeue(out var cts))
+            while (_disposalQueue.Count > 1 && _disposalQueue.TryDequeue(out CancellationTokenSource cts))
             {
                 try
                 {
@@ -459,7 +460,7 @@ namespace ClassicUO.Game
             StopPathfinding();
 
             // Dispose all queued cancellation tokens
-            while (_disposalQueue.TryDequeue(out var cts))
+            while (_disposalQueue.TryDequeue(out CancellationTokenSource cts))
             {
                 try
                 {
@@ -486,7 +487,7 @@ namespace ClassicUO.Game
                     return false;
                 }
 
-                var player = world.Player;
+                PlayerMobile player = world.Player;
                 if (player.IsParalyzed)
                 {
                     Log.Warn("[LongDistancePathfinder] Cannot use regular pathfinder: player is paralyzed");
@@ -669,7 +670,7 @@ namespace ClassicUO.Game
             {
                 // No exact path found, try to find the closest reachable point
                 Log.Warn($"[LongDistancePathfinder] No exact path found, finding closest reachable point");
-                var target = _target;
+                TargetPosition target = _target;
                 LongPathNode bestNode = FindClosestNodeToTarget(closedSet, target);
 
                 if (cancellationToken.IsCancellationRequested)
@@ -736,7 +737,7 @@ namespace ClassicUO.Game
             const int stepSize = 1;
 
             // Capture target position atomically
-            var target = _target;
+            TargetPosition target = _target;
 
             // Calculate direction to target for prioritization
             int deltaX = target.X - currentNode.X;
