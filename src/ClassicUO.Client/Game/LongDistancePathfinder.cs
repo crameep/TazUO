@@ -106,7 +106,7 @@ namespace ClassicUO.Game
                 _oldCancellation = null;
 
                 // Cancel current and store it for disposal next time
-                var old = Interlocked.Exchange(ref _pathfindingCancellation, null);
+                CancellationTokenSource old = Interlocked.Exchange(ref _pathfindingCancellation, null);
                 old?.Cancel();
                 Interlocked.Exchange(ref _oldCancellation, old);
 
@@ -352,7 +352,7 @@ namespace ClassicUO.Game
             }
 
             // Cancel and store for disposal (don't dispose immediately as background task may still be using it)
-            var old = Interlocked.Exchange(ref _pathfindingCancellation, null);
+            CancellationTokenSource old = Interlocked.Exchange(ref _pathfindingCancellation, null);
             old?.Cancel();
             Interlocked.Exchange(ref _oldCancellation, old);
 

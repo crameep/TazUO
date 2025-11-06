@@ -834,6 +834,8 @@ namespace ClassicUO.Game
             while (!_openSet.IsEmpty())
             {
                 PathNode node = _openSet.Dequeue();
+                if (node == null) continue;
+
                 (int X, int Y, int Z) key = (node.X, node.Y, node.Z);
 
                 if (_closedSet.ContainsKey(key))
