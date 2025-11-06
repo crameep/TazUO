@@ -204,7 +204,8 @@ public class PyBaseControl(Control control)
     {
         if (!VerifyIntegrity())
             return 0;
-        return control.Alpha;
+
+        return MainThreadQueue.InvokeOnMainThread(() => control.Alpha);
     }
 
     /// <summary>
