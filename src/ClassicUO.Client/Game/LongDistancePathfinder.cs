@@ -24,10 +24,10 @@ namespace ClassicUO.Game
         private static volatile bool _pathGenerationComplete = false;
         private static volatile bool _walkingStarted = false;
         private static CancellationTokenSource _pathfindingCancellation;
-        private static DateTime _lastPathfindingAttempt = DateTime.MinValue;
         private static volatile bool _disableLongDistanceForWaypoints = false;
         private static int _currentChunkSize = 10;
         private static List<Point> _failedTiles = new();
+        private static long _nextAttempt = 0;
 
         public static bool WalkLongDistance(int targetX, int targetY)
         {
@@ -39,7 +39,7 @@ namespace ClassicUO.Game
                 return false;
             }
 
-            if (!WalkableManager.Instance.IsMapGenerationComplete(World.Instance.MapIndex))
+            if (!WalkableManager.Instance.IsMapGenerationComplete(World.Instance.MapIndex) && Time.Ticks > _nextAttempt)
             {
                 (int current, int total) val = WalkableManager.Instance.GetCurrentMapGenerationProgress();
                 GameActions.Print("Long distance pathfinding is in process, pathfinding may be degraded untiled completed.");
@@ -55,13 +55,10 @@ namespace ClassicUO.Game
             }
 
             // Prevent rapid re-attempts that could cause infinite loops
-            DateTime now = DateTime.Now;
-            if (now - _lastPathfindingAttempt < TimeSpan.FromMilliseconds(500))
-            {
-                Log.Warn($"[LongDistancePathfinder] Too many rapid pathfinding attempts, ignoring. Last attempt: {_lastPathfindingAttempt}, current: {now}");
+            if (Time.Ticks < _nextAttempt)
                 return false;
-            }
-            _lastPathfindingAttempt = now;
+
+            _nextAttempt = Time.Ticks + 500;
 
             // Cancel any existing pathfinding first
             if (_pathfindingInProgress)
