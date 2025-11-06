@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection.Metadata;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
@@ -55,9 +56,13 @@ namespace ClassicUO.Game
         public bool BlockMoving { get; set; }
 
         private World _world;
+
+        public bool UseLongDistancePathfinding;
+
         public Pathfinder(World world)
         {
             _world = world;
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING, false, (b) => UseLongDistancePathfinding = b);
         }
 
         public static bool ObjectBlocksLOS(GameObject obj, int losMinZ, int losMaxZ)
@@ -978,14 +983,6 @@ namespace ClassicUO.Game
 
             EventSink.InvokeOnPathFinding(null, new Vector4(x, y, z, distance));
 
-            int playerDistance = Math.Max(Math.Abs(x - _world.Player.X), Math.Abs(y - _world.Player.Y));
-            if (playerDistance > 10)
-            {
-                // Use long distance pathfinder
-                if (LongDistancePathfinder.WalkLongDistance(x, y))
-                    return true;
-            }
-
             CleanupPathfinding();
             _pointIndex = 0;
             _goalNode = null;
@@ -1008,7 +1005,13 @@ namespace ClassicUO.Game
                 AutoWalking = false;
             }
 
-            return _path.Count != 0;
+            bool status = _path.Count != 0;
+
+            if(UseLongDistancePathfinding && !status)
+                if (LongDistancePathfinder.WalkLongDistance(x, y))
+                    return true;
+
+            return status;
         }
 
         public void ProcessAutoWalk()

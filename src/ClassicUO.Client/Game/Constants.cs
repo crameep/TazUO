@@ -118,6 +118,7 @@ namespace ClassicUO.Game
             public const string MANAGED_ZLIB = "USE_MANAGED_ZLIB";
             public const string IMGUI_ALPHA = "imgui_window_alpha";
             public const string IMGUI_THEME = "imgui_theme";
+            public const string USE_LONG_DISTANCE_PATHING = "use_long_distance_pathing";
         }
     }
 }

@@ -12,6 +12,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _highlightObjects;
         private bool _showNames;
         private bool _autoOpenOwnCorpse;
+        private bool _useLongDistancePathing;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private int _currentThemeIndex;
@@ -25,6 +26,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
+            _useLongDistancePathing = World.Instance?.Player?.Pathfinder.UseLongDistancePathfinding ?? false;
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -168,6 +170,20 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
+            ImGui.EndGroup();
+
+            // Group: Misc Config
+            ImGui.BeginGroup();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc Config");
+
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.Checkbox("Long-Distance Pathfinding", ref _useLongDistancePathing))
+            {
+                World.Instance.Player.Pathfinder.UseLongDistancePathfinding = _useLongDistancePathing;
+                Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
+            }
+            ImGuiComponents.Tooltip("This is currently in beta.");
             ImGui.EndGroup();
         }
 
