@@ -39,6 +39,13 @@ namespace ClassicUO.Game
                 return false;
             }
 
+            if (!WalkableManager.Instance.IsMapGenerationComplete(World.Instance.MapIndex))
+            {
+                (int current, int total) val = WalkableManager.Instance.GetCurrentMapGenerationProgress();
+                GameActions.Print("Long distance pathfinding is in process, pathfinding may be degraded untiled completed.");
+                GameActions.Print($"Generating pathfinding cache. {Utility.MathHelper.PercetangeOf(val.current, val.total)}% ({val.current}/{val.total})", 84);
+            }
+
             // If we're currently processing chunks, don't allow new long distance pathfinding
             // This prevents infinite recursion when walking to chunks
             if (_disableLongDistanceForWaypoints)
