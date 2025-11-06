@@ -22,17 +22,17 @@ namespace ClassicUO.Game
         private static readonly object _stateLock = new object();
 
         // Shared state (accessed from multiple threads)
-        private static int _targetX, _targetY;
+        private static volatile int _targetX, _targetY;
         private static volatile bool _pathfindingInProgress = false;
         private static readonly ConcurrentQueue<Point> _fullTilePath = new();
         private static volatile bool _pathGenerationComplete = false;
         private static volatile bool _walkingStarted = false;
         private static CancellationTokenSource _pathfindingCancellation;
         private static volatile int _disableLongDistanceForWaypoints = 0; // Using int for Interlocked operations
-        private static int _currentChunkSize = 10;
-        private static readonly List<Point> _failedTiles = new();
-        private static long _nextAttempt = 0;
-        private static long _pathfindingStartTime;
+        private static volatile int _currentChunkSize = 10;
+        private static readonly ConcurrentStack<Point> _failedTiles = new();
+        private static long _nextAttempt = 0; // Protected by Interlocked operations
+        private static long _pathfindingStartTime; // Set before background thread starts, read during execution
 
         public static bool WalkLongDistance(int targetX, int targetY)
         {
@@ -60,10 +60,12 @@ namespace ClassicUO.Game
             }
 
             // Prevent rapid re-attempts that could cause infinite loops
-            if (Time.Ticks < _nextAttempt)
+            long currentTicks = Time.Ticks;
+            long nextAttempt = Interlocked.Read(ref _nextAttempt);
+            if (currentTicks < nextAttempt)
                 return false;
 
-            _nextAttempt = Time.Ticks + 500;
+            Interlocked.Exchange(ref _nextAttempt, currentTicks + 500);
 
             // Use lock to prevent race conditions during initialization
             lock (_stateLock)
@@ -89,8 +91,10 @@ namespace ClassicUO.Game
                 _currentChunkSize = INITIAL_CHUNK_SIZE;
                 _pathfindingStartTime = Time.Ticks;
 
-                // Dispose old cancellation token and create new one
-                _pathfindingCancellation?.Dispose();
+                // Cancel old operation and create new cancellation token
+                // Don't dispose immediately - the background thread might still be using it
+                // The GC will clean it up once the background task completes
+                _pathfindingCancellation?.Cancel();
                 _pathfindingCancellation = new CancellationTokenSource();
 
                 // Clear the full tile path queue and failed tiles
@@ -151,10 +155,23 @@ namespace ClassicUO.Game
                         Math.Abs(World.Instance.Player.Y - _targetY)
                     );
 
-                    if (distanceToTarget <= 1 || !World.Instance.Player.Pathfinder.WalkTo(_targetX, _targetY, World.Instance.Player.Z, 0))
+                    // Check if we've reached the destination
+                    if (distanceToTarget <= 1)
                     {
+                        // We're close enough - try one final walk to exact position
+                        World.Instance.Player.Pathfinder.WalkTo(_targetX, _targetY, World.Instance.Player.Z, 0);
                         GameActions.Print("Destination reached!");
                         Log.Info("[LongDistancePathfinder] Path completed successfully");
+                        StopPathfinding();
+                        return;
+                    }
+
+                    // Try to continue walking to target
+                    if (!World.Instance.Player.Pathfinder.WalkTo(_targetX, _targetY, World.Instance.Player.Z, 0))
+                    {
+                        // Can't walk to target - we're as close as we can get
+                        Log.Warn("[LongDistancePathfinder] Cannot reach exact target - stopping at current position");
+                        GameActions.Print("Destination reached (as close as possible)!");
                         StopPathfinding();
                         return;
                     }
@@ -168,15 +185,11 @@ namespace ClassicUO.Game
             var chunkTiles = new List<Point>();
             int tilesCollected = 0;
 
-            // Add any failed tiles back to the front first (with thread safety)
-            lock (_stateLock)
+            // Add any failed tiles back to the front first (thread-safe with ConcurrentStack)
+            while (tilesCollected < _currentChunkSize && _failedTiles.TryPop(out Point failedTile))
             {
-                for (int i = _failedTiles.Count - 1; i >= 0 && tilesCollected < _currentChunkSize; i--)
-                {
-                    chunkTiles.Add(_failedTiles[i]);
-                    tilesCollected++;
-                }
-                _failedTiles.RemoveRange(Math.Max(0, _failedTiles.Count - tilesCollected), tilesCollected);
+                chunkTiles.Add(failedTile);
+                tilesCollected++;
             }
 
             // Fill remaining chunk with new tiles from queue
@@ -220,10 +233,7 @@ namespace ClassicUO.Game
             {
                 Log.Warn($"[LongDistancePathfinder] No reachable tiles in chunk of {chunkTiles.Count}, all too far from player");
                 // Put all tiles back as failed and reduce chunk size
-                lock (_stateLock)
-                {
-                    _failedTiles.AddRange(chunkTiles);
-                }
+                _failedTiles.PushRange(chunkTiles.ToArray());
                 _currentChunkSize = Math.Max(1, _currentChunkSize - 1);
 
                 if (_currentChunkSize == 1)
@@ -250,10 +260,7 @@ namespace ClassicUO.Game
                 if (targetIndex < chunkTiles.Count - 1)
                 {
                     List<Point> remainingTiles = chunkTiles.GetRange(targetIndex + 1, chunkTiles.Count - targetIndex - 1);
-                    lock (_stateLock)
-                    {
-                        _failedTiles.AddRange(remainingTiles);
-                    }
+                    _failedTiles.PushRange(remainingTiles.ToArray());
                     Log.Info($"[LongDistancePathfinder] Put {remainingTiles.Count} tiles beyond target back for later processing");
                 }
             }
@@ -262,10 +269,7 @@ namespace ClassicUO.Game
                 Log.Warn($"[LongDistancePathfinder] Failed to walk to chunk target, reducing chunk size from {_currentChunkSize}");
 
                 // Put the tiles back at the front for retry with smaller chunk
-                lock (_stateLock)
-                {
-                    _failedTiles.AddRange(chunkTiles);
-                }
+                _failedTiles.PushRange(chunkTiles.ToArray());
 
                 // Reduce chunk size (10 -> 9 -> 8 -> ... -> 1)
                 _currentChunkSize = Math.Max(1, _currentChunkSize - 1);
