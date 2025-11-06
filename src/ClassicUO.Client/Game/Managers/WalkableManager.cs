@@ -169,8 +169,6 @@ namespace ClassicUO.Game.Managers
             return GetMapGenerationProgress(World.Instance.Map.Index);
         }
 
-        private ulong nextUpdateMessage = Time.Ticks;
-
         private void GenerateNextChunks(int numChunks)
         {
             if (World.Instance == null || !World.Instance.InGame || World.Instance.Map == null || _isGenerating)
@@ -231,13 +229,6 @@ namespace ClassicUO.Game.Managers
 
                     currentIndex++;
                     chunksGenerated++;
-                }
-
-                if (Time.Ticks > nextUpdateMessage)
-                {
-                    (int current, int total) val = GetCurrentMapGenerationProgress();
-                    GameActions.Print($"Generating pathfinding cache. {MathHelper.PercetangeOf(val.current, val.total)}% ({val.current}/{val.total})", 84);
-                    nextUpdateMessage = Time.Ticks + 5000;
                 }
 
                 // Update the generation index
