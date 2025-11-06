@@ -1245,7 +1245,7 @@ internal static class GameActions
         Entity mount = World.Instance.Get(ProfileManager.CurrentProfile.SavedMountSerial);
         if (mount != null)
         {
-            DoubleClickQueued(ProfileManager.CurrentProfile.SavedMountSerial);
+            DoubleClickQueued(ProfileManager.CurrentProfile.SavedMountSerial, true);
             ScriptRecorder.Instance.RecordMount(mount);
             return true;
         }
