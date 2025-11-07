@@ -18,7 +18,7 @@ namespace ClassicUO.Game
         private const int REGULAR_PATHFINDER_MAX_RANGE = 10;
         private const int MIN_TILES_TO_START_WALKING = 5;
         private const int INITIAL_CHUNK_SIZE = 10;
-        private const int MAX_PATHFINDING_TIME_MS = 30000; // 30 seconds
+        private const int MAX_PATHFINDING_TIME_MS = 15000; // 30 seconds
         private const int MAX_PATH_LENGTH = 2500; // Maximum tiles in a path to prevent memory exhaustion
 
         // Thread synchronization
@@ -605,7 +605,7 @@ namespace ClassicUO.Game
             while (openSet.Count > 0 && !cancellationToken.IsCancellationRequested)
             {
                 // Check for timeout
-                if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS || nodesProcessed > 100000)
+                if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS)
                 {
                     Log.Warn("[LongDistancePathfinder] Pathfinding timeout - exceeded maximum time or nodes");
                     MainThreadQueue.EnqueueAction(() => GameActions.Print("Pathfinding timeout - path too complex"));
@@ -842,7 +842,18 @@ namespace ClassicUO.Game
 
             int newDistFromStart = currentNode.DistFromStart + stepSize;
             int newDistToGoal = GetDistance(newX, newY, target.X, target.Y);
-            int newCost = newDistFromStart + newDistToGoal;
+
+            // Calculate base f-score (g + h)
+            int fScore = newDistFromStart + newDistToGoal;
+
+            // Add tie-breaker to prefer paths that make forward progress
+            // When there's a wall between the player and goal, nodes close to the goal
+            // (but blocked) have similar f-scores to nodes on the correct path around the wall.
+            // By preferring nodes with higher g-values (further from start), we encourage
+            // the algorithm to explore forward along the path rather than lingering near
+            // dead-ends close to the goal. This prevents the path from going to the closest
+            // position near the goal first, then backtracking to find the opening.
+            int priorityWithTieBreaker = fScore * 1000 - newDistFromStart;
 
             var neighborNode = new LongPathNode
             {
@@ -850,11 +861,11 @@ namespace ClassicUO.Game
                 Y = newY,
                 DistFromStart = newDistFromStart,
                 DistToGoal = newDistToGoal,
-                Cost = newCost,
+                Cost = fScore,
                 Parent = currentNode
             };
 
-            openSet.Enqueue(neighborNode, newCost);
+            openSet.Enqueue(neighborNode, priorityWithTieBreaker);
             return true;
         }
 
