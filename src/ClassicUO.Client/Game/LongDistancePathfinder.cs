@@ -650,6 +650,9 @@ namespace ClassicUO.Game
                 if (cancellationToken.IsCancellationRequested)
                     return;
 
+                // Smooth the path to remove unnecessary waypoints
+                fullPath = SmoothPath(fullPath);
+
                 // Check if path exceeds maximum length
                 if (fullPath.Count > MAX_PATH_LENGTH)
                 {
@@ -699,6 +702,9 @@ namespace ClassicUO.Game
 
                     if (cancellationToken.IsCancellationRequested)
                         return;
+
+                    // Smooth the path to remove unnecessary waypoints
+                    partialPath = SmoothPath(partialPath);
 
                     // Check if path exceeds maximum length
                     if (partialPath.Count > MAX_PATH_LENGTH)
@@ -886,6 +892,152 @@ namespace ClassicUO.Game
 
             path.Reverse();
             return path;
+        }
+
+        /// <summary>
+        /// Smooths a path by removing unnecessary waypoints using line-of-sight checks,
+        /// then fills in all tiles along the straight line segments.
+        /// This creates straighter paths when direct lines are walkable.
+        /// </summary>
+        private static List<Point> SmoothPath(List<Point> path)
+        {
+            if (path == null || path.Count <= 2)
+                return path;
+
+            var keyPoints = new List<Point>();
+            int currentIndex = 0;
+            keyPoints.Add(path[0]);
+
+            // Find key waypoints (corners where direction changes)
+            while (currentIndex < path.Count - 1)
+            {
+                int furthestIndex = currentIndex + 1;
+
+                // Try to find the furthest point we can reach in a straight line
+                for (int i = currentIndex + 2; i < path.Count; i++)
+                {
+                    if (HasLineOfSight(path[currentIndex], path[i]))
+                    {
+                        furthestIndex = i;
+                    }
+                    else
+                    {
+                        break; // Can't see further, stop checking
+                    }
+                }
+
+                // Add the furthest reachable point
+                keyPoints.Add(path[furthestIndex]);
+                currentIndex = furthestIndex;
+            }
+
+            // Now fill in all tiles along the straight line segments between key points
+            var smoothedPath = new List<Point>();
+            for (int i = 0; i < keyPoints.Count - 1; i++)
+            {
+                List<Point> segment = GenerateLineSegment(keyPoints[i], keyPoints[i + 1]);
+                // Add all points except the last one (to avoid duplicates)
+                for (int j = 0; j < segment.Count - 1; j++)
+                {
+                    smoothedPath.Add(segment[j]);
+                }
+            }
+            // Add the final point
+            smoothedPath.Add(keyPoints[keyPoints.Count - 1]);
+
+            Log.Debug($"[LongDistancePathfinder] Path smoothing: {path.Count} tiles -> {smoothedPath.Count} tiles ({keyPoints.Count} key points)");
+            return smoothedPath;
+        }
+
+        /// <summary>
+        /// Generates all tiles along a straight line between two points using Bresenham's algorithm.
+        /// </summary>
+        private static List<Point> GenerateLineSegment(Point start, Point end)
+        {
+            var segment = new List<Point>();
+
+            int x0 = start.X;
+            int y0 = start.Y;
+            int x1 = end.X;
+            int y1 = end.Y;
+
+            int dx = Math.Abs(x1 - x0);
+            int dy = Math.Abs(y1 - y0);
+            int sx = x0 < x1 ? 1 : -1;
+            int sy = y0 < y1 ? 1 : -1;
+            int err = dx - dy;
+
+            int x = x0;
+            int y = y0;
+
+            while (true)
+            {
+                segment.Add(new Point(x, y));
+
+                if (x == x1 && y == y1)
+                    break;
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y += sy;
+                }
+            }
+
+            return segment;
+        }
+
+        /// <summary>
+        /// Checks if there's a clear walkable line of sight between two points.
+        /// Uses Bresenham's line algorithm to check all tiles along the path.
+        /// </summary>
+        private static bool HasLineOfSight(Point start, Point end)
+        {
+            int x0 = start.X;
+            int y0 = start.Y;
+            int x1 = end.X;
+            int y1 = end.Y;
+
+            int dx = Math.Abs(x1 - x0);
+            int dy = Math.Abs(y1 - y0);
+            int sx = x0 < x1 ? 1 : -1;
+            int sy = y0 < y1 ? 1 : -1;
+            int err = dx - dy;
+
+            int x = x0;
+            int y = y0;
+
+            // Check all tiles along the line
+            while (true)
+            {
+                // Check if current tile is walkable (skip start tile)
+                if (!(x == x0 && y == y0) && !IsGenerallyWalkable(x, y))
+                    return false;
+
+                // Reached the end
+                if (x == x1 && y == y1)
+                    break;
+
+                int e2 = 2 * err;
+                if (e2 > -dy)
+                {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx)
+                {
+                    err += dx;
+                    y += sy;
+                }
+            }
+
+            return true;
         }
 
         private static LongPathNode FindClosestNodeToTarget(Dictionary<(int x, int y), LongPathNode> closedSet, TargetPosition target)
