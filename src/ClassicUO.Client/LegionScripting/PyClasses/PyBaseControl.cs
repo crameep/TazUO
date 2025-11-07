@@ -43,13 +43,7 @@ public class PyBaseControl(Control control)
     /// <summary>
     /// Check if this control has been disposed(delete/removed/etc)
     /// </summary>
-    public bool IsDisposed
-    {
-        get
-        {
-            return VerifyIntegrity() && control.IsDisposed;
-        }
-    }
+    public bool IsDisposed => VerifyIntegrity() && control.IsDisposed;
 
     /// <summary>
     /// Adds a child control to this control. Works with gumps too (gump.Add(control)).
@@ -131,6 +125,20 @@ public class PyBaseControl(Control control)
                 control.X = x;
                 control.Y = y;
             });
+    }
+
+    public int GetWidth()
+    {
+        if (!VerifyIntegrity()) return 0;
+
+        return MainThreadQueue.InvokeOnMainThread(() => control.Width);
+    }
+
+    public int GetHeight()
+    {
+        if (!VerifyIntegrity()) return 0;
+        
+        return MainThreadQueue.InvokeOnMainThread(() => control.Height);
     }
 
     /// <summary>
