@@ -433,8 +433,12 @@ namespace ClassicUO.Game.Managers
 
                     case GameEffect:
                         // Ignore effects
-                    case Mobile mobile:
+                    case Mobile:
                         // Ignore mobiles
+                        break;
+
+                    case Static stat:
+                        if (stat.ItemData.IsImpassable) return false;
                         break;
 
                     case Item item:

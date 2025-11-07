@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Utility.Logging;
@@ -21,7 +22,7 @@ namespace ClassicUO.Game
         private const int MAX_PATH_LENGTH = 2500; // Maximum tiles in a path to prevent memory exhaustion
 
         // Thread synchronization
-        private static readonly object _stateLock = new object();
+        private static readonly object _stateLock = new();
 
         // Target position struct for atomic reads/writes
         private class TargetPosition
@@ -31,17 +32,17 @@ namespace ClassicUO.Game
         }
 
         // Shared state (accessed from multiple threads)
-        private static volatile TargetPosition _target = new TargetPosition();
-        private static volatile bool _pathfindingInProgress = false;
+        private static volatile TargetPosition _target = new();
+        private static volatile bool _pathfindingInProgress;
         private static readonly ConcurrentQueue<Point> _fullTilePath = new();
-        private static volatile bool _pathGenerationComplete = false;
-        private static volatile bool _walkingStarted = false;
+        private static volatile bool _pathGenerationComplete;
+        private static volatile bool _walkingStarted;
         private static CancellationTokenSource _pathfindingCancellation;
         private static readonly ConcurrentQueue<CancellationTokenSource> _disposalQueue = new();
-        private static volatile int _disableLongDistanceForWaypoints = 0; // Using int for Interlocked operations
+        private static volatile int _disableLongDistanceForWaypoints; // Using int for Interlocked operations
         private static volatile int _currentChunkSize = 10;
         private static readonly ConcurrentStack<Point> _failedTiles = new();
-        private static long _nextAttempt = 0; // Protected by Interlocked operations
+        private static long _nextAttempt; // Protected by Interlocked operations
         private static long _pathfindingStartTime; // Set before background thread starts, read during execution
 
         public static bool IsPathfinding() => _pathfindingInProgress;
@@ -62,6 +63,11 @@ namespace ClassicUO.Game
                 Log.Warn("[LongDistancePathfinder] Cannot start pathfinding: not in game or no player");
                 return false;
             }
+
+            int playerX = World.Instance.Player.X;
+            int playerY = World.Instance.Player.Y;
+            int distance = Math.Max(Math.Abs(targetX - playerX), Math.Abs(targetY - playerY));
+            if (distance < 1) return true;
 
             if (!WalkableManager.Instance.IsMapGenerationComplete(World.Instance.MapIndex) && Time.Ticks > _nextAttempt)
             {
@@ -100,10 +106,6 @@ namespace ClassicUO.Game
                         Log.Debug("[LongDistancePathfinder] Stopping existing pathfinding to start new one");
                         StopPathfindingInternal();
                     }
-
-                    int playerX = World.Instance.Player.X;
-                    int playerY = World.Instance.Player.Y;
-                    int distance = Math.Max(Math.Abs(targetX - playerX), Math.Abs(targetY - playerY));
 
                     Log.Info($"[LongDistancePathfinder] Starting full tile path generation from ({playerX}, {playerY}) to ({targetX}, {targetY}), distance: {distance}");
 
@@ -192,8 +194,6 @@ namespace ClassicUO.Game
                     // Check if we've reached the destination
                     if (distanceToTarget <= 1)
                     {
-                        // We're close enough - try one final walk to exact position
-                        pathfinder.WalkTo(target.X, target.Y, player.Z, 0);
                         GameActions.Print("Destination reached!");
                         Log.Info("[LongDistancePathfinder] Path completed successfully");
                         StopPathfinding();
@@ -239,6 +239,14 @@ namespace ClassicUO.Game
                 return;
             }
 
+#if DEBUG
+            // Hue the tiles in the current chunk for debugging
+            foreach (Point step in chunkTiles)
+            {
+                World.Instance.Map.GetTile(step.X, step.Y).Hue = 32;
+            }
+#endif
+
             // Try to find the furthest reachable tile in the chunk
             Point? targetTile = null;
             int targetIndex = -1;
@@ -279,10 +287,11 @@ namespace ClassicUO.Game
                 return;
             }
 
-            Log.Debug($"[LongDistancePathfinder] Processing chunk of {chunkTiles.Count} tiles, target: ({targetTile.Value.X}, {targetTile.Value.Y})");
+            Log.Debug($"[LongDistancePathfinder] Processing chunk of {chunkTiles.Count} tiles, walking to ({targetTile.Value.X}, {targetTile.Value.Y})");
 
-            // Try to walk to the selected target tile
-            bool success = CallRegularPathfinder(targetTile.Value.X, targetTile.Value.Y, player.Z, 1);
+            // Walk through the chunk tiles directly (up to and including the target)
+            List<Point> tilesToWalk = chunkTiles.GetRange(0, targetIndex + 1);
+            bool success = StartWalkingChunk(tilesToWalk);
 
             if (success)
             {
@@ -356,11 +365,20 @@ namespace ClassicUO.Game
                 Log.Debug($"[LongDistancePathfinder] Starting to process tiles with {tileCount} tiles available");
             }
 
-            // Continue processing tile chunks if we've started and regular pathfinder isn't busy
-            if (walkingStarted && !pathfinder.AutoWalking)
+            // Continue processing tile chunks if we've started
+            if (walkingStarted)
             {
-                Log.Debug("[LongDistancePathfinder] Processing next tile chunk");
-                ProcessTileChunks();
+                // First, process any active chunk walking
+                if (_isWalkingChunk)
+                {
+                    ProcessChunkWalking();
+                }
+                // If not walking a chunk and pathfinder isn't busy, process next chunk
+                else if (!pathfinder.AutoWalking)
+                {
+                    Log.Debug("[LongDistancePathfinder] Processing next tile chunk");
+                    ProcessTileChunks();
+                }
             }
         }
 
@@ -411,6 +429,9 @@ namespace ClassicUO.Game
                 old.Cancel();
                 _disposalQueue.Enqueue(old);
             }
+
+            // Stop any chunk walking in progress
+            StopChunkWalking();
 
             _pathfindingInProgress = false;
             _pathGenerationComplete = false;
@@ -951,6 +972,229 @@ namespace ClassicUO.Game
         }
 
         private static int GetDistance(int x1, int y1, int x2, int y2) => Math.Max(Math.Abs(x2 - x1), Math.Abs(y2 - y1));
+
+        // Current chunk tiles being walked
+        private static List<Point> _currentChunkTiles;
+        private static int _currentChunkTileIndex;
+        private static bool _isWalkingChunk;
+        private static int _currentTileAttempts;
+        private static Point? _lastAttemptedTile;
+
+        /// <summary>
+        /// Starts walking through a chunk of tiles from our generated path.
+        /// </summary>
+        /// <param name="tiles">List of tiles to walk through</param>
+        /// <returns>True if walking started, false otherwise</returns>
+        private static bool StartWalkingChunk(List<Point> tiles)
+        {
+            if (tiles == null || tiles.Count == 0)
+            {
+                Log.Warn("[LongDistancePathfinder] Cannot start walking chunk: no tiles provided");
+                return false;
+            }
+
+            World world = World.Instance;
+            if (world == null || !world.InGame || world.Player == null)
+            {
+                Log.Warn("[LongDistancePathfinder] Cannot start walking chunk: not in game or no player");
+                return false;
+            }
+
+            // Store the tiles and start processing them
+            _currentChunkTiles = tiles;
+            _currentChunkTileIndex = 0;
+            _isWalkingChunk = true;
+            _currentTileAttempts = 0;
+            _lastAttemptedTile = null;
+
+            Log.Debug($"[LongDistancePathfinder] Started walking chunk with {tiles.Count} tiles");
+            return true;
+        }
+
+        /// <summary>
+        /// Processes the current chunk tiles, walking one tile at a time.
+        /// Similar to Pathfinder.ProcessAutoWalk() but for our chunk tiles.
+        /// </summary>
+        /// <returns>True if still walking, false if chunk completed or failed</returns>
+        private static bool ProcessChunkWalking()
+        {
+            if (!_isWalkingChunk || _currentChunkTiles == null)
+                return false;
+
+            World world = World.Instance;
+            if (world == null || !world.InGame || world.Player == null)
+            {
+                StopChunkWalking();
+                return false;
+            }
+
+            PlayerMobile player = world.Player;
+
+            // Check if we can walk (similar checks to ProcessAutoWalk)
+            if (player.Walker.StepsCount >= Constants.MAX_STEP_COUNT)
+            {
+                //Log.Debug("[LongDistancePathfinder] Step queue full, waiting...");
+                return true; // Still walking, just waiting
+            }
+
+            if (player.Walker.LastStepRequestTime > Time.Ticks) return true; // Still walking, just waiting
+
+            // Check if we've reached the end of the chunk
+            if (_currentChunkTileIndex >= _currentChunkTiles.Count)
+            {
+                Log.Debug("[LongDistancePathfinder] Chunk completed successfully");
+                StopChunkWalking();
+                return false;
+            }
+
+            // Get the current target tile
+            Point targetTile = _currentChunkTiles[_currentChunkTileIndex];
+
+            // Check if we've reached this tile
+            if (player.X == targetTile.X && player.Y == targetTile.Y)
+            {
+                _currentChunkTileIndex++;
+                _currentTileAttempts = 0;
+                _lastAttemptedTile = null;
+
+                if (_currentChunkTileIndex >= _currentChunkTiles.Count)
+                {
+                    Log.Debug("[LongDistancePathfinder] Chunk completed");
+                    StopChunkWalking();
+                    return false;
+                }
+                targetTile = _currentChunkTiles[_currentChunkTileIndex];
+            }
+
+            // Check if this is a new tile we're attempting
+            if (!_lastAttemptedTile.HasValue || _lastAttemptedTile.Value.X != targetTile.X || _lastAttemptedTile.Value.Y != targetTile.Y)
+            {
+                _lastAttemptedTile = targetTile;
+                _currentTileAttempts = 0;
+            }
+
+            // After 3 attempts, use the regular pathfinder
+            if (_currentTileAttempts >= 3)
+            {
+                Log.Debug($"[LongDistancePathfinder] 3 attempts to reach ({targetTile.X}, {targetTile.Y}) failed, using Pathfinder");
+
+                // Use the regular pathfinder to reach this tile
+                if (CallRegularPathfinder(targetTile.X, targetTile.Y, player.Z, 0))
+                {
+                    Log.Debug("[LongDistancePathfinder] Regular pathfinder accepted the target");
+                    _currentTileAttempts = 0; // Reset counter while pathfinder works
+                    return true;
+                }
+                else
+                {
+                    Log.Warn("[LongDistancePathfinder] Regular pathfinder also failed, skipping tile");
+                    // Skip to next tile
+                    _currentChunkTileIndex++;
+                    _currentTileAttempts = 0;
+                    _lastAttemptedTile = null;
+
+                    if (_currentChunkTileIndex >= _currentChunkTiles.Count)
+                    {
+                        Log.Debug("[LongDistancePathfinder] Chunk completed after skipping unreachable tile");
+                        StopChunkWalking();
+                        return false;
+                    }
+                    return true;
+                }
+            }
+
+            // Increment attempt counter
+            _currentTileAttempts++;
+
+            // Calculate direction to target tile
+            Direction targetDirection = GetDirectionToTarget(player.X, player.Y, targetTile.X, targetTile.Y);
+
+            // Determine if we should run (run if we have more than 14 tiles left)
+            bool shouldRun = (_currentChunkTiles.Count - _currentChunkTileIndex) > 14;
+
+            // Try to walk in the target direction
+            if (!player.Walk(targetDirection, shouldRun))
+            {
+                Log.Warn("[LongDistancePathfinder] Failed to walk towards chunk tile");
+                // Don't stop immediately, let the attempt counter handle it
+                return true;
+            }
+
+            return true; // Still walking
+        }
+
+        /// <summary>
+        /// Stops processing the current chunk.
+        /// </summary>
+        private static void StopChunkWalking()
+        {
+            _isWalkingChunk = false;
+            _currentChunkTiles = null;
+            _currentChunkTileIndex = 0;
+            _currentTileAttempts = 0;
+            _lastAttemptedTile = null;
+        }
+
+        /// <summary>
+        /// Walks towards a target position by calculating the direction and calling player.Walk() directly.
+        /// Similar to Pathfinder.ProcessAutoWalk() but for long-distance pathfinding.
+        /// </summary>
+        /// <param name="targetX">Target X coordinate</param>
+        /// <param name="targetY">Target Y coordinate</param>
+        /// <param name="run">Whether to run or walk</param>
+        /// <returns>True if walking started successfully, false otherwise</returns>
+        private static bool WalkTowardsTarget(int targetX, int targetY, bool run = true)
+        {
+            World world = World.Instance;
+            if (world == null || !world.InGame || world.Player == null)
+            {
+                Log.Warn("[LongDistancePathfinder] Cannot walk: not in game or no player");
+                return false;
+            }
+
+            PlayerMobile player = world.Player;
+
+            // Check if player can walk (same checks as in ProcessAutoWalk)
+            if (player.IsParalyzed)
+            {
+                Log.Warn("[LongDistancePathfinder] Cannot walk: player is paralyzed");
+                return false;
+            }
+
+            if (player.Walker.StepsCount >= Constants.MAX_STEP_COUNT)
+            {
+                Log.Debug("[LongDistancePathfinder] Cannot walk: step queue is full");
+                return false;
+            }
+
+            if (player.Walker.LastStepRequestTime > Time.Ticks)
+            {
+                Log.Debug("[LongDistancePathfinder] Cannot walk: waiting for step cooldown");
+                return false;
+            }
+
+            // Calculate direction to target
+            Direction direction = GetDirectionToTarget(player.X, player.Y, targetX, targetY);
+
+            // Try to walk in that direction
+            bool success = player.Walk(direction, run);
+
+            if (success)
+            {
+                Log.Debug($"[LongDistancePathfinder] Walking {direction} towards ({targetX}, {targetY})");
+            }
+            else
+            {
+                Log.Debug($"[LongDistancePathfinder] Failed to walk {direction} towards ({targetX}, {targetY})");
+            }
+
+            return success;
+        }
+
+        /// <summary>
+        /// Calculates the direction to move from current position to target position.
+        /// </summary>
+        private static Direction GetDirectionToTarget(int currentX, int currentY, int targetX, int targetY) => DirectionHelper.CalculateDirection(currentX, currentY, targetX, targetY);
 
         private static List<Point> ConvertToPointList(List<(int X, int Y, int Z)> path)
         {

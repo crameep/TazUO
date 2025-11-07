@@ -1434,16 +1434,24 @@ namespace ClassicUO.LegionScripting
 
             DateTime expire = DateTime.Now.AddSeconds(timeout);
 
-            while (MainThreadQueue.InvokeOnMainThread(() => World.Player.Pathfinder.AutoWalking))
+            while (MainThreadQueue.InvokeOnMainThread(() => World.Player.Pathfinder.AutoWalking || LongDistancePathfinder.IsPathfinding()))
             {
                 if (DateTime.Now >= expire)
                 {
-                    MainThreadQueue.InvokeOnMainThread(World.Player.Pathfinder.StopAutoWalk);
+                    MainThreadQueue.InvokeOnMainThread(() =>
+                    {
+                        World.Player.Pathfinder.StopAutoWalk();
+                        LongDistancePathfinder.StopPathfinding();
+                    });
                     return false;
                 }
             }
 
-            MainThreadQueue.InvokeOnMainThread(World.Player.Pathfinder.StopAutoWalk);
+            MainThreadQueue.InvokeOnMainThread(() =>
+            {
+                World.Player.Pathfinder.StopAutoWalk();
+                LongDistancePathfinder.StopPathfinding();
+            });
 
             return MainThreadQueue.InvokeOnMainThread(() => World.Player.DistanceFrom(new Vector2(x, y)) <= distance);
         }
@@ -1489,17 +1497,23 @@ namespace ClassicUO.LegionScripting
 
             DateTime expire = DateTime.Now.AddSeconds(timeout);
 
-            while (MainThreadQueue.InvokeOnMainThread(() => World.Player.Pathfinder.AutoWalking))
+            while (MainThreadQueue.InvokeOnMainThread(() => World.Player.Pathfinder.AutoWalking || LongDistancePathfinder.IsPathfinding()))
             {
                 if (DateTime.Now >= expire)
                 {
-                    MainThreadQueue.InvokeOnMainThread(World.Player.Pathfinder.StopAutoWalk);
-                    return false;
+                    MainThreadQueue.InvokeOnMainThread(() =>
+                    {
+                        World.Player.Pathfinder.StopAutoWalk();
+                        LongDistancePathfinder.StopPathfinding();
+                    });                    return false;
                 }
             }
 
-            MainThreadQueue.InvokeOnMainThread(World.Player.Pathfinder.StopAutoWalk);
-
+            MainThreadQueue.InvokeOnMainThread(() =>
+            {
+                World.Player.Pathfinder.StopAutoWalk();
+                LongDistancePathfinder.StopPathfinding();
+            });
             return MainThreadQueue.InvokeOnMainThread(() => World.Player.DistanceFrom(new Vector2(x, y)) <= distance);
         }
 
@@ -1530,7 +1544,11 @@ namespace ClassicUO.LegionScripting
         ///   API.CancelPathfinding()
         /// ```
         /// </summary>
-        public void CancelPathfinding() => MainThreadQueue.InvokeOnMainThread(World.Player.Pathfinder.StopAutoWalk);
+        public void CancelPathfinding() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            World.Player.Pathfinder.StopAutoWalk();
+            LongDistancePathfinder.StopPathfinding();
+        });
 
         /// <summary>
         /// Attempt to build a path to a location.  This will fail with large distances.

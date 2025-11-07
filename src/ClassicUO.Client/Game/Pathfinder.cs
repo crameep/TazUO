@@ -896,6 +896,10 @@ namespace ClassicUO.Game
                 {
                     ReconstructPath(_goalNode);
 
+#if DEBUG
+                    foreach (PathNode step in _path) World.Instance.Map.GetTile(step.X, step.Y).Hue = 32;
+#endif
+
                     return true;
                 }
 
