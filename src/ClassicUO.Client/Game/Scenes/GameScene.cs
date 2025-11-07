@@ -385,6 +385,7 @@ namespace ClassicUO.Game.Scenes
 
             Instance = null;
 
+            LongDistancePathfinder.Dispose();
             WalkableManager.Instance.Shutdown();
 
             GridContainerSaveData.Instance.Save();

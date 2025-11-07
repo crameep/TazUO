@@ -76,6 +76,12 @@ class PyBaseControl:
         """
         pass
 
+    def GetWidth(self) -> "int":
+        pass
+
+    def GetHeight(self) -> "int":
+        pass
+
     def SetWidth(self, width: "int") -> None:
         """
          Sets the control's width.

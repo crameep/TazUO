@@ -114,6 +114,18 @@ description: PyBaseControl class documentation
 
 ---
 
+### GetWidth
+
+**Return Type:** `int`
+
+---
+
+### GetHeight
+
+**Return Type:** `int`
+
+---
+
 ### SetWidth
 `(width)`
  Sets the control's width.

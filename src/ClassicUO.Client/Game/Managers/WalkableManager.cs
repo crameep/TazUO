@@ -2,10 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
+using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.UI.Controls;
+using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace ClassicUO.Game.Managers
 {
@@ -44,6 +51,27 @@ namespace ClassicUO.Game.Managers
             LoadAllMapData();
 
             Client.Settings?.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2, (s) => TARGET_GENERATION_TIME_MS = s);
+
+#if DEBUG
+            World.Instance.CommandManager.Register("walkable", strings =>
+            {
+                Task.Run(() =>
+                {
+                    var g = new Gump(World.Instance, 0, 0);
+                    Texture2D text = GenerateWalkableTexture(2);
+                    var it = new EmbeddedGumpPic(0, 0, text);
+                    g.Add(it);
+                    g.Disposed += (sender, args) => text?.Dispose();
+                    g.WantUpdateSize = true;
+                    MainThreadQueue.InvokeOnMainThread(() => UIManager.Add(g));
+                });
+            });
+
+            World.Instance.CommandManager.Register("reset", strings =>
+            {
+                StartFreshGeneration(World.Instance.MapIndex);
+            });
+#endif
         }
 
         public bool IsWalkable(int x, int y)
@@ -360,21 +388,469 @@ namespace ClassicUO.Game.Managers
                     return false;
                 }
 
-                // For now, let's use a very basic walkability check
-                // If we can get a tile, and it's a land tile, consider it walkable
-                // if (tile is Land land)
-                // {
-                //     //Log.Debug($"[WalkableManager] Land tile at ({x}, {y}) z={z}: true");
-                //
-                //     return true; // Very permissive for now
-                // }
                 sbyte z = World.Instance.Map.GetTileZ(x, y);
-                return World.Instance.Player.Pathfinder.CanWalk(ref _irrelevantDirection, ref x, ref y, ref z, true);
+                return CheckTileWalkability(x, y, z);
             }
             catch (Exception ex)
             {
                 Log.Warn($"[WalkableManager] Error calculating walkability at ({x}, {y}): {ex.Message}");
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a specific tile is walkable based on terrain, statics, items, and mobiles.
+        /// This method replicates the pathfinder's walkability logic without requiring actual pathfinding.
+        /// </summary>
+        /// <param name="x">X coordinate of the tile</param>
+        /// <param name="y">Y coordinate of the tile</param>
+        /// <param name="z">Z coordinate to check from</param>
+        /// <returns>True if the tile is walkable, false otherwise</returns>
+        public bool CheckTileWalkability(int x, int y, sbyte z)
+        {
+            if (World.Instance?.Map == null || World.Instance.Player == null)
+                return false;
+
+            GameObject tile = World.Instance.Map.GetTile(x, y, false);
+            if (tile == null)
+                return false;
+
+            // Determine player state
+            bool isDeadOrGM = World.Instance.Player.IsDead || World.Instance.Player.Graphic == 0x03DB;
+            bool isFlying = World.Instance.Player.IsGargoyle && World.Instance.Player.IsFlying;
+            bool isOnSeaHorse = false;
+
+            Item mount = World.Instance.Player.FindItemByLayer(Layer.Mount);
+            if (mount != null && mount.Graphic == 0x3EB3)
+                isOnSeaHorse = true;
+
+            bool ignoreCharacters = ProfileManager.CurrentProfile.IgnoreStaminaCheck ||
+                                   isDeadOrGM ||
+                                   World.Instance.Player.IgnoreCharacters ||
+                                   !(World.Instance.Player.Stamina < World.Instance.Player.StaminaMax && World.Instance.Map.Index == 0);
+
+            // Find the first object in the tile chain
+            GameObject obj = tile;
+            while (obj.TPrevious != null)
+                obj = obj.TPrevious;
+
+            bool hasWalkableSurface = false;
+            int surfaceZ = -128;
+
+            // Iterate through all objects at this tile
+            for (; obj != null; obj = obj.TNext)
+            {
+                // Skip objects below player in custom houses
+                if (World.Instance.CustomHouseManager != null && obj.Z < World.Instance.Player.Z)
+                    continue;
+
+                switch (obj)
+                {
+                    case Land land:
+                        // Check if land tile is valid (not a "no draw" tile)
+                        ushort landGraphic = land.Graphic;
+                        if (landGraphic < 0x01AE && landGraphic != 2 || landGraphic > 0x01B5 && landGraphic != 0x01DB)
+                        {
+                            if (isOnSeaHorse)
+                            {
+                                // Seahorse can only walk on water
+                                if (land.TileData.IsWet)
+                                {
+                                    int landZ = land.AverageZ;
+                                    if (Math.Abs(landZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                    {
+                                        hasWalkableSurface = true;
+                                        if (landZ > surfaceZ)
+                                            surfaceZ = landZ;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Normal land walkability
+                                if (!land.TileData.IsImpassable)
+                                {
+                                    int landZ = land.AverageZ;
+                                    if (Math.Abs(landZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                    {
+                                        hasWalkableSurface = true;
+                                        if (landZ > surfaceZ)
+                                            surfaceZ = landZ;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    case GameEffect:
+                        // Ignore effects
+                        break;
+
+                    case Mobile mobile:
+                        // Check if mobile blocks movement
+                        if (!ignoreCharacters && !mobile.IsDead && !mobile.IgnoreCharacters)
+                        {
+                            // Mobile blocks if at similar Z level
+                            int mobileZ = mobile.Z;
+                            if (Math.Abs(mobileZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                            {
+                                return false; // Blocked by mobile
+                            }
+                        }
+                        break;
+
+                    case Item item when item.IsMulti || item.ItemData.IsInternal:
+                        // Skip multi items and internal items
+                        break;
+
+                    case Item item:
+                        ushort itemGraphic = item.Graphic;
+                        ref StaticTiles itemData = ref Client.Game.UO.FileManager.TileData.StaticData[itemGraphic];
+
+                        bool dropFlags = false;
+
+                        // Check for passable doors and lightweight items for dead/GM
+                        if (isDeadOrGM && (itemData.IsDoor || itemData.Weight <= 0x5A))
+                        {
+                            dropFlags = true;
+                        }
+                        else if (ProfileManager.CurrentProfile.SmoothDoors && itemData.IsDoor)
+                        {
+                            dropFlags = true;
+                        }
+                        else
+                        {
+                            // Certain graphics are always passable
+                            dropFlags = itemGraphic >= 0x3946 && itemGraphic <= 0x3964 || itemGraphic == 0x0082;
+                        }
+
+                        if (!dropFlags)
+                        {
+                            if (isOnSeaHorse)
+                            {
+                                if (itemData.IsWet)
+                                {
+                                    int itemZ = item.Z;
+                                    if (Math.Abs(itemZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                    {
+                                        hasWalkableSurface = true;
+                                        if (itemZ > surfaceZ)
+                                            surfaceZ = itemZ;
+                                    }
+                                }
+                                else if (itemData.IsImpassable)
+                                {
+                                    int itemZ = item.Z;
+                                    int itemTop = itemZ + itemData.Height;
+                                    // Check if item blocks at current Z
+                                    if (itemZ <= z && itemTop > z)
+                                    {
+                                        return false; // Blocked by item
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (itemData.IsImpassable)
+                                {
+                                    int itemZ = item.Z;
+                                    int itemTop = itemZ + itemData.Height;
+                                    // Check if item blocks at current Z
+                                    if (itemZ <= z && itemTop > z)
+                                    {
+                                        return false; // Blocked by item
+                                    }
+                                }
+                                else if (itemData.IsSurface || itemData.IsBridge)
+                                {
+                                    int itemZ = item.Z;
+                                    int surfaceHeight = itemData.Height;
+
+                                    if (itemData.IsBridge)
+                                        surfaceHeight /= 2;
+
+                                    int itemSurfaceZ = itemZ + surfaceHeight;
+
+                                    if (Math.Abs(itemSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                    {
+                                        hasWalkableSurface = true;
+                                        if (itemSurfaceZ > surfaceZ)
+                                            surfaceZ = itemSurfaceZ;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    case Multi multi:
+                        // Handle multi objects (houses, etc.)
+                        if ((World.Instance.CustomHouseManager != null && multi.IsCustom &&
+                            (multi.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_GENERIC_INTERNAL) == 0) ||
+                            multi.IsHousePreview)
+                        {
+                            break; // Skip these multis
+                        }
+
+                        if ((multi.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_IGNORE_IN_RENDER) != 0)
+                        {
+                            break; // Skip ignored multis
+                        }
+
+                        ushort multiGraphic = multi.Graphic;
+                        ref StaticTiles multiData = ref Client.Game.UO.FileManager.TileData.StaticData[multiGraphic];
+
+                        if (isOnSeaHorse)
+                        {
+                            if (multiData.IsWet)
+                            {
+                                int multiZ = multi.Z;
+                                if (Math.Abs(multiZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                {
+                                    hasWalkableSurface = true;
+                                    if (multiZ > surfaceZ)
+                                        surfaceZ = multiZ;
+                                }
+                            }
+                            else if (multiData.IsImpassable)
+                            {
+                                int multiZ = multi.Z;
+                                int multiTop = multiZ + multiData.Height;
+                                if (multiZ <= z && multiTop > z)
+                                {
+                                    return false; // Blocked by multi
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (multiData.IsImpassable)
+                            {
+                                int multiZ = multi.Z;
+                                int multiTop = multiZ + multiData.Height;
+                                if (multiZ <= z && multiTop > z)
+                                {
+                                    return false; // Blocked by multi
+                                }
+                            }
+                            else if (multiData.IsSurface || multiData.IsBridge)
+                            {
+                                int multiZ = multi.Z;
+                                int surfaceHeight = multiData.Height;
+
+                                if (multiData.IsBridge)
+                                    surfaceHeight /= 2;
+
+                                int multiSurfaceZ = multiZ + surfaceHeight;
+
+                                if (Math.Abs(multiSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
+                                {
+                                    hasWalkableSurface = true;
+                                    if (multiSurfaceZ > surfaceZ)
+                                        surfaceZ = multiSurfaceZ;
+                                }
+                            }
+                        }
+                        break;
+                }
+            }
+
+            return hasWalkableSurface;
+        }
+
+        /// <summary>
+        /// Generates a texture visualization of the current map's walkable status.
+        /// Green pixels represent walkable tiles, red pixels represent non-walkable tiles.
+        /// Black pixels represent tiles that haven't been generated yet.
+        /// </summary>
+        /// <param name="scale">Scale factor for the texture. 1 = 1 pixel per tile, 2 = 1 pixel per 2x2 tiles, etc.</param>
+        /// <returns>A Texture2D showing the walkable status, or null if unavailable</returns>
+        public Texture2D GenerateWalkableTexture(int scale = 1)
+        {
+            if (World.Instance == null || !World.Instance.InGame || World.Instance.Map == null)
+            {
+                Log.Warn("[WalkableManager] Cannot generate texture: World or Map not available");
+                return null;
+            }
+
+            if (Client.Game?.GraphicsDevice == null)
+            {
+                Log.Warn("[WalkableManager] Cannot generate texture: GraphicsDevice not available");
+                return null;
+            }
+
+            if (scale < 1)
+                scale = 1;
+
+            int mapIndex = World.Instance.Map.Index;
+
+            // Get map dimensions in tiles
+            int mapWidthInBlocks = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 0];
+            int mapHeightInBlocks = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 1];
+            int mapWidthInTiles = mapWidthInBlocks * 8;
+            int mapHeightInTiles = mapHeightInBlocks * 8;
+
+            // Calculate texture dimensions based on scale
+            int textureWidth = (mapWidthInTiles + scale - 1) / scale;
+            int textureHeight = (mapHeightInTiles + scale - 1) / scale;
+
+            Log.Info($"[WalkableManager] Generating walkable texture for map {mapIndex}: {textureWidth}x{textureHeight} (scale {scale})");
+
+            // Create color array for the texture
+            var colors = new Color[textureWidth * textureHeight];
+
+            // Define colors
+            Color walkableColor = Color.Green;
+            Color nonWalkableColor = Color.Red;
+            Color unknownColor = Color.Black;
+
+            WalkableMapData mapData = null;
+            lock (_mapDataLock)
+            {
+                if (_mapData.TryGetValue(mapIndex, out mapData))
+                {
+                    // Map data exists, use it
+                }
+            }
+
+            // Fill the color array
+            for (int pixelY = 0; pixelY < textureHeight; pixelY++)
+            {
+                for (int pixelX = 0; pixelX < textureWidth; pixelX++)
+                {
+                    // Calculate the tile position this pixel represents
+                    int tileX = pixelX * scale;
+                    int tileY = pixelY * scale;
+
+                    // For scaled textures, check multiple tiles and use majority vote
+                    int walkableCount = 0;
+                    int nonWalkableCount = 0;
+                    int unknownCount = 0;
+
+                    for (int dy = 0; dy < scale && (tileY + dy) < mapHeightInTiles; dy++)
+                    {
+                        for (int dx = 0; dx < scale && (tileX + dx) < mapWidthInTiles; dx++)
+                        {
+                            int checkX = tileX + dx;
+                            int checkY = tileY + dy;
+
+                            if (mapData != null && mapData.HasDataForTile(checkX, checkY))
+                            {
+                                if (mapData.GetWalkable(checkX, checkY))
+                                    walkableCount++;
+                                else
+                                    nonWalkableCount++;
+                            }
+                            else
+                            {
+                                unknownCount++;
+                            }
+                        }
+                    }
+
+                    // Determine pixel color based on majority
+                    Color pixelColor;
+                    if (unknownCount > (walkableCount + nonWalkableCount))
+                    {
+                        pixelColor = unknownColor;
+                    }
+                    else if (walkableCount > nonWalkableCount)
+                    {
+                        pixelColor = walkableColor;
+                    }
+                    else
+                    {
+                        pixelColor = nonWalkableColor;
+                    }
+
+                    colors[pixelY * textureWidth + pixelX] = pixelColor;
+                }
+            }
+
+            // Create the texture
+            try
+            {
+                var texture = new Texture2D(
+                    Client.Game.GraphicsDevice,
+                    textureWidth,
+                    textureHeight,
+                    false,
+                    SurfaceFormat.Color
+                );
+
+                texture.SetData(colors);
+
+                Log.Info($"[WalkableManager] Walkable texture generated successfully: {textureWidth}x{textureHeight}");
+                return texture;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[WalkableManager] Failed to create walkable texture: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Generates and saves a walkable texture to a PNG file in the Data directory.
+        /// </summary>
+        /// <param name="scale">Scale factor for the texture. Higher values = smaller file size</param>
+        /// <param name="filename">Optional custom filename (without extension)</param>
+        /// <returns>The file path if successful, null otherwise</returns>
+        public string SaveWalkableTextureToPng(int scale = 4, string filename = null)
+        {
+            if (World.Instance == null || !World.Instance.InGame || World.Instance.Map == null)
+            {
+                Log.Warn("[WalkableManager] Cannot save texture: World or Map not available");
+                return null;
+            }
+
+            try
+            {
+                Texture2D texture = GenerateWalkableTexture(scale);
+                if (texture == null)
+                {
+                    Log.Warn("[WalkableManager] Failed to generate texture for saving");
+                    return null;
+                }
+
+                // Create output directory
+                string outputDir = Path.Combine(
+                    CUOEnviroment.ExecutablePath,
+                    "Data",
+                    FileSystemHelper.RemoveInvalidChars(World.Instance.ServerName)
+                );
+
+                if (!Directory.Exists(outputDir))
+                {
+                    Directory.CreateDirectory(outputDir);
+                }
+
+                // Generate filename
+                if (string.IsNullOrEmpty(filename))
+                {
+                    int mapIndex = World.Instance.Map.Index;
+                    filename = $"walkable_map_{mapIndex}_scale{scale}_{DateTime.Now:yyyyMMdd_HHmmss}";
+                }
+
+                string filePath = Path.Combine(outputDir, filename + ".png");
+
+                // Save texture to file
+                using (FileStream fileStream = File.Create(filePath))
+                {
+                    texture.SaveAsPng(fileStream, texture.Width, texture.Height);
+                }
+
+                // Dispose the texture
+                texture.Dispose();
+
+                Log.Info($"[WalkableManager] Walkable texture saved to: {filePath}");
+                GameActions.Print($"Walkable map saved to: {filePath}", 87);
+
+                return filePath;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[WalkableManager] Failed to save walkable texture: {ex.Message}");
+                return null;
             }
         }
 
