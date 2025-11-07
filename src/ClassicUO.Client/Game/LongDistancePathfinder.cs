@@ -1074,7 +1074,7 @@ namespace ClassicUO.Game
             }
 
             // After 3 attempts, use the regular pathfinder
-            if (_currentTileAttempts >= 3)
+            if (_currentTileAttempts >= 10)
             {
                 Log.Debug($"[LongDistancePathfinder] 3 attempts to reach ({targetTile.X}, {targetTile.Y}) failed, using Pathfinder");
 
