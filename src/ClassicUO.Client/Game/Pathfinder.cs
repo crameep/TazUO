@@ -1188,92 +1188,105 @@ namespace ClassicUO.Game
         {
             readonly List<PathNode> _heap = new();
             readonly Dictionary<(int, int, int), PathNode> _lookup = new();
+            readonly object _lock = new();
 
             internal bool Contains((int, int, int) coordinate)
             {
-                if (_lookup.TryGetValue(coordinate, out PathNode existing))
+                lock (_lock)
                 {
-                    // The priority queue lazily remove duplicates, so we check
-                    // whether the node is valid here.
-                    return existing.IsValid;
-                }
+                    if (_lookup.TryGetValue(coordinate, out PathNode existing))
+                    {
+                        // The priority queue lazily remove duplicates, so we check
+                        // whether the node is valid here.
+                        return existing.IsValid;
+                    }
 
-                return false;
+                    return false;
+                }
             }
 
             internal void Clear()
             {
-                _heap.Clear();
-                _lookup.Clear();
+                lock (_lock)
+                {
+                    _heap.Clear();
+                    _lookup.Clear();
+                }
             }
 
             internal bool IsEmpty()
             {
-                while (_heap.Count > 0)
+                lock (_lock)
                 {
-                    // The priority queue lazily remove duplicates, so we check
-                    // for them here. If should be removed lazily, remove it now
-                    // and continue to next element.
-                    if (_heap[0].IsValid)
+                    while (_heap.Count > 0)
                     {
-                        return false;
+                        // The priority queue lazily remove duplicates, so we check
+                        // for them here. If should be removed lazily, remove it now
+                        // and continue to next element.
+                        if (_heap[0].IsValid) return false;
+
+                        RemoveAt(0);
                     }
 
-                    RemoveAt(0);
+                    return true;
                 }
-
-                return true;
             }
 
             internal void Enqueue(PathNode node)
             {
-                (int, int, int) key = GetKey(node);
-                if (_lookup.TryGetValue(key, out PathNode existing))
+                lock (_lock)
                 {
-                    if (existing.IsValid && existing.Cost <= node.Cost)
+                    (int, int, int) key = GetKey(node);
+                    if (_lookup.TryGetValue(key, out PathNode existing))
                     {
-                        // Existing priority is better or equal, so ignore this node.
+                        if (existing.IsValid && existing.Cost <= node.Cost)
+                        {
+                            // Existing priority is better or equal, so ignore this node.
 
-                        // While it breaks encapsulation to perform this inside
-                        // the priority queue, it is safe to return this node
-                        // to the object pool early at this point because we know
-                        // the caller will discard its reference to this node, so
-                        // it cannot be used later during path reconstruction.
-                        node.Return();
+                            // While it breaks encapsulation to perform this inside
+                            // the priority queue, it is safe to return this node
+                            // to the object pool early at this point because we know
+                            // the caller will discard its reference to this node, so
+                            // it cannot be used later during path reconstruction.
+                            node.Return();
 
-                        return;
+                            return;
+                        }
+
+                        // The priority queue lazily remove duplicates, so we mark existing to be deleted later.
+                        existing.IsValid = false;
                     }
 
-                    // The priority queue lazily remove duplicates, so we mark existing to be deleted later.
-                    existing.IsValid = false;
+                    node.IsValid = true;
+                    _lookup[key] = node;
+                    _heap.Add(node);
+                    int index = _heap.Count - 1;
+                    HeapifyUp(index);
                 }
-
-                node.IsValid = true;
-                _lookup[key] = node;
-                _heap.Add(node);
-                int index = _heap.Count - 1;
-                HeapifyUp(index);
             }
 
             internal PathNode Dequeue()
             {
-                while (_heap.Count > 0)
+                lock (_lock)
                 {
-                    // The priority queue lazily remove duplicates, so we check
-                    // for them here. If should be removed lazily, remove it now
-                    // and continue to next element.
-                    PathNode top = _heap[0];
-                    if (!top.IsValid)
+                    while (_heap.Count > 0)
                     {
+                        // The priority queue lazily remove duplicates, so we check
+                        // for them here. If should be removed lazily, remove it now
+                        // and continue to next element.
+                        PathNode top = _heap[0];
+                        if (!top.IsValid)
+                        {
+                            RemoveAt(0);
+                            continue;
+                        }
+
                         RemoveAt(0);
-                        continue;
+                        return top;
                     }
 
-                    RemoveAt(0);
-                    return top;
+                    return null;
                 }
-
-                return null;
             }
 
             void Swap(int i, int j) => (_heap[j], _heap[i]) = (_heap[i], _heap[j]);

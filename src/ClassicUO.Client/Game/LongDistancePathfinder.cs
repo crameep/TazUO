@@ -82,55 +82,63 @@ namespace ClassicUO.Game
             if (currentTicks < nextAttempt)
                 return false;
 
+            World.Instance?.Player?.Pathfinder?.StopAutoWalk();
+
             Interlocked.Exchange(ref _nextAttempt, currentTicks + 500);
+            GameActions.Print($"Generating full path to ({targetX}, {targetY})...");
 
-            // Use lock to prevent race conditions during initialization
-            lock (_stateLock)
+            Task.Run(() =>
             {
-                // Cancel any existing pathfinding first
-                if (_pathfindingInProgress)
+                // Use lock to prevent race conditions during initialization
+                lock (_stateLock)
                 {
-                    Log.Debug("[LongDistancePathfinder] Stopping existing pathfinding to start new one");
-                    StopPathfindingInternal();
+                    // Cancel any existing pathfinding first
+                    if (_pathfindingInProgress)
+                    {
+                        Log.Debug("[LongDistancePathfinder] Stopping existing pathfinding to start new one");
+                        StopPathfindingInternal();
+                    }
+
+                    int playerX = World.Instance.Player.X;
+                    int playerY = World.Instance.Player.Y;
+                    int distance = Math.Max(Math.Abs(targetX - playerX), Math.Abs(targetY - playerY));
+
+                    Log.Info($"[LongDistancePathfinder] Starting full tile path generation from ({playerX}, {playerY}) to ({targetX}, {targetY}), distance: {distance}");
+
+                    // Initialize pathfinding state
+                    _pathfindingInProgress = true;
+                    _pathGenerationComplete = false;
+                    _walkingStarted = false;
+                    _currentChunkSize = INITIAL_CHUNK_SIZE;
+                    _pathfindingStartTime = Time.Ticks;
+
+                    // Cancel old operation and queue for disposal
+                    CancellationTokenSource old = Interlocked.Exchange(ref _pathfindingCancellation, null);
+                    if (old != null)
+                    {
+                        old.Cancel();
+                        _disposalQueue.Enqueue(old);
+                    }
+
+                    // Create new cancellation token and capture it inside lock
+                    _pathfindingCancellation = new CancellationTokenSource();
+                    CancellationToken token = _pathfindingCancellation.Token;
+
+                    // Clear the full tile path queue and failed tiles
+                    while (_fullTilePath.TryDequeue(out _)) { }
+
+                    _failedTiles.Clear();
+
+                    MainThreadQueue.EnqueueAction(() => {
+                        World world = World.Instance;
+                        if (world?.Player?.Pathfinder != null)
+                            world.Player.Pathfinder.AutoWalking = true;
+                    });
+
+                    // Start full path generation in background (fire-and-forget)
+                    _ = StartFullPathGeneration(playerX, playerY, targetX, targetY, token);
                 }
-
-                int playerX = World.Instance.Player.X;
-                int playerY = World.Instance.Player.Y;
-                int distance = Math.Max(Math.Abs(targetX - playerX), Math.Abs(targetY - playerY));
-
-                Log.Info($"[LongDistancePathfinder] Starting full tile path generation from ({playerX}, {playerY}) to ({targetX}, {targetY}), distance: {distance}");
-                GameActions.Print($"Generating full path to ({targetX}, {targetY})...");
-
-                // Initialize pathfinding state
-                _pathfindingInProgress = true;
-                _pathGenerationComplete = false;
-                _walkingStarted = false;
-                _currentChunkSize = INITIAL_CHUNK_SIZE;
-                _pathfindingStartTime = Time.Ticks;
-
-                // Cancel old operation and queue for disposal
-                CancellationTokenSource old = Interlocked.Exchange(ref _pathfindingCancellation, null);
-                if (old != null)
-                {
-                    old.Cancel();
-                    _disposalQueue.Enqueue(old);
-                }
-
-                // Create new cancellation token and capture it inside lock
-                _pathfindingCancellation = new CancellationTokenSource();
-                CancellationToken token = _pathfindingCancellation.Token;
-
-                // Clear the full tile path queue and failed tiles
-                while (_fullTilePath.TryDequeue(out _)) { }
-                _failedTiles.Clear();
-
-                World world = World.Instance;
-                if (world?.Player?.Pathfinder != null)
-                    world.Player.Pathfinder.AutoWalking = true;
-
-                // Start full path generation in background (fire-and-forget)
-                _ = StartFullPathGeneration(playerX, playerY, targetX, targetY, token);
-            }
+            });
 
             return true;
         }
@@ -386,10 +394,7 @@ namespace ClassicUO.Game
         /// </summary>
         public static void StopPathfinding()
         {
-            lock (_stateLock)
-            {
-                StopPathfindingInternal();
-            }
+            lock (_stateLock) StopPathfindingInternal();
         }
 
         // Internal method - must be called from within _stateLock
@@ -421,9 +426,11 @@ namespace ClassicUO.Game
             while (_fullTilePath.TryDequeue(out _)) { }
             _failedTiles.Clear();
 
-            World world = World.Instance;
-            if (world?.Player?.Pathfinder != null)
-                world.Player.Pathfinder.AutoWalking = false;
+            MainThreadQueue.EnqueueAction(() => {
+                World world = World.Instance;
+                if (world?.Player?.Pathfinder != null)
+                    world.Player.Pathfinder.AutoWalking = false;
+            });
 
             Log.Info($"[LongDistancePathfinder] Pathfinding stopped - cleared {queueSize} tiles from queue");
         }
@@ -547,18 +554,16 @@ namespace ClassicUO.Game
             int distance = Math.Max(Math.Abs(targetX - startX), Math.Abs(targetY - startY));
             if (distance <= CLOSE_DISTANCE_THRESHOLD)
             {
+                MainThreadQueue.EnqueueAction(() => {
                 World world = World.Instance;
-                if (world?.Player?.Pathfinder != null)
-                {
-                    List<Point> shortPath = ConvertToPointList(world.Player.Pathfinder.GetPathTo(targetX, targetY, world.Player.Z, 0));
-                    if (shortPath != null)
+                    if (world?.Player?.Pathfinder != null)
                     {
-                        foreach (Point point in shortPath)
-                        {
-                            _fullTilePath.Enqueue(point);
-                        }
+                        List<Point> shortPath = ConvertToPointList(world.Player.Pathfinder.GetPathTo(targetX, targetY, world.Player.Z, 0));
+                        if (shortPath != null)
+                            foreach (Point point in shortPath)
+                                _fullTilePath.Enqueue(point);
                     }
-                }
+                });
                 return;
             }
 
@@ -586,7 +591,7 @@ namespace ClassicUO.Game
                 if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS)
                 {
                     Log.Warn("[LongDistancePathfinder] Pathfinding timeout - exceeded maximum time");
-                    GameActions.Print("Pathfinding timeout - path too complex");
+                    MainThreadQueue.EnqueueAction(() => GameActions.Print("Pathfinding timeout - path too complex"));
                     return;
                 }
 
@@ -611,10 +616,7 @@ namespace ClassicUO.Game
                 GenerateNeighborsForFullPath(currentNode, openSet, closedSet);
 
                 // Yield periodically to prevent blocking
-                if (nodesProcessed % 100 == 0)
-                {
-                    Thread.Sleep(1); // Brief yield
-                }
+                if (nodesProcessed % 100 == 0) Thread.Sleep(1); // Brief yield
             }
 
             if (cancellationToken.IsCancellationRequested)
@@ -635,7 +637,7 @@ namespace ClassicUO.Game
                 if (fullPath.Count > MAX_PATH_LENGTH)
                 {
                     Log.Warn($"[LongDistancePathfinder] Path too long ({fullPath.Count} tiles), truncating to {MAX_PATH_LENGTH} tiles");
-                    GameActions.Print($"Path too long, using partial path ({MAX_PATH_LENGTH} tiles)");
+                    MainThreadQueue.EnqueueAction(() => GameActions.Print($"Path too long, using partial path ({MAX_PATH_LENGTH} tiles)"));
                     fullPath = fullPath.GetRange(0, MAX_PATH_LENGTH);
                 }
 
@@ -646,10 +648,7 @@ namespace ClassicUO.Game
                     if (previousPoint.HasValue)
                     {
                         int stepDistance = GetDistance(point.X, point.Y, previousPoint.Value.X, previousPoint.Value.Y);
-                        if (stepDistance > 2)
-                        {
-                            Log.Warn($"[LongDistancePathfinder] Large step detected in path: from ({previousPoint.Value.X}, {previousPoint.Value.Y}) to ({point.X}, {point.Y}), distance: {stepDistance}");
-                        }
+                        if (stepDistance > 2) Log.Warn($"[LongDistancePathfinder] Large step detected in path: from ({previousPoint.Value.X}, {previousPoint.Value.Y}) to ({point.X}, {point.Y}), distance: {stepDistance}");
                     }
                     _fullTilePath.Enqueue(point);
                     previousPoint = point;
@@ -664,7 +663,7 @@ namespace ClassicUO.Game
                 }
 
                 Log.Debug($"[LongDistancePathfinder] Added {_fullTilePath.Count} tiles to full path queue");
-                GameActions.Print($"Generated path with {_fullTilePath.Count} tiles!");
+                MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated path with {_fullTilePath.Count} tiles!"));
             }
             else
             {
@@ -688,15 +687,12 @@ namespace ClassicUO.Game
                     if (partialPath.Count > MAX_PATH_LENGTH)
                     {
                         Log.Warn($"[LongDistancePathfinder] Partial path too long ({partialPath.Count} tiles), truncating to {MAX_PATH_LENGTH} tiles");
-                        GameActions.Print($"Path too long, using truncated path ({MAX_PATH_LENGTH} tiles)");
+                        MainThreadQueue.EnqueueAction(() => GameActions.Print($"Path too long, using truncated path ({MAX_PATH_LENGTH} tiles)"));
                         partialPath = partialPath.GetRange(0, MAX_PATH_LENGTH);
                     }
 
                     // Add the partial path
-                    foreach (Point point in partialPath)
-                    {
-                        _fullTilePath.Enqueue(point);
-                    }
+                    foreach (Point point in partialPath) _fullTilePath.Enqueue(point);
 
                     // Still try to add the exact target at the end - regular pathfinder might be able to reach it
                     Point lastPoint = partialPath[partialPath.Count - 1];
@@ -707,7 +703,7 @@ namespace ClassicUO.Game
                     }
 
                     Log.Debug($"[LongDistancePathfinder] Added {_fullTilePath.Count} tiles to partial path queue");
-                    GameActions.Print($"Generated partial path with {_fullTilePath.Count} tiles (closest reachable point).");
+                    MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated partial path with {_fullTilePath.Count} tiles (closest reachable point)."));
                 }
                 else
                 {
@@ -716,17 +712,12 @@ namespace ClassicUO.Game
                     List<Point> directPath = CreateDirectPathWithAvoidance(startX, startY, targetX, targetY);
                     if (directPath != null && directPath.Count > 1)
                     {
-                        foreach (Point point in directPath)
-                        {
-                            _fullTilePath.Enqueue(point);
-                        }
+                        foreach (Point point in directPath) _fullTilePath.Enqueue(point);
                         Log.Debug($"[LongDistancePathfinder] Added direct path with {directPath.Count} tiles");
-                        GameActions.Print($"Generated direct path with {directPath.Count} tiles.");
+                        MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated direct path with {directPath.Count} tiles."));
                     }
                     else
-                    {
-                        GameActions.Print($"Could not find any viable path to target.");
-                    }
+                        MainThreadQueue.EnqueueAction(() => GameActions.Print($"Could not find any viable path to target."));
                 }
             }
         }

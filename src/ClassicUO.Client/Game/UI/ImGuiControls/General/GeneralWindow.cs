@@ -1,6 +1,7 @@
 using System;
 using ImGuiNET;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Managers;
 using ClassicUO.Network;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -91,6 +92,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.EndTabItem();
                 }
 
+                if (ImGui.BeginTabItem("Pathfinding"))
+                {
+                    DrawPathfindingTab();
+                    ImGui.EndTabItem();
+                }
+
                 ImGui.EndTabBar();
             }
         }
@@ -173,11 +180,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
             ImGui.EndGroup();
+        }
 
-            // Group: Misc Config
+        private void DrawPathfindingTab()
+        {
             ImGui.BeginGroup();
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc Config");
 
             ImGui.SetNextItemWidth(150);
             if (ImGui.Checkbox("Long-Distance Pathfinding", ref _useLongDistancePathing))
@@ -187,6 +194,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("This is currently in beta.");
 
+
             ImGui.SetNextItemWidth(150);
             if (ImGui.SliderInt("Pathfinding Gen Time", ref _pathfindingGenerationTimeMs, 1, 50, "%d ms"))
             {
@@ -195,6 +203,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (Managers.WalkableManager.Instance != null) Managers.WalkableManager.Instance.TARGET_GENERATION_TIME_MS = _pathfindingGenerationTimeMs;
             }
             ImGuiComponents.Tooltip("Target time in milliseconds for pathfinding cache generation per cycle. Higher values generate cache faster but may cause performance issues.");
+
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.Button("Reset current map cache"))
+            {
+                WalkableManager.Instance?.StartFreshGeneration(World.Instance.MapIndex);
+            }
+            ImGuiComponents.Tooltip("This will start regeneration of the current map cache.");
+
 
             ImGui.EndGroup();
         }

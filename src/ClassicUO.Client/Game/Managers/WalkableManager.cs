@@ -67,9 +67,12 @@ namespace ClassicUO.Game.Managers
                 });
             });
 
-            World.Instance.CommandManager.Register("reset", strings =>
+            World.Instance.CommandManager.Register("checkwalk", strings =>
             {
-                StartFreshGeneration(World.Instance.MapIndex);
+                int x = World.Instance.Player.X;
+                int y =  World.Instance.Player.Y;
+                bool walkable = IsWalkable(x, y);
+                GameActions.Print($"Is walkable: {x}, {y}: {walkable}", (ushort)(walkable ? 64 : 32));
             });
 #endif
         }
@@ -83,27 +86,15 @@ namespace ClassicUO.Game.Managers
 
             // Check session modifications first
             lock (_sessionModificationsLock)
-            {
                 if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
-                {
                     if (sessionData.HasDataForTile(x, y))
-                    {
                         return sessionData.GetWalkable(x, y);
-                    }
-                }
-            }
 
             // Check persistent data
             lock (_mapDataLock)
-            {
                 if (_mapData.TryGetValue(mapIndex, out WalkableMapData mapData))
-                {
                     if (mapData.HasDataForTile(x, y))
-                    {
                         return mapData.GetWalkable(x, y);
-                    }
-                }
-            }
 
             // If no data exists, calculate on demand
             return CalculateWalkabilityForTile(x, y);
@@ -136,12 +127,8 @@ namespace ClassicUO.Game.Managers
             int mapIndex = World.Instance.Map.Index;
 
             lock (_sessionModificationsLock)
-            {
                 if (_sessionModifications.TryGetValue(mapIndex, out WalkableMapData sessionData))
-                {
                     sessionData.ClearWalkable(x, y);
-                }
-            }
         }
 
         public void Update()
@@ -164,10 +151,7 @@ namespace ClassicUO.Game.Managers
                 _updateCounter++;
 
                 // Generate chunks every other update
-                if (_updateCounter % 2 == 0)
-                {
-                    GenerateNextChunks(_chunksPerCycle);
-                }
+                if (_updateCounter % 2 == 0) GenerateNextChunks(_chunksPerCycle);
             }
         }
 
@@ -220,7 +204,6 @@ namespace ClassicUO.Game.Managers
 
                 WalkableMapData mapData;
                 lock (_mapDataLock)
-                {
                     if (!_mapData.TryGetValue(mapIndex, out mapData))
                     {
                         mapData = new WalkableMapData(mapIndex);
@@ -243,7 +226,6 @@ namespace ClassicUO.Game.Managers
 
                         _mapData[mapIndex] = mapData;
                     }
-                }
 
                 // Calculate chunks to generate
                 int totalChunksX = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 0];
@@ -284,10 +266,7 @@ namespace ClassicUO.Game.Managers
                 double elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
                 AdjustChunksPerCycleBasedOnPerformance(elapsedMs, numChunks);
 
-                lock (_generationLock)
-                {
-                    _isGenerating = false;
-                }
+                lock (_generationLock) _isGenerating = false;
             }
         }
 
@@ -299,10 +278,7 @@ namespace ClassicUO.Game.Managers
 
             // Add to recent generation times for smoothing
             _recentGenerationTimes.Enqueue(elapsedMs);
-            if (_recentGenerationTimes.Count > PERFORMANCE_SAMPLE_SIZE)
-            {
-                _recentGenerationTimes.Dequeue();
-            }
+            if (_recentGenerationTimes.Count > PERFORMANCE_SAMPLE_SIZE) _recentGenerationTimes.Dequeue();
 
             // Only adjust after we have enough samples
             if (_recentGenerationTimes.Count < PERFORMANCE_SAMPLE_SIZE)
@@ -310,25 +286,18 @@ namespace ClassicUO.Game.Managers
 
             // Calculate average time from recent samples
             double avgTime = 0;
-            foreach (double time in _recentGenerationTimes)
-            {
-                avgTime += time;
-            }
+            foreach (double time in _recentGenerationTimes) avgTime += time;
             avgTime /= _recentGenerationTimes.Count;
 
             int oldChunksPerCycle = _chunksPerCycle;
 
             // Adjust chunks per cycle based on performance
             if (avgTime < TARGET_GENERATION_TIME_MS * 0.8) // If we're significantly under target
-            {
                 // Increase chunks per cycle
                 _chunksPerCycle = Math.Min(_chunksPerCycle + 1, MAX_CHUNKS_PER_CYCLE);
-            }
             else if (avgTime > TARGET_GENERATION_TIME_MS * 1.2) // If we're significantly over target
-            {
                 // Decrease chunks per cycle
                 _chunksPerCycle = Math.Max(_chunksPerCycle - 1, MIN_CHUNKS_PER_CYCLE);
-            }
 
             // Log performance adjustments
             if (_chunksPerCycle != oldChunksPerCycle)
@@ -346,16 +315,12 @@ namespace ClassicUO.Game.Managers
             {
                 // Generate walkability data for an 8x8 chunk synchronously
                 for (int x = chunkX * CHUNK_SIZE; x < (chunkX + 1) * CHUNK_SIZE; x++)
-                {
-                    for (int y = chunkY * CHUNK_SIZE; y < (chunkY + 1) * CHUNK_SIZE; y++)
+                for (int y = chunkY * CHUNK_SIZE; y < (chunkY + 1) * CHUNK_SIZE; y++)
+                    if (!mapData.HasDataForTile(x, y))
                     {
-                        if (!mapData.HasDataForTile(x, y))
-                        {
-                            bool walkable = CalculateWalkabilityForTile(x, y);
-                            mapData.SetWalkable(x, y, walkable);
-                        }
+                        bool walkable = CalculateWalkabilityForTile(x, y);
+                        mapData.SetWalkable(x, y, walkable);
                     }
-                }
             }
             catch (Exception ex)
             {
@@ -415,20 +380,6 @@ namespace ClassicUO.Game.Managers
             if (tile == null)
                 return false;
 
-            // Determine player state
-            bool isDeadOrGM = World.Instance.Player.IsDead || World.Instance.Player.Graphic == 0x03DB;
-            bool isFlying = World.Instance.Player.IsGargoyle && World.Instance.Player.IsFlying;
-            bool isOnSeaHorse = false;
-
-            Item mount = World.Instance.Player.FindItemByLayer(Layer.Mount);
-            if (mount != null && mount.Graphic == 0x3EB3)
-                isOnSeaHorse = true;
-
-            bool ignoreCharacters = ProfileManager.CurrentProfile.IgnoreStaminaCheck ||
-                                   isDeadOrGM ||
-                                   World.Instance.Player.IgnoreCharacters ||
-                                   !(World.Instance.Player.Stamina < World.Instance.Player.StaminaMax && World.Instance.Map.Index == 0);
-
             // Find the first object in the tile chain
             GameObject obj = tile;
             while (obj.TPrevious != null)
@@ -450,133 +401,56 @@ namespace ClassicUO.Game.Managers
                         // Check if land tile is valid (not a "no draw" tile)
                         ushort landGraphic = land.Graphic;
                         if (landGraphic < 0x01AE && landGraphic != 2 || landGraphic > 0x01B5 && landGraphic != 0x01DB)
-                        {
-                            if (isOnSeaHorse)
+                            if (!land.TileData.IsImpassable)
                             {
-                                // Seahorse can only walk on water
-                                if (land.TileData.IsWet)
+                                int landZ = land.AverageZ;
+                                if (Math.Abs(landZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
                                 {
-                                    int landZ = land.AverageZ;
-                                    if (Math.Abs(landZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                    {
-                                        hasWalkableSurface = true;
-                                        if (landZ > surfaceZ)
-                                            surfaceZ = landZ;
-                                    }
+                                    hasWalkableSurface = true;
+                                    if (landZ > surfaceZ)
+                                        surfaceZ = landZ;
                                 }
                             }
-                            else
-                            {
-                                // Normal land walkability
-                                if (!land.TileData.IsImpassable)
-                                {
-                                    int landZ = land.AverageZ;
-                                    if (Math.Abs(landZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                    {
-                                        hasWalkableSurface = true;
-                                        if (landZ > surfaceZ)
-                                            surfaceZ = landZ;
-                                    }
-                                }
-                            }
-                        }
+
                         break;
 
                     case GameEffect:
                         // Ignore effects
-                        break;
-
                     case Mobile mobile:
-                        // Check if mobile blocks movement
-                        if (!ignoreCharacters && !mobile.IsDead && !mobile.IgnoreCharacters)
-                        {
-                            // Mobile blocks if at similar Z level
-                            int mobileZ = mobile.Z;
-                            if (Math.Abs(mobileZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                            {
-                                return false; // Blocked by mobile
-                            }
-                        }
-                        break;
-
-                    case Item item when item.IsMulti || item.ItemData.IsInternal:
-                        // Skip multi items and internal items
+                        // Ignore mobiles
                         break;
 
                     case Item item:
                         ushort itemGraphic = item.Graphic;
                         ref StaticTiles itemData = ref Client.Game.UO.FileManager.TileData.StaticData[itemGraphic];
 
-                        bool dropFlags = false;
-
-                        // Check for passable doors and lightweight items for dead/GM
-                        if (isDeadOrGM && (itemData.IsDoor || itemData.Weight <= 0x5A))
-                        {
-                            dropFlags = true;
-                        }
-                        else if (ProfileManager.CurrentProfile.SmoothDoors && itemData.IsDoor)
-                        {
-                            dropFlags = true;
-                        }
-                        else
-                        {
-                            // Certain graphics are always passable
-                            dropFlags = itemGraphic >= 0x3946 && itemGraphic <= 0x3964 || itemGraphic == 0x0082;
-                        }
+                        // Certain graphics are always passable
+                        bool dropFlags = itemGraphic >= 0x3946 && itemGraphic <= 0x3964 || itemGraphic == 0x0082;
 
                         if (!dropFlags)
                         {
-                            if (isOnSeaHorse)
+                            if (itemData.IsImpassable)
                             {
-                                if (itemData.IsWet)
-                                {
-                                    int itemZ = item.Z;
-                                    if (Math.Abs(itemZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                    {
-                                        hasWalkableSurface = true;
-                                        if (itemZ > surfaceZ)
-                                            surfaceZ = itemZ;
-                                    }
-                                }
-                                else if (itemData.IsImpassable)
-                                {
-                                    int itemZ = item.Z;
-                                    int itemTop = itemZ + itemData.Height;
-                                    // Check if item blocks at current Z
-                                    if (itemZ <= z && itemTop > z)
-                                    {
-                                        return false; // Blocked by item
-                                    }
-                                }
+                                int itemZ = item.Z;
+                                int itemTop = itemZ + itemData.Height;
+                                // Check if item blocks at current Z
+                                if (itemZ <= z && itemTop > z) return false; // Blocked by item
                             }
-                            else
+                            else if (itemData.IsSurface || itemData.IsBridge)
                             {
-                                if (itemData.IsImpassable)
+                                int itemZ = item.Z;
+                                int surfaceHeight = itemData.Height;
+
+                                if (itemData.IsBridge)
+                                    surfaceHeight /= 2;
+
+                                int itemSurfaceZ = itemZ + surfaceHeight;
+
+                                if (Math.Abs(itemSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
                                 {
-                                    int itemZ = item.Z;
-                                    int itemTop = itemZ + itemData.Height;
-                                    // Check if item blocks at current Z
-                                    if (itemZ <= z && itemTop > z)
-                                    {
-                                        return false; // Blocked by item
-                                    }
-                                }
-                                else if (itemData.IsSurface || itemData.IsBridge)
-                                {
-                                    int itemZ = item.Z;
-                                    int surfaceHeight = itemData.Height;
-
-                                    if (itemData.IsBridge)
-                                        surfaceHeight /= 2;
-
-                                    int itemSurfaceZ = itemZ + surfaceHeight;
-
-                                    if (Math.Abs(itemSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                    {
-                                        hasWalkableSurface = true;
-                                        if (itemSurfaceZ > surfaceZ)
-                                            surfaceZ = itemSurfaceZ;
-                                    }
+                                    hasWalkableSurface = true;
+                                    if (itemSurfaceZ > surfaceZ)
+                                        surfaceZ = itemSurfaceZ;
                                 }
                             }
                         }
@@ -587,67 +461,34 @@ namespace ClassicUO.Game.Managers
                         if ((World.Instance.CustomHouseManager != null && multi.IsCustom &&
                             (multi.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_GENERIC_INTERNAL) == 0) ||
                             multi.IsHousePreview)
-                        {
                             break; // Skip these multis
-                        }
 
-                        if ((multi.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_IGNORE_IN_RENDER) != 0)
-                        {
-                            break; // Skip ignored multis
-                        }
+                        if ((multi.State & CUSTOM_HOUSE_MULTI_OBJECT_FLAGS.CHMOF_IGNORE_IN_RENDER) != 0) break; // Skip ignored multis
 
                         ushort multiGraphic = multi.Graphic;
                         ref StaticTiles multiData = ref Client.Game.UO.FileManager.TileData.StaticData[multiGraphic];
 
-                        if (isOnSeaHorse)
+                        if (multiData.IsImpassable)
                         {
-                            if (multiData.IsWet)
-                            {
-                                int multiZ = multi.Z;
-                                if (Math.Abs(multiZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                {
-                                    hasWalkableSurface = true;
-                                    if (multiZ > surfaceZ)
-                                        surfaceZ = multiZ;
-                                }
-                            }
-                            else if (multiData.IsImpassable)
-                            {
-                                int multiZ = multi.Z;
-                                int multiTop = multiZ + multiData.Height;
-                                if (multiZ <= z && multiTop > z)
-                                {
-                                    return false; // Blocked by multi
-                                }
-                            }
+                            int multiZ = multi.Z;
+                            int multiTop = multiZ + multiData.Height;
+                            if (multiZ <= z && multiTop > z) return false; // Blocked by multi
                         }
-                        else
+                        else if (multiData.IsSurface || multiData.IsBridge)
                         {
-                            if (multiData.IsImpassable)
+                            int multiZ = multi.Z;
+                            int surfaceHeight = multiData.Height;
+
+                            if (multiData.IsBridge)
+                                surfaceHeight /= 2;
+
+                            int multiSurfaceZ = multiZ + surfaceHeight;
+
+                            if (Math.Abs(multiSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
                             {
-                                int multiZ = multi.Z;
-                                int multiTop = multiZ + multiData.Height;
-                                if (multiZ <= z && multiTop > z)
-                                {
-                                    return false; // Blocked by multi
-                                }
-                            }
-                            else if (multiData.IsSurface || multiData.IsBridge)
-                            {
-                                int multiZ = multi.Z;
-                                int surfaceHeight = multiData.Height;
-
-                                if (multiData.IsBridge)
-                                    surfaceHeight /= 2;
-
-                                int multiSurfaceZ = multiZ + surfaceHeight;
-
-                                if (Math.Abs(multiSurfaceZ - z) <= Constants.DEFAULT_BLOCK_HEIGHT)
-                                {
-                                    hasWalkableSurface = true;
-                                    if (multiSurfaceZ > surfaceZ)
-                                        surfaceZ = multiSurfaceZ;
-                                }
+                                hasWalkableSurface = true;
+                                if (multiSurfaceZ > surfaceZ)
+                                    surfaceZ = multiSurfaceZ;
                             }
                         }
                         break;
@@ -705,65 +546,51 @@ namespace ClassicUO.Game.Managers
 
             WalkableMapData mapData = null;
             lock (_mapDataLock)
-            {
                 if (_mapData.TryGetValue(mapIndex, out mapData))
                 {
                     // Map data exists, use it
                 }
-            }
 
             // Fill the color array
             for (int pixelY = 0; pixelY < textureHeight; pixelY++)
+            for (int pixelX = 0; pixelX < textureWidth; pixelX++)
             {
-                for (int pixelX = 0; pixelX < textureWidth; pixelX++)
+                // Calculate the tile position this pixel represents
+                int tileX = pixelX * scale;
+                int tileY = pixelY * scale;
+
+                // For scaled textures, check multiple tiles and use majority vote
+                int walkableCount = 0;
+                int nonWalkableCount = 0;
+                int unknownCount = 0;
+
+                for (int dy = 0; dy < scale && (tileY + dy) < mapHeightInTiles; dy++)
+                for (int dx = 0; dx < scale && (tileX + dx) < mapWidthInTiles; dx++)
                 {
-                    // Calculate the tile position this pixel represents
-                    int tileX = pixelX * scale;
-                    int tileY = pixelY * scale;
+                    int checkX = tileX + dx;
+                    int checkY = tileY + dy;
 
-                    // For scaled textures, check multiple tiles and use majority vote
-                    int walkableCount = 0;
-                    int nonWalkableCount = 0;
-                    int unknownCount = 0;
-
-                    for (int dy = 0; dy < scale && (tileY + dy) < mapHeightInTiles; dy++)
+                    if (mapData != null && mapData.HasDataForTile(checkX, checkY))
                     {
-                        for (int dx = 0; dx < scale && (tileX + dx) < mapWidthInTiles; dx++)
-                        {
-                            int checkX = tileX + dx;
-                            int checkY = tileY + dy;
-
-                            if (mapData != null && mapData.HasDataForTile(checkX, checkY))
-                            {
-                                if (mapData.GetWalkable(checkX, checkY))
-                                    walkableCount++;
-                                else
-                                    nonWalkableCount++;
-                            }
-                            else
-                            {
-                                unknownCount++;
-                            }
-                        }
-                    }
-
-                    // Determine pixel color based on majority
-                    Color pixelColor;
-                    if (unknownCount > (walkableCount + nonWalkableCount))
-                    {
-                        pixelColor = unknownColor;
-                    }
-                    else if (walkableCount > nonWalkableCount)
-                    {
-                        pixelColor = walkableColor;
+                        if (mapData.GetWalkable(checkX, checkY))
+                            walkableCount++;
+                        else
+                            nonWalkableCount++;
                     }
                     else
-                    {
-                        pixelColor = nonWalkableColor;
-                    }
-
-                    colors[pixelY * textureWidth + pixelX] = pixelColor;
+                        unknownCount++;
                 }
+
+                // Determine pixel color based on majority
+                Color pixelColor;
+                if (unknownCount > (walkableCount + nonWalkableCount))
+                    pixelColor = unknownColor;
+                else if (walkableCount > nonWalkableCount)
+                    pixelColor = walkableColor;
+                else
+                    pixelColor = nonWalkableColor;
+
+                colors[pixelY * textureWidth + pixelX] = pixelColor;
             }
 
             // Create the texture
@@ -819,10 +646,7 @@ namespace ClassicUO.Game.Managers
                     FileSystemHelper.RemoveInvalidChars(World.Instance.ServerName)
                 );
 
-                if (!Directory.Exists(outputDir))
-                {
-                    Directory.CreateDirectory(outputDir);
-                }
+                if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
 
                 // Generate filename
                 if (string.IsNullOrEmpty(filename))
@@ -834,10 +658,7 @@ namespace ClassicUO.Game.Managers
                 string filePath = Path.Combine(outputDir, filename + ".png");
 
                 // Save texture to file
-                using (FileStream fileStream = File.Create(filePath))
-                {
-                    texture.SaveAsPng(fileStream, texture.Width, texture.Height);
-                }
+                using (FileStream fileStream = File.Create(filePath)) texture.SaveAsPng(fileStream, texture.Width, texture.Height);
 
                 // Dispose the texture
                 texture.Dispose();
@@ -860,10 +681,7 @@ namespace ClassicUO.Game.Managers
             {
                 string cacheDir = Path.Combine(CUOEnviroment.ExecutablePath, "Data", FileSystemHelper.RemoveInvalidChars(World.Instance.ServerName));
 
-                if (!Directory.Exists(cacheDir))
-                {
-                    Directory.CreateDirectory(cacheDir);
-                }
+                if (!Directory.Exists(cacheDir)) Directory.CreateDirectory(cacheDir);
             }
             catch (Exception ex)
             {
@@ -873,10 +691,7 @@ namespace ClassicUO.Game.Managers
 
         private void LoadAllMapData()
         {
-            for (int mapIndex = 0; mapIndex < MAX_MAP_COUNT; mapIndex++)
-            {
-                LoadMapData(mapIndex);
-            }
+            for (int mapIndex = 0; mapIndex < MAX_MAP_COUNT; mapIndex++) LoadMapData(mapIndex);
         }
 
         private void LoadMapData(int mapIndex)
@@ -944,9 +759,7 @@ namespace ClassicUO.Game.Managers
                             Log.Debug($"[WalkableManager] Current checksum: {currentChecksum}");
                         }
                         else
-                        {
                             Log.Info($"[WalkableManager] Map {mapIndex} checksum valid, using cached data");
-                        }
                     }
                     catch (Exception checksumEx)
                     {
@@ -962,10 +775,7 @@ namespace ClassicUO.Game.Managers
                     }
 
                     // Checksum is valid, proceed with normal loading
-                    lock (_mapDataLock)
-                    {
-                        _mapData[mapIndex] = mapData;
-                    }
+                    lock (_mapDataLock) _mapData[mapIndex] = mapData;
 
                     // Check if this map was fully generated
                     int totalChunksX = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 0];
@@ -997,7 +807,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        private void StartFreshGeneration(int mapIndex)
+        internal void StartFreshGeneration(int mapIndex)
         {
             var mapData = new WalkableMapData(mapIndex);
 
@@ -1017,10 +827,7 @@ namespace ClassicUO.Game.Managers
                 Log.Warn($"[WalkableManager] Failed to calculate checksum for new map {mapIndex}: {checksumEx.Message}");
             }
 
-            lock (_mapDataLock)
-            {
-                _mapData[mapIndex] = mapData;
-            }
+            lock (_mapDataLock) _mapData[mapIndex] = mapData;
 
             // Reset generation state to start from beginning
             _mapChunkGenerationIndex[mapIndex] = 0;
@@ -1035,10 +842,8 @@ namespace ClassicUO.Game.Managers
             {
                 WalkableMapData mapData;
                 lock (_mapDataLock)
-                {
                     if (!_mapData.TryGetValue(mapIndex, out mapData))
                         return;
-                }
 
                 // Ensure checksum is current before saving
                 try
@@ -1075,35 +880,23 @@ namespace ClassicUO.Game.Managers
                 _mapData.Keys.CopyTo(mapIndices, 0);
             }
 
-            foreach (int mapIndex in mapIndices)
-            {
-                SaveMapData(mapIndex);
-            }
+            foreach (int mapIndex in mapIndices) SaveMapData(mapIndex);
         }
 
         private string GetMapDataFileName(int mapIndex) => Path.Combine(CUOEnviroment.ExecutablePath, "Data", FileSystemHelper.RemoveInvalidChars(World.Instance.ServerName), $"walkable_map_{mapIndex}.dat");
 
         public void ClearSessionModifications()
         {
-            lock (_sessionModificationsLock)
-            {
-                _sessionModifications.Clear();
-            }
+            lock (_sessionModificationsLock) _sessionModifications.Clear();
         }
 
         public void Shutdown()
         {
             SaveAllMapData();
 
-            lock (_mapDataLock)
-            {
-                _mapData.Clear();
-            }
+            lock (_mapDataLock) _mapData.Clear();
 
-            lock (_sessionModificationsLock)
-            {
-                _sessionModifications.Clear();
-            }
+            lock (_sessionModificationsLock) _sessionModifications.Clear();
         }
     }
 
@@ -1129,20 +922,15 @@ namespace ClassicUO.Game.Managers
 
         public bool HasDataForTile(int x, int y)
         {
-            lock (_dataLock)
-            {
-                return HasDataForTileUnsafe(x, y);
-            }
+            lock (_dataLock) return HasDataForTileUnsafe(x, y);
         }
 
         private bool HasDataForTileUnsafe(int x, int y)
         {
             long chunkKey = GetChunkKey(x >> 3, y >> 3); // Changed from >> 5 to >> 3 for 8x8 chunks
             if (_chunks.TryGetValue(chunkKey, out BitArray8x8 chunk))
-            {
                 // Check if this specific tile has been set (not just if the chunk exists)
                 return chunk.IsSet(x & 7, y & 7);
-            }
             return false;
         }
 
@@ -1150,12 +938,9 @@ namespace ClassicUO.Game.Managers
         {
             long chunkKey = GetChunkKey(x >> 3, y >> 3); // Changed from >> 5 to >> 3 for 8x8 chunks
             lock (_dataLock)
-            {
                 if (_chunks.TryGetValue(chunkKey, out BitArray8x8 chunk))
-                {
                     return chunk.Get(x & 7, y & 7); // Changed from & 31 to & 7 for 8x8 chunks
-                }
-            }
+
             return false;
         }
 
@@ -1177,12 +962,8 @@ namespace ClassicUO.Game.Managers
         {
             long chunkKey = GetChunkKey(x >> 3, y >> 3);
             lock (_dataLock)
-            {
                 if (_chunks.TryGetValue(chunkKey, out BitArray8x8 chunk))
-                {
                     chunk.Clear(x & 7, y & 7);
-                }
-            }
         }
 
         public int CalculateGenerationProgress(int mapIndex)
@@ -1195,7 +976,6 @@ namespace ClassicUO.Game.Managers
             int completedChunks = 0;
 
             lock (_dataLock)
-            {
                 // Check each 8x8 map chunk to see if we have data for it
                 for (int chunkIndex = 0; chunkIndex < totalChunksX * totalChunksY; chunkIndex++)
                 {
@@ -1205,26 +985,15 @@ namespace ClassicUO.Game.Managers
                     // Check if this 8x8 chunk has any data by sampling a few tiles
                     bool hasData = false;
                     for (int x = chunkX * 8; x < (chunkX + 1) * 8 && !hasData; x++)
-                    {
-                        for (int y = chunkY * 8; y < (chunkY + 1) * 8 && !hasData; y++)
-                        {
-                            if (HasDataForTileUnsafe(x, y))
-                            {
-                                hasData = true;
-                            }
-                        }
-                    }
+                    for (int y = chunkY * 8; y < (chunkY + 1) * 8 && !hasData; y++)
+                        if (HasDataForTileUnsafe(x, y))
+                            hasData = true;
 
                     if (hasData)
-                    {
                         completedChunks = chunkIndex + 1; // +1 because we completed this chunk
-                    }
                     else
-                    {
                         break; // Sequential generation, so we can stop here
-                    }
                 }
-            }
 
             return completedChunks;
         }
@@ -1239,7 +1008,6 @@ namespace ClassicUO.Game.Managers
             {
                 using (var stream = new FileStream(tempFilename, FileMode.Create, FileAccess.Write))
                 using (var writer = new BinaryWriter(stream))
-                {
                     lock (_dataLock)
                     {
                         // Write file version first for future compatibility
@@ -1258,23 +1026,16 @@ namespace ClassicUO.Game.Managers
                         // Write checksum (new in version 2)
                         writer.Write(_mapChecksum ?? string.Empty);
                     }
-                }
 
                 // Atomic replace
-                if (File.Exists(filename))
-                {
-                    File.Delete(filename);
-                }
+                if (File.Exists(filename)) File.Delete(filename);
                 File.Move(tempFilename, filename);
             }
             catch (Exception ex)
             {
                 try
                 {
-                    if (File.Exists(tempFilename))
-                    {
-                        File.Delete(tempFilename);
-                    }
+                    if (File.Exists(tempFilename)) File.Delete(tempFilename);
                 }
                 catch { }
 
@@ -1293,17 +1054,11 @@ namespace ClassicUO.Game.Managers
                     int fileVersion = reader.ReadInt32();
 
                     // Only accept version 2+ files (with checksums)
-                    if (fileVersion < 2)
-                    {
-                        throw new InvalidDataException($"Old file format detected (version {fileVersion}), file will be deleted and regenerated");
-                    }
+                    if (fileVersion < 2) throw new InvalidDataException($"Old file format detected (version {fileVersion}), file will be deleted and regenerated");
 
                     int mapIndex = reader.ReadInt32();
 
-                    if (mapIndex != _mapIndex)
-                    {
-                        throw new InvalidDataException($"Map index mismatch: expected {_mapIndex}, got {mapIndex}");
-                    }
+                    if (mapIndex != _mapIndex) throw new InvalidDataException($"Map index mismatch: expected {_mapIndex}, got {mapIndex}");
 
                     int chunkCount = reader.ReadInt32();
 
@@ -1321,13 +1076,9 @@ namespace ClassicUO.Game.Managers
 
                         // Read checksum (required in version 2+)
                         if (stream.Position < stream.Length)
-                        {
                             _mapChecksum = reader.ReadString();
-                        }
                         else
-                        {
                             throw new InvalidDataException("Checksum missing from file");
-                        }
                     }
                 }
             }
@@ -1388,29 +1139,17 @@ namespace ClassicUO.Game.Managers
         public void WriteTo(BinaryWriter writer)
         {
             // Write data array
-            for (int i = 0; i < 8; i++)
-            {
-                writer.Write(_data[i]);
-            }
+            for (int i = 0; i < 8; i++) writer.Write(_data[i]);
             // Write isset array
-            for (int i = 0; i < 8; i++)
-            {
-                writer.Write(_isset[i]);
-            }
+            for (int i = 0; i < 8; i++) writer.Write(_isset[i]);
         }
 
         public void ReadFrom(BinaryReader reader)
         {
             // Read data array
-            for (int i = 0; i < 8; i++)
-            {
-                _data[i] = reader.ReadByte();
-            }
+            for (int i = 0; i < 8; i++) _data[i] = reader.ReadByte();
             // Read isset array
-            for (int i = 0; i < 8; i++)
-            {
-                _isset[i] = reader.ReadByte();
-            }
+            for (int i = 0; i < 8; i++) _isset[i] = reader.ReadByte();
         }
     }
 }
