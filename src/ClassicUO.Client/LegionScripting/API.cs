@@ -1518,7 +1518,7 @@ namespace ClassicUO.LegionScripting
                 if (World == null || World.Player == null)
                     return false;
 
-                return World.Player.Pathfinder.AutoWalking;
+                return World.Player.Pathfinder.AutoWalking || LongDistancePathfinder.IsPathfinding();
             }
         );
 

@@ -48,7 +48,7 @@ namespace ClassicUO.Game.Managers
         public void Initialize()
         {
             CreateCacheDirectory();
-            LoadAllMapData();
+            // Maps are now loaded on-demand when first accessed rather than loading all maps at startup
 
             Client.Settings?.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2, (s) => TARGET_GENERATION_TIME_MS = s);
 
@@ -143,6 +143,9 @@ namespace ClassicUO.Game.Managers
             {
                 _lastMapIndex = mapIndex;
                 ClearSessionModifications(); // Clear session mods when changing maps
+
+                // Ensure the new map is loaded
+                EnsureMapLoaded(mapIndex);
             }
 
             // Only generate chunks if the map isn't fully generated yet
@@ -153,6 +156,20 @@ namespace ClassicUO.Game.Managers
                 // Generate chunks every other update
                 if (_updateCounter % 2 == 0) GenerateNextChunks(_chunksPerCycle);
             }
+        }
+
+        private void EnsureMapLoaded(int mapIndex)
+        {
+            // Check if map is already loaded
+            lock (_mapDataLock)
+            {
+                if (_mapData.ContainsKey(mapIndex))
+                    return; // Map already loaded
+            }
+
+            // Load the map data from disk or start fresh generation
+            Log.Info($"[WalkableManager] Loading map {mapIndex} on demand");
+            LoadMapData(mapIndex);
         }
 
         public bool IsMapGenerationComplete(int mapIndex) => _mapGenerationComplete.TryGetValue(mapIndex, out bool isComplete) && isComplete;

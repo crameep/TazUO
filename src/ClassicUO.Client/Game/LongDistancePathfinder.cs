@@ -14,7 +14,7 @@ namespace ClassicUO.Game
     {
         private const int CLOSE_DISTANCE_THRESHOLD = 10;
         private const int MAX_PATHFIND_ATTEMPTS = 100;
-        private const int REGULAR_PATHFINDER_MAX_RANGE = 15;
+        private const int REGULAR_PATHFINDER_MAX_RANGE = 10;
         private const int MIN_TILES_TO_START_WALKING = 5;
         private const int INITIAL_CHUNK_SIZE = 10;
         private const int MAX_PATHFINDING_TIME_MS = 30000; // 30 seconds
@@ -43,6 +43,8 @@ namespace ClassicUO.Game
         private static readonly ConcurrentStack<Point> _failedTiles = new();
         private static long _nextAttempt = 0; // Protected by Interlocked operations
         private static long _pathfindingStartTime; // Set before background thread starts, read during execution
+
+        public static bool IsPathfinding() => _pathfindingInProgress;
 
         /// <summary>
         /// Initiates long-distance pathfinding to the specified target coordinates.
@@ -128,12 +130,6 @@ namespace ClassicUO.Game
                     while (_fullTilePath.TryDequeue(out _)) { }
 
                     _failedTiles.Clear();
-
-                    MainThreadQueue.EnqueueAction(() => {
-                        World world = World.Instance;
-                        if (world?.Player?.Pathfinder != null)
-                            world.Player.Pathfinder.AutoWalking = true;
-                    });
 
                     // Start full path generation in background (fire-and-forget)
                     _ = StartFullPathGeneration(playerX, playerY, targetX, targetY, token);
@@ -286,7 +282,7 @@ namespace ClassicUO.Game
             Log.Debug($"[LongDistancePathfinder] Processing chunk of {chunkTiles.Count} tiles, target: ({targetTile.Value.X}, {targetTile.Value.Y})");
 
             // Try to walk to the selected target tile
-            bool success = CallRegularPathfinder(targetTile.Value.X, targetTile.Value.Y, player.Z, 0);
+            bool success = CallRegularPathfinder(targetTile.Value.X, targetTile.Value.Y, player.Z, 1);
 
             if (success)
             {
@@ -502,18 +498,18 @@ namespace ClassicUO.Game
                 }
 
                 // Calculate distance to see if it would normally trigger long distance pathfinding
-                int playerDistance = Math.Max(Math.Abs(x - player.X), Math.Abs(y - player.Y));
-
-                if (playerDistance <= CLOSE_DISTANCE_THRESHOLD)
-                {
-                    // Distance is small enough, just use regular pathfinder directly
-                    return player.Pathfinder.WalkTo(x, y, z, distance);
-                }
-                else
+                // int playerDistance = Math.Max(Math.Abs(x - player.X), Math.Abs(y - player.Y));
+                //
+                // if (playerDistance <= CLOSE_DISTANCE_THRESHOLD)
+                // {
+                //     // Distance is small enough, just use regular pathfinder directly
+                //     return player.Pathfinder.WalkTo(x, y, z, distance);
+                // }
+                // else
                 {
                     // Distance would trigger long distance pathfinding, but we want to force regular pathfinding
                     // So we temporarily disable long distance pathfinding and accept the result
-                    Log.Debug($"[LongDistancePathfinder] Forcing regular pathfinder for waypoint at distance {playerDistance}");
+                    //Log.Debug($"[LongDistancePathfinder] Forcing regular pathfinder for waypoint at distance {playerDistance}");
 
                     Interlocked.Increment(ref _disableLongDistanceForWaypoints);
                     try
