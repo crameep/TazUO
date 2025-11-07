@@ -143,6 +143,8 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
         private HashSet<string> _cachedNormalizedAllProperties;
         private HashSet<string> _cachedNormalizedAllNegatives;
         private Dictionary<string, (int MinValue, bool IsOptional)> _cachedNormalizedRulesProperties;
+        private static readonly List<ItemPropertiesData> _reusableItemData = new(3);
+        private static readonly List<uint> _reusableRequeueItems = new();
         private bool _cacheValid = false;
 
         private GridHighlightData(GridHighlightSetupEntry entry)
@@ -170,6 +172,14 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             list.Insert(up ? index - 1 : index + 1, _entry);
         }
 
+        public static void ProcessItemOpl(World world, Item item)
+        {
+            if (item.HighlightChecked) return;
+
+            ProcessItemOpl(world, item.Serial);
+        }
+
+
         public static void ProcessItemOpl(World world, uint serial)
         {
             // Only queue items if the server supports tooltips
@@ -190,8 +200,8 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             if (!hasQueuedItems)
                 return;
 
-            List<ItemPropertiesData> itemData = new(3);
-            List<uint> requeueItems = new();
+            _reusableItemData.Clear();
+            _reusableRequeueItems.Clear();
 
             for (int i = 0; i < 3 && _queue.Count > 0; i++)
             {
@@ -206,7 +216,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                 }
 
                 // Check if item is still valid for highlighting
-                if (item.OnGround || item.IsMulti)
+                if (item.OnGround || item.IsMulti || item.HighlightChecked)
                 {
                     // Item moved to ground or is multi, remove from hashset and skip
                     _queuedItems.Remove(ser);
@@ -217,18 +227,19 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                 if (!World.OPL.TryGetNameAndData(ser, out _, out _))
                 {
                     // OPL data not available yet, requeue for later processing
-                    requeueItems.Add(ser);
+                    _reusableRequeueItems.Add(ser);
                     continue;
                 }
 
                 // OPL data exists, remove from hashset and create ItemPropertiesData
                 _queuedItems.Remove(ser);
-                itemData.Add(new ItemPropertiesData(World, item));
+                _reusableItemData.Add(new ItemPropertiesData(World, item));
             }
 
             // Process items with OPL data
-            foreach (ItemPropertiesData data in itemData)
+            foreach (ItemPropertiesData data in _reusableItemData)
             {
+                data.item.HighlightChecked = true;
                 GridHighlightData bestMatch = GetBestMatch(data);
                 if (bestMatch != null)
                 {
@@ -249,7 +260,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             }
 
             // Requeue items that don't have OPL data yet
-            foreach (uint ser in requeueItems)
+            foreach (uint ser in _reusableRequeueItems)
             {
                 _queue.Enqueue(ser);
             }
@@ -294,6 +305,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                 item.HighlightName = null;
                 item.HighlightColor = Color.Transparent;
                 item.ShouldAutoLoot = false;
+                item.HighlightChecked = false;
 
                 ProcessItemOpl(world, kvp.Key);
             }

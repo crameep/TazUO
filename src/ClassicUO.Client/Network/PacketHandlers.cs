@@ -6324,9 +6324,6 @@ sealed class PacketHandlers
 
         container.PushToBack(item);
 
-        // Queue item for grid highlighting
-        GridHighlightData.ProcessItemOpl(world, serial);
-
         if (SerialHelper.IsMobile(containerSerial))
         {
             Mobile m = world.Mobiles.Get(containerSerial);
@@ -6571,10 +6568,6 @@ sealed class PacketHandlers
 
             // Update item database
             ItemDatabaseManager.Instance.AddOrUpdateItem(item, world);
-
-            // Queue item for grid highlighting
-            if(item.Container != 0xFFFF_FFFF)
-                GridHighlightData.ProcessItemOpl(world, serial);
         }
         else
         {
