@@ -439,6 +439,7 @@ namespace ClassicUO.Game.Managers
 
                     case Static stat:
                         if (stat.ItemData.IsImpassable) return false;
+                        if (stat.ItemData.IsWall) return false;
                         break;
 
                     case Item item:

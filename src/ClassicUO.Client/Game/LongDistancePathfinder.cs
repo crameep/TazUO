@@ -605,10 +605,11 @@ namespace ClassicUO.Game
             while (openSet.Count > 0 && !cancellationToken.IsCancellationRequested)
             {
                 // Check for timeout
-                if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS)
+                if (Time.Ticks - _pathfindingStartTime > MAX_PATHFINDING_TIME_MS || nodesProcessed > 100000)
                 {
-                    Log.Warn("[LongDistancePathfinder] Pathfinding timeout - exceeded maximum time");
+                    Log.Warn("[LongDistancePathfinder] Pathfinding timeout - exceeded maximum time or nodes");
                     MainThreadQueue.EnqueueAction(() => GameActions.Print("Pathfinding timeout - path too complex"));
+                    StopPathfinding();
                     return;
                 }
 
@@ -683,7 +684,6 @@ namespace ClassicUO.Game
                 }
 
                 Log.Debug($"[LongDistancePathfinder] Added {_fullTilePath.Count} tiles to full path queue");
-                MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated path with {_fullTilePath.Count} tiles!"));
             }
             else
             {
@@ -726,7 +726,6 @@ namespace ClassicUO.Game
                     }
 
                     Log.Debug($"[LongDistancePathfinder] Added {_fullTilePath.Count} tiles to partial path queue");
-                    MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated partial path with {_fullTilePath.Count} tiles (closest reachable point)."));
                 }
                 else
                 {
@@ -737,7 +736,6 @@ namespace ClassicUO.Game
                     {
                         foreach (Point point in directPath) _fullTilePath.Enqueue(point);
                         Log.Debug($"[LongDistancePathfinder] Added direct path with {directPath.Count} tiles");
-                        MainThreadQueue.EnqueueAction(() => GameActions.Print($"Generated direct path with {directPath.Count} tiles."));
                     }
                     else
                         MainThreadQueue.EnqueueAction(() => GameActions.Print($"Could not find any viable path to target."));
@@ -1202,7 +1200,7 @@ namespace ClassicUO.Game
             // Get the current target tile
             Point targetTile = _currentChunkTiles[_currentChunkTileIndex];
 
-            // Check if we've reached this tile
+            // Check if we've reached this tile or passed it
             if (player.X == targetTile.X && player.Y == targetTile.Y)
             {
                 _currentChunkTileIndex++;
@@ -1216,6 +1214,36 @@ namespace ClassicUO.Game
                     return false;
                 }
                 targetTile = _currentChunkTiles[_currentChunkTileIndex];
+            }
+
+            // Check if we've moved past the current tile (player is closer to future tiles)
+            // This prevents walking backwards when the player overshoots
+            while (_currentChunkTileIndex < _currentChunkTiles.Count - 1)
+            {
+                Point nextTile = _currentChunkTiles[_currentChunkTileIndex + 1];
+                int distanceToCurrent = GetDistance(player.X, player.Y, targetTile.X, targetTile.Y);
+                int distanceToNext = GetDistance(player.X, player.Y, nextTile.X, nextTile.Y);
+
+                // If we're already closer to the next tile, skip the current one
+                if (distanceToNext < distanceToCurrent)
+                {
+                    Log.Debug($"[LongDistancePathfinder] Player overshot tile ({targetTile.X}, {targetTile.Y}), skipping ahead");
+                    _currentChunkTileIndex++;
+                    _currentTileAttempts = 0;
+                    _lastAttemptedTile = null;
+
+                    if (_currentChunkTileIndex >= _currentChunkTiles.Count)
+                    {
+                        Log.Debug("[LongDistancePathfinder] Chunk completed after skipping");
+                        StopChunkWalking();
+                        return false;
+                    }
+                    targetTile = _currentChunkTiles[_currentChunkTileIndex];
+                }
+                else
+                {
+                    break; // Found the right tile to target
+                }
             }
 
             // Check if this is a new tile we're attempting
@@ -1261,11 +1289,8 @@ namespace ClassicUO.Game
             // Calculate direction to target tile
             Direction targetDirection = GetDirectionToTarget(player.X, player.Y, targetTile.X, targetTile.Y);
 
-            // Determine if we should run (run if we have more than 14 tiles left)
-            bool shouldRun = (_currentChunkTiles.Count - _currentChunkTileIndex) > 14;
-
             // Try to walk in the target direction
-            if (!player.Walk(targetDirection, shouldRun))
+            if (!player.Walk(targetDirection, true))
             {
                 Log.Warn("[LongDistancePathfinder] Failed to walk towards chunk tile");
                 // Don't stop immediately, let the attempt counter handle it
