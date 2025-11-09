@@ -1546,7 +1546,7 @@ namespace ClassicUO.LegionScripting
         /// </summary>
         public void CancelPathfinding() => MainThreadQueue.InvokeOnMainThread(() =>
         {
-            World.Player.Pathfinder.StopAutoWalk();
+            World?.Player?.Pathfinder?.StopAutoWalk();
             LongDistancePathfinder.StopPathfinding();
         });
 
