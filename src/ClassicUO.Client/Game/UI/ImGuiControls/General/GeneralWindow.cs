@@ -135,6 +135,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Select the color theme for ImGui windows.");
 
+            if(ImGui.Button("Open Theme Editor"))
+                ImGuiThemeEditorWindow.Show();
+
             if (ImGui.Checkbox("Highlight game objects", ref _highlightObjects))
             {
                 _profile.HighlightGameObjects = _highlightObjects;
