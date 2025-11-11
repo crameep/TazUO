@@ -93,10 +93,12 @@ public class PyBaseControl(Control control)
     /// Used in python API
     /// </summary>
     /// <param name="x">The new X coordinate</param>
-    public void SetX(int x)
+    public PyBaseControl SetX(int x)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control.X = x);
+
+        return this;
     }
 
     /// <summary>
@@ -104,10 +106,12 @@ public class PyBaseControl(Control control)
     /// Used in python API
     /// </summary>
     /// <param name="y">The new Y coordinate</param>
-    public void SetY(int y)
+    public PyBaseControl SetY(int y)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control.Y = y);
+
+        return this;
     }
 
     /// <summary>
@@ -116,7 +120,7 @@ public class PyBaseControl(Control control)
     /// </summary>
     /// <param name="x">The new X coordinate</param>
     /// <param name="y">The new Y coordinate</param>
-    public void SetPos(int x, int y)
+    public PyBaseControl SetPos(int x, int y)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() =>
@@ -124,6 +128,8 @@ public class PyBaseControl(Control control)
                 control.X = x;
                 control.Y = y;
             });
+
+        return this;
     }
 
     public int GetWidth()
@@ -136,7 +142,7 @@ public class PyBaseControl(Control control)
     public int GetHeight()
     {
         if (!VerifyIntegrity()) return 0;
-        
+
         return MainThreadQueue.InvokeOnMainThread(() => control.Height);
     }
 
@@ -145,10 +151,12 @@ public class PyBaseControl(Control control)
     /// Used in python API
     /// </summary>
     /// <param name="width">The new width in pixels</param>
-    public void SetWidth(int width)
+    public PyBaseControl SetWidth(int width)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control.Width = width);
+
+        return this;
     }
 
     /// <summary>
@@ -156,10 +164,12 @@ public class PyBaseControl(Control control)
     /// Used in python API
     /// </summary>
     /// <param name="height">The new height in pixels</param>
-    public void SetHeight(int height)
+    public PyBaseControl SetHeight(int height)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control.Height = height);
+
+        return this;
     }
 
     /// <summary>
@@ -170,7 +180,7 @@ public class PyBaseControl(Control control)
     /// <param name="y">The new Y coordinate</param>
     /// <param name="width">The new width in pixels</param>
     /// <param name="height">The new height in pixels</param>
-    public void SetRect(int x, int y, int width, int height)
+    public PyBaseControl SetRect(int x, int y, int width, int height)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() =>
@@ -180,26 +190,32 @@ public class PyBaseControl(Control control)
                 control.Width = width;
                 control.Height = height;
             });
+
+        return this;
     }
 
     /// <summary>
     /// Centers a GUMP horizontally in the viewport. Only works on Gump instances.
     /// Used in python API
     /// </summary>
-    public void CenterXInViewPort()
+    public PyBaseControl CenterXInViewPort()
     {
         if (VerifyIntegrity() && control is Gump g)
             MainThreadQueue.EnqueueAction(() => g.CenterXInViewPort());
+
+        return this;
     }
 
     /// <summary>
     /// Centers a GUMP vertically in the viewport. Only works on Gump instances.
     /// Used in python API
     /// </summary>
-    public void CenterYInViewPort()
+    public PyBaseControl CenterYInViewPort()
     {
         if (VerifyIntegrity() && control is Gump g)
             MainThreadQueue.EnqueueAction(() => g.CenterYInViewPort());
+
+        return this;
     }
 
     /// <summary>
@@ -220,20 +236,24 @@ public class PyBaseControl(Control control)
     /// Used in python API
     /// </summary>
     /// <param name="alpha">The new Alpha value</param>
-    public void SetAlpha(float alpha)
+    public PyBaseControl SetAlpha(float alpha)
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control.Alpha = alpha);
+
+        return this;
     }
 
     /// <summary>
     /// Clears all child controls from this control.
     /// Used in python API
     /// </summary>
-    public void Clear()
+    public PyBaseControl Clear()
     {
         if (VerifyIntegrity())
             MainThreadQueue.EnqueueAction(() => control?.Clear());
+
+        return this;
     }
 
     /// <summary>
