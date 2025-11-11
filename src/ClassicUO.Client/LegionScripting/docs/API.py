@@ -629,6 +629,17 @@ class PyGumps:
         """
         pass
 
+    def CreateTiledGumpPic(self, graphic: "int", width: "int", height: "int", hue: "int" = 0) -> "Any":
+        """
+         Create a gump pic that tiles(repeats) (Use this for gump art, not item art)
+         Example:
+         ```py
+         gumpPic = API.CreateTiledGumpPic(0xafb, 100, 100)
+         gump.Add(gumpPic)
+        
+        """
+        pass
+
     def CreateDropDown(self, width: "int", items: "list[str]", selectedIndex: "int" = 0) -> "PyControlDropDown":
         """
          Creates a dropdown control (combobox) with the specified width and items.
@@ -954,6 +965,11 @@ class PyTextBox(PyBaseControl):
 
     def SetText(self, text: "str") -> None:
         pass
+
+class PyTiledGumpPic(PyBaseControl):
+   ""
+    Graphic: int = None
+    Hue: int = None
 
 class PyTTFTextInputField(PyBaseControl):
    ""

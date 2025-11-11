@@ -430,6 +430,28 @@ description: PyGumps class documentation
 
 ---
 
+### CreateTiledGumpPic
+`(graphic, width, height, hue)`
+ Create a gump pic that tiles(repeats) (Use this for gump art, not item art)
+ Example:
+ ```py
+ gumpPic = API.CreateTiledGumpPic(0xafb, 100, 100)
+ gump.Add(gumpPic)
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `graphic` | `ushort` | ❌ No |  |
+| `width` | `int` | ❌ No |  |
+| `height` | `int` | ❌ No |  |
+| `hue` | `ushort` | ✅ Yes |  |
+
+**Return Type:** `PyTiledGumpPic`
+
+---
+
 ### CreateDropDown
 `(width, items, selectedIndex)`
  Creates a dropdown control (combobox) with the specified width and items.

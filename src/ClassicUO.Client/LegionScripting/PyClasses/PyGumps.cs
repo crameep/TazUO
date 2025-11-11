@@ -398,6 +398,20 @@ public class PyGumps(API api)
     public PyGumpPic CreateGumpPic(ushort graphic, int x = 0, int y = 0, ushort hue = 0) => new PyGumpPic(new GumpPic(x, y, graphic, hue));
 
     /// <summary>
+    /// Create a gump pic that tiles(repeats) (Use this for gump art, not item art)
+    /// Example:
+    /// ```py
+    /// gumpPic = API.CreateTiledGumpPic(0xafb, 100, 100)
+    /// gump.Add(gumpPic)
+    /// </summary>
+    /// <param name="graphic"></param>
+    /// <param name="height"></param>
+    /// <param name="hue"></param>
+    /// <param name="width"></param>
+    /// <returns></returns>
+    public PyTiledGumpPic CreateTiledGumpPic(ushort graphic, int width, int height, ushort hue = 0) => new PyTiledGumpPic(new GumpPicTiled(0, 0, width, height, graphic) { Hue = hue });
+
+    /// <summary>
     /// Creates a dropdown control (combobox) with the specified width and items.
     /// </summary>
     /// <param name="width">The width of the dropdown control</param>
