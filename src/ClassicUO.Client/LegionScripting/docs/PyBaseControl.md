@@ -77,7 +77,7 @@ description: PyBaseControl class documentation
 | --- | --- | --- | --- |
 | `x` | `int` | ❌ No | The new X coordinate |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -93,7 +93,7 @@ description: PyBaseControl class documentation
 | --- | --- | --- | --- |
 | `y` | `int` | ❌ No | The new Y coordinate |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -110,7 +110,7 @@ description: PyBaseControl class documentation
 | `x` | `int` | ❌ No | The new X coordinate |
 | `y` | `int` | ❌ No | The new Y coordinate |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -138,7 +138,7 @@ description: PyBaseControl class documentation
 | --- | --- | --- | --- |
 | `width` | `int` | ❌ No | The new width in pixels |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -154,7 +154,7 @@ description: PyBaseControl class documentation
 | --- | --- | --- | --- |
 | `height` | `int` | ❌ No | The new height in pixels |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -173,7 +173,7 @@ description: PyBaseControl class documentation
 | `width` | `int` | ❌ No | The new width in pixels |
 | `height` | `int` | ❌ No | The new height in pixels |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -183,7 +183,7 @@ description: PyBaseControl class documentation
  Used in python API
 
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -193,7 +193,7 @@ description: PyBaseControl class documentation
  Used in python API
 
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -219,7 +219,7 @@ description: PyBaseControl class documentation
 | --- | --- | --- | --- |
 | `alpha` | `float` | ❌ No | The new Alpha value |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
@@ -229,7 +229,7 @@ description: PyBaseControl class documentation
  Used in python API
 
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `PyBaseControl`
 
 ---
 
