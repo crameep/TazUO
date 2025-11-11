@@ -453,7 +453,7 @@ public class PyGumps(API api)
 
         wControl.AcceptMouseInput = true;
 
-        wControl.MouseUp += (s, e) =>
+        wControl.MouseUp += (_, e) =>
         {
             if (leftOnly && e.Button != MouseButtonType.Left)
                 return;
@@ -500,7 +500,7 @@ public class PyGumps(API api)
         if (control == null || onDispose == null || control.Control == null || !api.engine.Operations.IsCallable(onDispose))
             return control;
 
-        control.Control.Disposed += (s, e) =>
+        control.Control.Disposed += (_, _) =>
         {
             api?.ScheduleCallback
             (() =>
@@ -509,8 +509,9 @@ public class PyGumps(API api)
                     {
                         api.engine.Operations.Invoke(onDispose);
                     }
-                    catch (Exception ex)
+                    catch
                     {
+                        // ignored
                     }
                 }
             );
