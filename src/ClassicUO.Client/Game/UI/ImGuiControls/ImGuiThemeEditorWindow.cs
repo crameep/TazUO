@@ -31,14 +31,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
             return CloneThemeColors(customTheme.Colors);
         }
 
-        private ImGuiTheme.ThemeColors CloneFromCurrent()
-        {
-            return CloneThemeColors(ImGuiTheme.Current);
-        }
+        private ImGuiTheme.ThemeColors CloneFromCurrent() => CloneThemeColors(ImGuiTheme.Current);
 
-        private ImGuiTheme.ThemeColors CloneThemeColors(ImGuiTheme.ThemeColors colors)
-        {
-            return new ImGuiTheme.ThemeColors
+        private ImGuiTheme.ThemeColors CloneThemeColors(ImGuiTheme.ThemeColors colors) =>
+            new()
             {
                 Base100 = colors.Base100,
                 Base200 = colors.Base200,
@@ -67,7 +63,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ScrollbarGrabHovered = colors.ScrollbarGrabHovered,
                 ScrollbarGrabActive = colors.ScrollbarGrabActive,
             };
-        }
 
         private void ApplyEditingTheme()
         {

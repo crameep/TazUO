@@ -14,6 +14,7 @@ namespace ClassicUO.Game
     public static class LongDistancePathfinder
     {
         private const int CLOSE_DISTANCE_THRESHOLD = 10;
+        private const int FULL_TILE_GENERATION_THRESHOLD = 20; // Generate every tile step when within this distance
         private const int MAX_PATHFIND_ATTEMPTS = 100;
         private const int REGULAR_PATHFINDER_MAX_RANGE = 10;
         private const int MIN_TILES_TO_START_WALKING = 5;
@@ -651,8 +652,16 @@ namespace ClassicUO.Game
                 if (cancellationToken.IsCancellationRequested)
                     return;
 
-                // Smooth the path to remove unnecessary waypoints
-                fullPath = SmoothPath(fullPath);
+                // Only smooth the path for longer distances - keep every tile for short distances
+                if (distance > FULL_TILE_GENERATION_THRESHOLD)
+                {
+                    fullPath = SmoothPath(fullPath);
+                    Log.Debug($"[LongDistancePathfinder] Path smoothed for long distance ({distance} tiles)");
+                }
+                else
+                {
+                    Log.Debug($"[LongDistancePathfinder] Keeping all tiles for short distance ({distance} tiles)");
+                }
 
                 // Check if path exceeds maximum length
                 if (fullPath.Count > MAX_PATH_LENGTH)
@@ -703,8 +712,16 @@ namespace ClassicUO.Game
                     if (cancellationToken.IsCancellationRequested)
                         return;
 
-                    // Smooth the path to remove unnecessary waypoints
-                    partialPath = SmoothPath(partialPath);
+                    // Only smooth the path for longer distances - keep every tile for short distances
+                    if (distance > FULL_TILE_GENERATION_THRESHOLD)
+                    {
+                        partialPath = SmoothPath(partialPath);
+                        Log.Debug($"[LongDistancePathfinder] Partial path smoothed for long distance ({distance} tiles)");
+                    }
+                    else
+                    {
+                        Log.Debug($"[LongDistancePathfinder] Keeping all tiles in partial path for short distance ({distance} tiles)");
+                    }
 
                     // Check if path exceeds maximum length
                     if (partialPath.Count > MAX_PATH_LENGTH)
@@ -959,44 +976,34 @@ namespace ClassicUO.Game
         }
 
         /// <summary>
-        /// Generates all tiles along a straight line between two points using Bresenham's algorithm.
+        /// Generates all tiles along an optimal path between two points using diagonal movement when possible.
+        /// This uses Chebyshev distance approach: move diagonally as much as possible, then move in cardinal directions.
+        /// This is optimal for tile-based games with 8-directional movement.
         /// </summary>
         private static List<Point> GenerateLineSegment(Point start, Point end)
         {
             var segment = new List<Point>();
 
-            int x0 = start.X;
-            int y0 = start.Y;
-            int x1 = end.X;
-            int y1 = end.Y;
+            int x = start.X;
+            int y = start.Y;
+            int targetX = end.X;
+            int targetY = end.Y;
 
-            int dx = Math.Abs(x1 - x0);
-            int dy = Math.Abs(y1 - y0);
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
-            int err = dx - dy;
+            // Add starting point
+            segment.Add(new Point(x, y));
 
-            int x = x0;
-            int y = y0;
-
-            while (true)
+            // Move diagonally and then cardinally to reach the target
+            while (x != targetX || y != targetY)
             {
+                int dx = Math.Sign(targetX - x); // -1, 0, or 1
+                int dy = Math.Sign(targetY - y); // -1, 0, or 1
+
+                // Move diagonally when possible (both dx and dy are non-zero)
+                // Otherwise move in a cardinal direction
+                x += dx;
+                y += dy;
+
                 segment.Add(new Point(x, y));
-
-                if (x == x1 && y == y1)
-                    break;
-
-                int e2 = 2 * err;
-                if (e2 > -dy)
-                {
-                    err -= dy;
-                    x += sx;
-                }
-                if (e2 < dx)
-                {
-                    err += dx;
-                    y += sy;
-                }
             }
 
             return segment;
@@ -1004,46 +1011,28 @@ namespace ClassicUO.Game
 
         /// <summary>
         /// Checks if there's a clear walkable line of sight between two points.
-        /// Uses Bresenham's line algorithm to check all tiles along the path.
+        /// Uses the same diagonal movement approach as GenerateLineSegment to ensure consistency.
         /// </summary>
         private static bool HasLineOfSight(Point start, Point end)
         {
-            int x0 = start.X;
-            int y0 = start.Y;
-            int x1 = end.X;
-            int y1 = end.Y;
+            int x = start.X;
+            int y = start.Y;
+            int targetX = end.X;
+            int targetY = end.Y;
 
-            int dx = Math.Abs(x1 - x0);
-            int dy = Math.Abs(y1 - y0);
-            int sx = x0 < x1 ? 1 : -1;
-            int sy = y0 < y1 ? 1 : -1;
-            int err = dx - dy;
-
-            int x = x0;
-            int y = y0;
-
-            // Check all tiles along the line
-            while (true)
+            // Check all tiles along the diagonal+cardinal path
+            while (x != targetX || y != targetY)
             {
-                // Check if current tile is walkable (skip start tile)
-                if (!(x == x0 && y == y0) && !IsGenerallyWalkable(x, y))
+                int dx = Math.Sign(targetX - x); // -1, 0, or 1
+                int dy = Math.Sign(targetY - y); // -1, 0, or 1
+
+                // Move diagonally when possible, otherwise cardinally
+                x += dx;
+                y += dy;
+
+                // Check if this tile is walkable
+                if (!IsGenerallyWalkable(x, y))
                     return false;
-
-                // Reached the end
-                if (x == x1 && y == y1)
-                    break;
-
-                int e2 = 2 * err;
-                if (e2 > -dy)
-                {
-                    err -= dy;
-                    x += sx;
-                }
-                if (e2 < dx)
-                {
-                    err += dx;
-                    y += sy;
-                }
             }
 
             return true;

@@ -118,7 +118,7 @@ namespace ClassicUO.Game.UI
         /// </summary>
         public static void SaveCustomThemeToSettings()
         {
-            var customTheme = GetTheme("Custom");
+            ImGuiTheme customTheme = GetTheme("Custom");
             if (customTheme != null)
             {
                 string json = customTheme.Colors.ToJson();
