@@ -727,16 +727,12 @@ sealed class PacketHandlers
                 }
             }
 
-            if (mobile == world.Player)
-            {
-                TitleBarStatsManager.UpdateTitleBar();
-            }
+            if (mobile == world.Player) TitleBarStatsManager.UpdateTitleBar();
 
             // Check for bandage healing
-            if (oldHits != mobile.Hits)
-            {
-                BandageManager.Instance.OnMobileHpChanged(mobile, oldHits, mobile.Hits);
-            }
+            if (oldHits != mobile.Hits) BandageManager.Instance.OnMobileHpChanged(mobile, oldHits, mobile.Hits);
+
+            if (mobile.IsRenamable && ProfileManager.CurrentProfile.EnablePetScaling) mobile.Scale = 0.6f;//Customizable later
         }
     }
 

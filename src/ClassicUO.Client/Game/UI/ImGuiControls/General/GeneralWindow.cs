@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using ImGuiNET;
 using ClassicUO.Configuration;
+using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Network;
 
@@ -10,7 +12,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
         private int _objectMoveDelay;
-        private bool _highlightObjects;
+        private bool _highlightObjects, _petScaling;
         private bool _showNames;
         private bool _autoOpenOwnCorpse;
         private bool _useLongDistancePathing;
@@ -30,6 +32,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
             _useLongDistancePathing = World.Instance?.Player?.Pathfinder.UseLongDistancePathfinding ?? false;
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
+            _petScaling = _profile.EnablePetScaling;
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -154,6 +157,18 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
             }
             ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
+
+            if (ImGui.Checkbox("Enable pet scaling", ref _petScaling))
+            {
+                _profile.EnablePetScaling = _petScaling;
+
+                Dictionary<uint, Mobile>.ValueCollection mobs = World.Instance.Mobiles.Values;
+                foreach (Mobile mob in mobs)
+                {
+                    if (mob != null && mob.IsRenamable)
+                        mob.Scale = _petScaling ? 0.6f : 1f;
+                }
+            }
 
             ImGui.EndGroup();
 
