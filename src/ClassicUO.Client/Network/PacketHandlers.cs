@@ -4900,6 +4900,8 @@ sealed class PacketHandlers
                     val = 0;
                 }
 
+                if (world.Player == null || !Enum.IsDefined(typeof(CharacterSpeedType), val)) break;
+
                 world.Player.SpeedMode = (CharacterSpeedType)val;
 
                 break;
