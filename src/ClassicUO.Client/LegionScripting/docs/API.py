@@ -703,6 +703,14 @@ class PyItem(PyEntity):
         """
         pass
 
+    def NameAndProps(self, wait: "bool" = False, timeout: "int" = 10) -> "str":
+        """
+         Gets the item name and properties (tooltip text).
+         This returns the name and properties in a single string. You can split it by newline if you want to separate them.
+        
+        """
+        pass
+
 class PyJournalEntry:
    ""
     Hue: int = None
@@ -745,6 +753,14 @@ class PyMobile(PyEntity):
     Backpack: PyItem = None
     Mount: PyItem = None
     __class__: str = None
+
+    def NameAndProps(self, wait: "bool" = False, timeout: "int" = 10) -> "str":
+        """
+         Gets the mobile name and properties (tooltip text).
+         This returns the name and properties in a single string. You can split it by newline if you want to separate them.
+        
+        """
+        pass
 
 class PyMulti(PyGameObject):
    ""

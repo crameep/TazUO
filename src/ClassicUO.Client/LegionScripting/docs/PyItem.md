@@ -77,3 +77,20 @@ description:  Represents a Python-accessible item in the game world.   Inherits 
 
 ---
 
+### NameAndProps
+`(wait, timeout)`
+ Gets the item name and properties (tooltip text).
+ This returns the name and properties in a single string. You can split it by newline if you want to separate them.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `wait` | `bool` | ✅ Yes | True or false to wait for name and props |
+| `timeout` | `int` | ✅ Yes | Timeout in seconds |
+
+**Return Type:** `string`
+
+---
+
