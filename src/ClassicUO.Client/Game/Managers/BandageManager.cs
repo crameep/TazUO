@@ -62,11 +62,18 @@ namespace ClassicUO.Game.Managers
         private void OnBuffAdded(object sender, BuffEventArgs e)
         {
             if (e.Buff.Type == BuffIconType.Healing) HasBandagingBuff = true;
+            if (e.Buff.Type == BuffIconType.Veterinary) HasBandagingBuff = true;
         }
 
         private void OnBuffRemoved(object sender, BuffEventArgs e)
         {
             if (e.Buff.Type == BuffIconType.Healing)
+            {
+                HasBandagingBuff = false;
+                if(CheckForBuff && Time.Ticks >= _nextBandageTime) //Add small delay after healing buff is removed
+                    _nextBandageTime = Time.Ticks + AsyncNetClient.Socket.Statistics.Ping;
+            }
+            else if (e.Buff.Type == BuffIconType.Veterinary)
             {
                 HasBandagingBuff = false;
                 if(CheckForBuff && Time.Ticks >= _nextBandageTime) //Add small delay after healing buff is removed
