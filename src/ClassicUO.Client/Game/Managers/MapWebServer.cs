@@ -1207,7 +1207,6 @@ namespace ClassicUO.Game.Managers
                 isDragging = true;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
-                document.getElementById('followPlayer').checked = false;
             }
         });
 
@@ -1215,6 +1214,13 @@ namespace ClassicUO.Game.Managers
             if (isDragging) {
                 const dx = e.clientX - lastMouseX;
                 const dy = e.clientY - lastMouseY;
+
+                // Only disable follow player if user has dragged more than 5 pixels
+                // This prevents accidental clicks from disabling it
+                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                    document.getElementById('followPlayer').checked = false;
+                }
+
                 offsetX += dx;
                 offsetY += dy;
                 lastMouseX = e.clientX;
