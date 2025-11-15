@@ -1,5 +1,6 @@
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using static ClassicUO.LegionScripting.API;
 
 namespace ClassicUO.LegionScripting.PyClasses;
 
@@ -27,6 +28,14 @@ public class PyMobile : PyEntity
     public bool IsRenamable => MainThreadQueue.InvokeOnMainThread(() => GetMobileUnsafe()?.IsRenamable ?? false);
     public bool IsHuman => MainThreadQueue.InvokeOnMainThread(() => GetMobileUnsafe()?.IsHuman ?? false);
     public bool IsYellowHits => MainThreadQueue.InvokeOnMainThread(() => GetMobileUnsafe()?.IsYellowHits ?? false);
+    public Notoriety Notoriety => MainThreadQueue.InvokeOnMainThread(() =>
+    {
+        Mobile mob = GetMobileUnsafe();
+
+        if (mob == null) return Notoriety.Unknown;
+
+        return (Notoriety)mob.NotorietyFlag;
+    });
 
     public virtual bool InWarMode
     {

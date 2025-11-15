@@ -116,7 +116,7 @@ public static class GenDoc
             }
 
             python.AppendLf($"class {classDeclaration.Identifier.Text}{baseClasses}:");
-            python.AppendLf("   \"\"");
+            python.AppendLf("    \"\"");
         }
     }
 
