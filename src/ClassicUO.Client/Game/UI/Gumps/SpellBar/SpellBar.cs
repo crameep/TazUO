@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
@@ -409,7 +410,8 @@ public class SpellBar : Gump
             BuildHotkeyLabel();
 
             ContextMenu = new(parentGump);
-            ContextMenu.Add(new ContextMenuItemEntry("Set spell", () =>
+            ContextMenu.Add("Set spell", GenSpellList());
+            ContextMenu.Add(new ContextMenuItemEntry("Quick set spell", () =>
             {
                 UIManager.Add
                 (
@@ -427,6 +429,83 @@ public class SpellBar : Gump
                 SetSpell(SpellDefinition.EmptySpell, row, col);
             }));
         }
+
+        private List<ContextMenuItemEntry> GenSpellList()
+            {
+                var list = new List<ContextMenuItemEntry>();
+
+                var entry = new ContextMenuItemEntry("Magery");
+                foreach (SpellDefinition spell in SpellsMagery.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Necromancy");
+                foreach (SpellDefinition spell in SpellsNecromancy.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Chivalry");
+                foreach (SpellDefinition spell in SpellsChivalry.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Bushido");
+                foreach (SpellDefinition spell in SpellsBushido.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Ninjitsu");
+                foreach (SpellDefinition spell in SpellsNinjitsu.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Spellweaving");
+                foreach (SpellDefinition spell in SpellsSpellweaving.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Mysticism");
+                foreach (SpellDefinition spell in SpellsMysticism.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Mastery");
+                foreach (SpellDefinition spell in SpellsMastery.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+                return list;
+            }
 
         private void resetStates()
         {
