@@ -130,6 +130,8 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
         _pendingReload = true;
     }
 
+    public void Refresh() => _pendingReload = true;
+
     public override void DrawContent()
     {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
