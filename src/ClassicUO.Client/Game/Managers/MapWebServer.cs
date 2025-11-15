@@ -605,6 +605,73 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        private void GetMinimizeStates(HttpListenerResponse response)
+        {
+            try
+            {
+                bool journalMinimized = Client.Settings.Get(SettingsScope.Global, "webmap_journal_minimized", false);
+                bool controlsMinimized = Client.Settings.Get(SettingsScope.Global, "webmap_controls_minimized", false);
+
+                var data = new
+                {
+                    journalMinimized = journalMinimized,
+                    controlsMinimized = controlsMinimized
+                };
+
+                string json = JsonSerializer.Serialize(data);
+                byte[] buffer = Encoding.UTF8.GetBytes(json);
+
+                response.ContentType = "application/json; charset=utf-8";
+                response.ContentLength64 = buffer.Length;
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error getting minimize states: {ex.Message}");
+                response.StatusCode = 500;
+                response.Close();
+            }
+        }
+
+        private void SetMinimizeStates(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string body = reader.ReadToEnd();
+                    Dictionary<string, bool> stateData = JsonSerializer.Deserialize<Dictionary<string, bool>>(body);
+
+                    if (stateData != null &&
+                        stateData.TryGetValue("journalMinimized", out bool journalMinimized) &&
+                        stateData.TryGetValue("controlsMinimized", out bool controlsMinimized))
+                    {
+                        Client.Settings.SetAsync(SettingsScope.Global, "webmap_journal_minimized", journalMinimized);
+                        Client.Settings.SetAsync(SettingsScope.Global, "webmap_controls_minimized", controlsMinimized);
+
+                        response.StatusCode = 200;
+                        byte[] buffer = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+                        response.ContentType = "application/json";
+                        response.ContentLength64 = buffer.Length;
+                        response.OutputStream.Write(buffer, 0, buffer.Length);
+                    }
+                    else
+                    {
+                        response.StatusCode = 400;
+                    }
+                }
+
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error setting minimize states: {ex.Message}");
+                response.StatusCode = 500;
+                response.Close();
+            }
+        }
+
         private string GetHtmlPage() => @"<!DOCTYPE html>
 <html>
 <head>
