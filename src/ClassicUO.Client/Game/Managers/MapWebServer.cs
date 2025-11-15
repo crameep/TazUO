@@ -1188,7 +1188,8 @@ namespace ClassicUO.Game.Managers
         }
 
         function drawLabel(ctx, text, x, y, color, zoom) {
-            const fontSize = Math.max(10, 12 / zoom);
+            // Constant font size on screen regardless of zoom level
+            const fontSize = 16 / zoom;
             ctx.font = `${fontSize}px Arial`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
