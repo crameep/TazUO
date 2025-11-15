@@ -13,6 +13,7 @@ using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Lock = System.Threading.Lock;
 
 namespace ClassicUO.Game.Managers
 {
@@ -26,14 +27,14 @@ namespace ClassicUO.Game.Managers
         private readonly Dictionary<int, WalkableMapData> _sessionModifications = new();
         private readonly Dictionary<int, bool> _mapGenerationComplete = new();
         private readonly Dictionary<int, int> _mapChunkGenerationIndex = new();
-        private readonly object _mapDataLock = new object();
-        private readonly object _sessionModificationsLock = new object();
+        private readonly Lock _mapDataLock = new();
+        private readonly Lock _sessionModificationsLock = new();
         private int _lastMapIndex = -1;
         private int _updateCounter = 0;
         private volatile bool _isGenerating = false;
-        private readonly object _generationLock = new object();
+        private readonly Lock _generationLock = new();
         private int _chunksPerCycle = 1; // Start with 1 for performance measurement
-        public int TARGET_GENERATION_TIME_MS = 2;
+        public int TargetGenerationTimeMs = 2;
         private const int MIN_CHUNKS_PER_CYCLE = 1;
         private const int MAX_CHUNKS_PER_CYCLE = 500;
         private readonly Queue<double> _recentGenerationTimes = new();
@@ -50,7 +51,7 @@ namespace ClassicUO.Game.Managers
             CreateCacheDirectory();
             // Maps are now loaded on-demand when first accessed rather than loading all maps at startup
 
-            Client.Settings?.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2, (s) => TARGET_GENERATION_TIME_MS = s);
+            Client.Settings?.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2, (s) => TargetGenerationTimeMs = s);
 
 #if DEBUG
             World.Instance.CommandManager.Register("walkable", strings =>
@@ -133,7 +134,7 @@ namespace ClassicUO.Game.Managers
 
         public void Update()
         {
-            if (World.Instance == null || !World.Instance.InGame)
+            if (World.Instance == null || !World.Instance.InGame || !World.Instance.Player.Pathfinder.UseLongDistancePathfinding)
                 return;
 
             int mapIndex = World.Instance.Map.Index;
@@ -309,17 +310,17 @@ namespace ClassicUO.Game.Managers
             int oldChunksPerCycle = _chunksPerCycle;
 
             // Adjust chunks per cycle based on performance
-            if (avgTime < TARGET_GENERATION_TIME_MS * 0.8) // If we're significantly under target
+            if (avgTime < TargetGenerationTimeMs * 0.8) // If we're significantly under target
                 // Increase chunks per cycle
                 _chunksPerCycle = Math.Min(_chunksPerCycle + 1, MAX_CHUNKS_PER_CYCLE);
-            else if (avgTime > TARGET_GENERATION_TIME_MS * 1.2) // If we're significantly over target
+            else if (avgTime > TargetGenerationTimeMs * 1.2) // If we're significantly over target
                 // Decrease chunks per cycle
                 _chunksPerCycle = Math.Max(_chunksPerCycle - 1, MIN_CHUNKS_PER_CYCLE);
 
             // Log performance adjustments
             if (_chunksPerCycle != oldChunksPerCycle)
             {
-                Log.Debug($"[WalkableManager] Performance adjustment: {oldChunksPerCycle} -> {_chunksPerCycle} chunks/cycle (avg: {avgTime:F1}ms, target: {TARGET_GENERATION_TIME_MS}ms)");
+                Log.Debug($"[WalkableManager] Performance adjustment: {oldChunksPerCycle} -> {_chunksPerCycle} chunks/cycle (avg: {avgTime:F1}ms, target: {TargetGenerationTimeMs}ms)");
 
                 // Clear samples when we make an adjustment to get fresh data
                 _recentGenerationTimes.Clear();

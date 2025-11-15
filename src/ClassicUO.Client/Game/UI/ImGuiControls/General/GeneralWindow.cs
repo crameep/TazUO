@@ -218,7 +218,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 _pathfindingGenerationTimeMs = Math.Clamp(_pathfindingGenerationTimeMs, 1, 50);
                 Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED,  _pathfindingGenerationTimeMs);
-                if (Managers.WalkableManager.Instance != null) Managers.WalkableManager.Instance.TARGET_GENERATION_TIME_MS = _pathfindingGenerationTimeMs;
+                if (Managers.WalkableManager.Instance != null) Managers.WalkableManager.Instance.TargetGenerationTimeMs = _pathfindingGenerationTimeMs;
             }
             ImGuiComponents.Tooltip("Target time in milliseconds for pathfinding cache generation per cycle. Higher values generate cache faster but may cause performance issues.");
 
