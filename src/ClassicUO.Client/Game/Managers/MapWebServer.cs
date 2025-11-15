@@ -26,6 +26,7 @@ namespace ClassicUO.Game.Managers
         private Thread _listenerThread;
         private volatile bool _isRunning;
         private int _port = 8088;
+        private int _lastMapIndex = -1;
         private readonly object _clientsLock = new object();
         private readonly List<ClientState> _activeClients = new List<ClientState>();
         private byte[] _cachedMapPng = null;
@@ -39,6 +40,7 @@ namespace ClassicUO.Game.Managers
             lock (_cacheLock)
             {
                 _cachedMapPng = pngData;
+                _lastMapIndex = mapIndex;
             }
             Log.Info($"Map PNG cached: {pngData?.Length ?? 0} bytes for map {mapIndex}");
         }
@@ -138,6 +140,17 @@ namespace ClassicUO.Game.Managers
                     case "/api/command":
                         HandleCommand(context.Request, context.Response);
                         break;
+                    case "/api/journalsize":
+                        if (context.Request.HttpMethod == "GET")
+                            GetJournalSize(context.Response);
+                        else if (context.Request.HttpMethod == "POST")
+                            SetJournalSize(context.Request, context.Response);
+                        else
+                        {
+                            context.Response.StatusCode = 405;
+                            context.Response.Close();
+                        }
+                        break;
                     default:
                         context.Response.StatusCode = 404;
                         context.Response.Close();
@@ -208,9 +221,17 @@ namespace ClassicUO.Game.Managers
             try
             {
                 byte[] imageData = null;
+                int currentMapIndex = World.Instance?.MapIndex ?? 0;
 
                 lock (_cacheLock)
                 {
+                    // Check if cached map is for the current map index
+                    if (_lastMapIndex != currentMapIndex)
+                    {
+                        Log.Warn($"Cached map index ({_lastMapIndex}) doesn't match current map index ({currentMapIndex}). Clearing cache.");
+                        _cachedMapPng = null;
+                    }
+
                     imageData = _cachedMapPng;
                 }
 
@@ -248,6 +269,7 @@ namespace ClassicUO.Game.Managers
             lock (_cacheLock)
             {
                 _cachedMapPng = null;
+                _lastMapIndex = -1;
             }
         }
 
@@ -483,6 +505,71 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        private void GetJournalSize(HttpListenerResponse response)
+        {
+            try
+            {
+                int width = Client.Settings.Get(SettingsScope.Global, "webmap_journal_width", 400);
+                int height = Client.Settings.Get(SettingsScope.Global, "webmap_journal_height", 300);
+
+                var data = new
+                {
+                    width = width,
+                    height = height
+                };
+
+                string json = JsonSerializer.Serialize(data);
+                byte[] buffer = Encoding.UTF8.GetBytes(json);
+
+                response.ContentType = "application/json; charset=utf-8";
+                response.ContentLength64 = buffer.Length;
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error getting journal size: {ex.Message}");
+                response.StatusCode = 500;
+                response.Close();
+            }
+        }
+
+        private void SetJournalSize(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string body = reader.ReadToEnd();
+                    Dictionary<string, int> sizeData = JsonSerializer.Deserialize<Dictionary<string, int>>(body);
+
+                    if (sizeData != null && sizeData.TryGetValue("width", out int width) && sizeData.TryGetValue("height", out int height))
+                    {
+                        Client.Settings.SetAsync(SettingsScope.Global, "webmap_journal_width", width);
+                        Client.Settings.SetAsync(SettingsScope.Global, "webmap_journal_height", height);
+
+                        response.StatusCode = 200;
+                        byte[] buffer = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+                        response.ContentType = "application/json";
+                        response.ContentLength64 = buffer.Length;
+                        response.OutputStream.Write(buffer, 0, buffer.Length);
+                    }
+                    else
+                    {
+                        response.StatusCode = 400;
+                    }
+                }
+
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error setting journal size: {ex.Message}");
+                response.StatusCode = 500;
+                response.Close();
+            }
+        }
+
         private string GetHtmlPage() => @"<!DOCTYPE html>
 <html>
 <head>
@@ -547,13 +634,16 @@ namespace ClassicUO.Game.Managers
             left: 10px;
             width: 400px;
             height: 300px;
+            min-width: 250px;
+            min-height: 150px;
+            max-width: 800px;
+            max-height: 80vh;
             background: rgba(0,0,0,0.9);
             border-radius: 8px;
             z-index: 1000;
             display: flex;
             flex-direction: column;
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
-            transition: height 0.3s ease;
         }
         #journal.minimized {
             height: 40px;
@@ -591,6 +681,24 @@ namespace ClassicUO.Game.Managers
         }
         #journalMinimizeBtn:hover {
             color: #45a049;
+        }
+        #journalResizeHandle {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 15px;
+            height: 15px;
+            cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 0%, transparent 50%, #4CAF50 50%, #4CAF50 100%);
+            border-radius: 0 8px 0 0;
+            opacity: 0.5;
+            z-index: 10;
+        }
+        #journalResizeHandle:hover {
+            opacity: 1;
+        }
+        #journal.minimized #journalResizeHandle {
+            display: none;
         }
         #journalContent {
             flex: 1;
@@ -687,13 +795,14 @@ namespace ClassicUO.Game.Managers
         <div>Mouse: <span id=""mousePos"">-</span></div>
     </div>
     <div id=""journal"">
+        <div id=""journalResizeHandle"" title=""Drag to resize""></div>
         <div id=""journalHeader"">
             <span>Journal</span>
             <button id=""journalMinimizeBtn"" title=""Minimize/Maximize"">−</button>
         </div>
         <div id=""journalContent""></div>
         <div id=""journalInputContainer"">
-            <input type=""text"" id=""journalInput"" placeholder=""Type command..."" />
+            <input type=""text"" id=""journalInput"" placeholder=""Send a message..."" />
         </div>
     </div>
     <canvas id=""mapCanvas""></canvas>
@@ -705,6 +814,7 @@ namespace ClassicUO.Game.Managers
         const journalInput = document.getElementById('journalInput');
         const journalBox = document.getElementById('journal');
         const journalMinimizeBtn = document.getElementById('journalMinimizeBtn');
+        const journalResizeHandle = document.getElementById('journalResizeHandle');
 
         let mapImage = null;
         let mapData = null;
@@ -722,6 +832,11 @@ namespace ClassicUO.Game.Managers
         let mouseZoomPoint = null; // Track the world position to keep under cursor during zoom
         let autoScrollJournal = true;
         let journalMinimized = false;
+        let isResizingJournal = false;
+        let resizeStartX = 0;
+        let resizeStartY = 0;
+        let resizeStartWidth = 0;
+        let resizeStartHeight = 0;
 
         const zoomLevels = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 4, 6, 8];
         let zoomIndex = 4;
@@ -896,14 +1011,57 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        async function loadJournalSize() {
+            try {
+                const response = await fetch('/api/journalsize');
+                if (response.ok) {
+                    const data = await response.json();
+                    journalBox.style.width = data.width + 'px';
+                    journalBox.style.height = data.height + 'px';
+                    console.log(`Loaded journal size: ${data.width}x${data.height}`);
+                }
+            } catch (err) {
+                console.error('Error loading journal size:', err);
+            }
+        }
+
+        async function saveJournalSize(width, height) {
+            try {
+                const response = await fetch('/api/journalsize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ width: width, height: height })
+                });
+
+                if (response.ok) {
+                    console.log(`Saved journal size: ${width}x${height}`);
+                }
+            } catch (err) {
+                console.error('Error saving journal size:', err);
+            }
+        }
+
         // Handle journal minimize/maximize
+        let savedJournalHeight = null;
+
         function toggleJournalMinimize() {
             journalMinimized = !journalMinimized;
             if (journalMinimized) {
+                // Save current height before minimizing
+                savedJournalHeight = journalBox.offsetHeight;
                 journalBox.classList.add('minimized');
+                journalBox.style.height = '40px';
+                journalBox.style.minHeight = '40px';
                 journalMinimizeBtn.textContent = '+';
             } else {
                 journalBox.classList.remove('minimized');
+                // Restore previous height and min-height
+                if (savedJournalHeight) {
+                    journalBox.style.height = savedJournalHeight + 'px';
+                }
+                journalBox.style.minHeight = '150px';
                 journalMinimizeBtn.textContent = '−';
             }
         }
@@ -911,6 +1069,38 @@ namespace ClassicUO.Game.Managers
         journalMinimizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleJournalMinimize();
+        });
+
+        // Handle journal resizing
+        journalResizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            isResizingJournal = true;
+            resizeStartX = e.clientX;
+            resizeStartY = e.clientY;
+            resizeStartWidth = journalBox.offsetWidth;
+            resizeStartHeight = journalBox.offsetHeight;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isResizingJournal) {
+                const deltaX = e.clientX - resizeStartX;
+                const deltaY = resizeStartY - e.clientY; // Inverted because journal is bottom-aligned
+
+                const newWidth = Math.max(250, Math.min(800, resizeStartWidth + deltaX));
+                const newHeight = Math.max(150, Math.min(window.innerHeight * 0.8, resizeStartHeight + deltaY));
+
+                journalBox.style.width = newWidth + 'px';
+                journalBox.style.height = newHeight + 'px';
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizingJournal) {
+                isResizingJournal = false;
+                // Save the new size to settings
+                saveJournalSize(journalBox.offsetWidth, journalBox.offsetHeight);
+            }
         });
 
         // Handle journal input
@@ -1202,8 +1392,8 @@ namespace ClassicUO.Game.Managers
         }
 
         canvas.addEventListener('mousedown', (e) => {
-            // Only allow dragging with left mouse button
-            if (e.button === 0) {
+            // Only allow dragging with left mouse button, and not if resizing journal
+            if (e.button === 0 && !isResizingJournal) {
                 isDragging = true;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
@@ -1251,11 +1441,26 @@ namespace ClassicUO.Game.Managers
 
         canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
 
-            zoomToMouse(mouseX, mouseY, e.deltaY < 0 ? 1 : -1);
+            const zoomDelta = e.deltaY < 0 ? 1 : -1;
+
+            // When follow player is enabled, zoom towards center
+            // When disabled, zoom towards mouse position
+            if (document.getElementById('followPlayer').checked) {
+                // Zoom towards center (like button zoom)
+                const newZoomIndex = Math.max(0, Math.min(zoomLevels.length - 1, zoomIndex + zoomDelta));
+                if (newZoomIndex !== zoomIndex) {
+                    zoomIndex = newZoomIndex;
+                    targetZoom = zoomLevels[zoomIndex];
+                    mouseZoomPoint = null; // Center zoom
+                }
+            } else {
+                // Zoom towards mouse position
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                zoomToMouse(mouseX, mouseY, zoomDelta);
+            }
         });
 
         // Keyboard shortcuts
@@ -1283,6 +1488,7 @@ namespace ClassicUO.Game.Managers
         });
 
         // Initialize
+        loadJournalSize();
         loadMapTexture();
         loadMapData();
         connectEventStream();

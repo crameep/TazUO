@@ -48,7 +48,6 @@ public class WorldMapGump : ResizableGump
 
     private static readonly string _mapsCachePath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Client", "MapsCache");
     private static readonly string UserMarkersFilePath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Client", $"{USER_MARKERS_FILE}.usr");
-    private static readonly Dictionary<string, string> _mapCache = new();
     public static readonly List<WMapMarkerFile> _markerFiles = new List<WMapMarkerFile>();
     public static readonly Dictionary<string, Texture2D> _markerIcons = new Dictionary<string, Texture2D>();
     private static readonly float[] _zooms = new float[10] { 0.125f, 0.25f, 0.5f, 0.75f, 1f, 1.5f, 2f, 4f, 6f, 8f };
@@ -1199,269 +1198,31 @@ public class WorldMapGump : ResizableGump
         if (mapIndex < 0 || mapIndex > MapLoader.MAPS_COUNT)
             return;
 
-        try
+        lock (Map.Map.GetMapPngLock())
         {
-            const int OFFSET_PIX = 2;
-            const int OFFSET_PIX_HALF = OFFSET_PIX / 2;
-
-            int realWidth = Client.Game.UO.FileManager.Maps.MapsDefaultSize[mapIndex, 0];
-            int realHeight = Client.Game.UO.FileManager.Maps.MapsDefaultSize[mapIndex, 1];
-
-            int fixedWidth = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 0];
-            int fixedHeight = Client.Game.UO.FileManager.Maps.MapBlocksSize[mapIndex, 1];
-
-            _mapTexture?.Dispose();
-
-            FileReader mapFile = Client.Game.UO.FileManager.Maps.GetMapFile(mapIndex);
-            FileReader staticFile = Client.Game.UO.FileManager.Maps.GetStaticFile(mapIndex);
-
-            if (!_mapCache.TryGetValue(mapFile.FilePath, out string fileMapPath))
+            try
             {
-                using var mapReader = new BinaryReader(File.Open(mapFile.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
-                using var staticsReader = new BinaryReader(File.Open(staticFile.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite));
+                _mapTexture?.Dispose();
 
-                static string calculateMd5(BinaryReader file)
+                // Use Map.GenerateMapPng to generate the PNG file
+                string fileMapPath = Map.Map.GenerateMapPng(mapIndex, map, world);
+
+                // Load the texture from the generated PNG
+                if (!string.IsNullOrEmpty(fileMapPath) && File.Exists(fileMapPath))
                 {
-                    var md5Ctx = new MD5Behaviour.MD5Context();
-                    MD5Behaviour.Initialize(ref md5Ctx);
-
-                    byte[] h = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = file.Read(h)) > 0)
-                        MD5Behaviour.Update(ref md5Ctx, h.AsSpan(0, bytesRead));
-                    MD5Behaviour.Finalize(ref md5Ctx);
-
-                    var strSb = new StringBuilder();
-                    for (int i = 0; i < 16; ++i)
-                        strSb.AppendFormat("{0:x2}", md5Ctx.Digest(i));
-
-                    return strSb.ToString();
+                    using FileStream stream = File.OpenRead(fileMapPath);
+                    _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
+                    GameActions.Print(ResGumps.WorldMapLoaded, 0x48);
                 }
-
-                string sum = calculateMd5(mapReader) + calculateMd5(staticsReader);
-                var md5Ctx = new MD5Behaviour.MD5Context();
-                MD5Behaviour.Initialize(ref md5Ctx);
-                MD5Behaviour.Update(ref md5Ctx, MemoryMarshal.AsBytes<char>(sum));
-                MD5Behaviour.Finalize(ref md5Ctx);
-                var strSb = new StringBuilder();
-                for (int i = 0; i < 16; ++i)
-                    strSb.AppendFormat("{0:x2}", md5Ctx.Digest(i));
-                string hash = strSb.ToString();
-
-                fileMapPath = Path.Combine(_mapsCachePath, $"map{mapIndex}_{hash}.png");
-                _mapCache[mapFile.FilePath] = fileMapPath;
-            }
-
-            if (!File.Exists(fileMapPath))
-            {
-                //Delete old map cache files
-                if (Directory.Exists(_mapsCachePath))
-                    Directory.GetFiles(_mapsCachePath, "map" + mapIndex + "_*.png").ForEach(s => File.Delete(s));
-
-                try
+                else
                 {
-                    Interlocked.Increment(ref _mapLoading);
-
-                    int size = (realWidth + OFFSET_PIX) * (realHeight + OFFSET_PIX);
-                    sbyte[] allZ = new sbyte[size];
-                    var staticBlocks = new StaticsBlock[32];
-
-                    using var img = new SixLabors.ImageSharp.Image<Byte4>(new SixLabors.ImageSharp.Configuration()
-                    {
-                        PreferContiguousImageBuffers = true
-                    }, realWidth + OFFSET_PIX, realHeight + OFFSET_PIX);
-
-                    img.DangerousTryGetSinglePixelMemory(out Memory<Byte4> imgBuffer);
-                    Span<Byte4> imgSpan = imgBuffer.Span;
-
-                    HuesLoader huesLoader = Client.Game.UO.FileManager.Hues;
-
-                    int bx, by, mapX = 0, mapY = 0, x, y;
-
-                    // Workaroud to avoid accessing map files from 2 sources at the same time
-                    UOFile fileMap = null;
-                    UOFile fileStatics = null;
-
-                    for (bx = 0; bx < fixedWidth; ++bx)
-                    {
-                        mapX = bx << 3;
-
-                        for (by = 0; by < fixedHeight; ++by)
-                        {
-                            ref IndexMap indexMap = ref map.GetIndex(bx, by);
-
-                            if (!indexMap.IsValid())
-                            {
-                                continue;
-                            }
-
-                            if (fileMap == null)
-                            {
-                                fileMap = new UOFile(indexMap.MapFile.FilePath);
-                            }
-
-                            fileMap.Seek((long)indexMap.MapAddress, System.IO.SeekOrigin.Begin);
-                            MapCellsArray cells = fileMap.Read<MapBlock>().Cells;
-
-                            mapY = by << 3;
-
-                            for (y = 0; y < 8; ++y)
-                            {
-                                int block = (mapY + y + OFFSET_PIX_HALF) * (realWidth + OFFSET_PIX) + mapX + OFFSET_PIX_HALF;
-                                int pos = y << 3;
-
-                                for (x = 0; x < 8; ++x, ++pos, ++block)
-                                {
-                                    ushort color = (ushort)(0x8000 | huesLoader.GetRadarColorData(cells[pos].TileID & 0x3FFF));
-
-                                    imgSpan[block].PackedValue = HuesHelper.Color16To32(color) | 0xFF_00_00_00;
-                                    allZ[block] = cells[pos].Z;
-                                }
-                            }
-
-                            if (fileStatics == null)
-                            {
-                                fileStatics = new UOFile(indexMap.StaticFile.FilePath);
-                            }
-
-                            if (fileStatics.Length == 0) //Fix for empty statics file
-                                continue;
-
-                            fileStatics.Seek((long)indexMap.StaticAddress, System.IO.SeekOrigin.Begin);
-
-                            if (staticBlocks.Length < indexMap.StaticCount)
-                                staticBlocks = new StaticsBlock[indexMap.StaticCount];
-
-                            Span<StaticsBlock> staticsBlocksSpan = staticBlocks.AsSpan(0, (int)indexMap.StaticCount);
-                            fileStatics.Read(MemoryMarshal.AsBytes(staticsBlocksSpan));
-
-                            foreach (ref StaticsBlock sb in staticsBlocksSpan)
-                            {
-                                if (sb.Color != 0 && sb.Color != 0xFFFF && GameObject.CanBeDrawn(world, sb.Color))
-                                {
-                                    int block = (mapY + sb.Y + OFFSET_PIX_HALF) * (realWidth + OFFSET_PIX) + mapX + sb.X + OFFSET_PIX_HALF;
-
-                                    if (sb.Z >= allZ[block])
-                                    {
-                                        ushort color = (ushort)(0x8000 | (sb.Hue != 0 ? huesLoader.GetColor16(16384, sb.Hue) : huesLoader.GetRadarColorData(sb.Color + 0x4000)));
-                                        //                                                    ushort color = (ushort)(0x8000 | (sb->Hue != 0 ? huesLoader.GetHueColorRgba5551(16, sb->Hue) : huesLoader.GetRadarColorData(sb->Color + 0x4000)));
-
-                                        imgSpan[block].PackedValue = HuesHelper.Color16To32(color) | 0xFF_00_00_00;
-                                        allZ[block] = sb.Z;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    fileMap?.Dispose();
-                    fileStatics?.Dispose();
-
-                    int real_width_less_one = realWidth - 1;
-                    int real_height_less_one = realHeight - 1;
-                    const float MAG_0 = 80f / 100f;
-                    const float MAG_1 = 100f / 80f;
-
-                    for (mapY = 1; mapY < real_height_less_one; ++mapY)
-                    {
-                        int blockCurrent = (mapY + OFFSET_PIX_HALF) * (realWidth + OFFSET_PIX) + OFFSET_PIX_HALF;
-                        int blockNext = (mapY + 1 + OFFSET_PIX_HALF) * (realWidth + OFFSET_PIX) + OFFSET_PIX_HALF;
-
-                        for (mapX = 1; mapX < real_width_less_one; ++mapX)
-                        {
-                            sbyte z0 = allZ[++blockCurrent];
-                            sbyte z1 = allZ[blockNext++];
-
-                            if (z0 == z1)
-                            {
-                                continue;
-                            }
-
-                            ref Byte4 cc = ref imgSpan[blockCurrent];
-                            if (cc.PackedValue == 0)
-                            {
-                                continue;
-                            }
-
-                            byte r = (byte)(cc.PackedValue & 0xFF);
-                            byte g = (byte)((cc.PackedValue >> 8) & 0xFF);
-                            byte b = (byte)((cc.PackedValue >> 16) & 0xFF);
-                            byte a = (byte)((cc.PackedValue >> 24) & 0xFF);
-
-                            if (r != 0 || g != 0 || b != 0)
-                            {
-                                if (z0 < z1)
-                                {
-                                    r = (byte)Math.Min(0xFF, r * MAG_0);
-                                    g = (byte)Math.Min(0xFF, g * MAG_0);
-                                    b = (byte)Math.Min(0xFF, b * MAG_0);
-                                }
-                                else
-                                {
-                                    r = (byte)Math.Min(0xFF, r * MAG_1);
-                                    g = (byte)Math.Min(0xFF, g * MAG_1);
-                                    b = (byte)Math.Min(0xFF, b * MAG_1);
-                                }
-
-                                cc.PackedValue = (uint)(r | (g << 8) | (b << 16) | (a << 24));
-                            }
-                        }
-                    }
-
-
-                    //var quantizer = new OctreeQuantizer();
-                    //for (var i = 0; i < buffer.Length; i++)
-                    //{
-                    //    quantizer.AddColor(buffer[i]);
-                    //}
-
-                    //var palette = quantizer.GetPalette(256);
-
-                    //for (var i = 0; i < buffer.Length; i++)
-                    //{
-                    //    var paletteIndex = quantizer.GetPaletteIndex(buffer[i]);
-                    //    buffer[i] = palette[paletteIndex];
-                    //}
-
-                    //quantizer.Clear();
-
-                    var imageEncoder = new PngEncoder
-                    {
-                        ColorType = PngColorType.Palette,
-                        CompressionLevel = PngCompressionLevel.DefaultCompression,
-                        SkipMetadata = true,
-                        FilterMethod = PngFilterMethod.None,
-                        ChunkFilter = PngChunkFilter.ExcludeAll,
-                        TransparentColorMode = PngTransparentColorMode.Clear,
-                    };
-
-                    Directory.CreateDirectory(_mapsCachePath);
-                    using FileStream stream2 = File.Create(fileMapPath);
-                    img.Save(stream2, imageEncoder);
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"error loading worldmap: {ex}");
-
-                    return;
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref _mapLoading);
+                    Log.Error($"Failed to generate map PNG for map {mapIndex}");
                 }
             }
-
-            if (File.Exists(fileMapPath))
+            catch (ThreadInterruptedException)
             {
-                using FileStream stream = File.OpenRead(fileMapPath);
-                _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
+                _mapLoading = 0;
             }
-
-            GameActions.Print(ResGumps.WorldMapLoaded, 0x48);
-        }
-        catch (ThreadInterruptedException)
-        {
-            _mapLoading = 0;
         }
     }
 
@@ -1504,7 +1265,7 @@ public class WorldMapGump : ResizableGump
         );
     }
 
-    public static void ClearMapCache() => _mapCache?.Clear();
+    public static void ClearMapCache() => Map.Map.ClearMapPngCache();
 
     public static Texture2D GetMapTextureForMap(int mapIndex) => _mapTexture;
 
@@ -1524,22 +1285,26 @@ public class WorldMapGump : ResizableGump
 
         try
         {
-            FileReader mapFile = Client.Game.UO.FileManager.Maps.GetMapFile(mapIndex);
+            Utility.Logging.Log.Info($"Loading/generating map texture for map {mapIndex}...");
 
-            if (_mapCache.TryGetValue(mapFile.FilePath, out string fileMapPath) && File.Exists(fileMapPath))
+            // Generate the PNG file on a background thread using Map.GenerateMapPng
+            string generatedMapPath = await Task.Run(() =>
             {
-                // Load from cache if available
-                Utility.Logging.Log.Info($"Loading map texture from cache for map {mapIndex}: {fileMapPath}");
+                var map = new Map.Map(World.Instance, mapIndex);
+                return Map.Map.GenerateMapPng(mapIndex, map, World.Instance);
+            });
+
+            // Now load the texture from the generated PNG on the main thread
+            if (!string.IsNullOrEmpty(generatedMapPath) && File.Exists(generatedMapPath))
+            {
                 _mapTexture?.Dispose();
-                using FileStream stream = File.OpenRead(fileMapPath);
+                using FileStream stream = File.OpenRead(generatedMapPath);
                 _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
                 Utility.Logging.Log.Info($"Map texture loaded successfully for map {mapIndex}");
             }
             else
             {
-                await Task.Run(() => LoadMap(mapIndex, new Map.Map(World.Instance, mapIndex), World.Instance));
-                // Map not cached - user needs to open world map gump first
-                Utility.Logging.Log.Warn($"Map texture not cached for map {mapIndex}. User must open world map gump first to generate cache.");
+                Utility.Logging.Log.Error($"Failed to generate map texture for map {mapIndex}");
             }
         }
         catch (Exception ex)

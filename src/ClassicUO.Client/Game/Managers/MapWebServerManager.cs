@@ -63,9 +63,13 @@ namespace ClassicUO.Game.Managers
             {
                 int mapIndex = World.Instance?.MapIndex ?? 0;
 
+                Log.Info($"Generating PNG for map {mapIndex}...");
+
                 // Try to load the map texture for this map index
-                UI.Gumps.WorldMapGump.LoadMapTextureForMap(mapIndex);
+                await UI.Gumps.WorldMapGump.LoadMapTextureForMap(mapIndex);
                 Texture2D mapTexture = UI.Gumps.WorldMapGump.GetMapTextureForMap(mapIndex);
+
+                Log.Info($"Loaded texture for map {mapIndex}: {(mapTexture != null ? $"{mapTexture.Width}x{mapTexture.Height}" : "null")}");
 
                 // Retry if texture not loaded yet (may happen during map change)
                 int retries = 0;
@@ -73,7 +77,7 @@ namespace ClassicUO.Game.Managers
                 {
                     Log.Warn($"Map texture not ready yet, retrying in 1000ms... (attempt {retries + 1})");
                     await Task.Delay(1000);
-                    UI.Gumps.WorldMapGump.LoadMapTextureForMap(mapIndex);
+                    await UI.Gumps.WorldMapGump.LoadMapTextureForMap(mapIndex);
                     mapTexture = UI.Gumps.WorldMapGump.GetMapTextureForMap(mapIndex);
                     retries++;
                 }
@@ -88,12 +92,23 @@ namespace ClassicUO.Game.Managers
                 Log.Info($"Converting map texture to PNG for map {mapIndex} ({mapTexture.Width}x{mapTexture.Height})...");
                 var startTime = System.Diagnostics.Stopwatch.StartNew();
 
-                // Offload the PNG conversion to a background thread
+                // Extract texture data on the main thread (graphics operations must be on main thread)
+                int width = mapTexture.Width;
+                int height = mapTexture.Height;
+                byte[] textureData = new byte[width * height * 4]; // RGBA
+
+                lock (Map.Map.GetMapPngLock())
+                {
+                    mapTexture.GetData(textureData);
+                }
+
+                // Offload the PNG encoding to a background thread
                 byte[] pngData = await Task.Run(() =>
                 {
+                    using (var image = SixLabors.ImageSharp.Image.LoadPixelData<SixLabors.ImageSharp.PixelFormats.Rgba32>(textureData, width, height))
                     using (var ms = new MemoryStream())
                     {
-                        mapTexture.SaveAsPng(ms, mapTexture.Width, mapTexture.Height);
+                        image.Save(ms, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
                         return ms.ToArray();
                     }
                 });
