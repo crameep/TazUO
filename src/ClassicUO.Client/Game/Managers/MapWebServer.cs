@@ -152,6 +152,17 @@ namespace ClassicUO.Game.Managers
                             context.Response.Close();
                         }
                         break;
+                    case "/api/minimizestates":
+                        if (context.Request.HttpMethod == "GET")
+                            GetMinimizeStates(context.Response);
+                        else if (context.Request.HttpMethod == "POST")
+                            SetMinimizeStates(context.Request, context.Response);
+                        else
+                        {
+                            context.Response.StatusCode = 405;
+                            context.Response.Close();
+                        }
+                        break;
                     default:
                         context.Response.StatusCode = 404;
                         context.Response.Close();
@@ -616,10 +627,37 @@ namespace ClassicUO.Game.Managers
             z-index: 1000;
             box-shadow: 0 4px 6px rgba(0,0,0,0.5);
         }
+        #controls.minimized {
+            padding: 10px 15px;
+        }
+        #controls.minimized .control-content {
+            display: none;
+        }
         #controls h2 {
             margin-bottom: 10px;
             font-size: 16px;
             color: #4CAF50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        #controls.minimized h2 {
+            margin-bottom: 0;
+        }
+        #controlsMinimizeBtn {
+            background: none;
+            border: none;
+            color: #4CAF50;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+            margin-left: 10px;
+        }
+        #controlsMinimizeBtn:hover {
+            color: #45a049;
         }
         #controls label {
             display: block;
@@ -797,17 +835,23 @@ namespace ClassicUO.Game.Managers
 </head>
 <body>
     <div id=""controls"">
-        <h2 id=""mapTitle"">TazUO Web Map</h2>
-        <button onclick=""zoomIn()"">Zoom In (+)</button>
-        <button onclick=""zoomOut()"">Zoom Out (-)</button>
-        <button onclick=""centerOnPlayer()"">Center</button>
-        <br>
-        <label><input type=""checkbox"" id=""followPlayer"" checked> Follow Player</label>
-        <label><input type=""checkbox"" id=""showParty"" checked> Show Party</label>
-        <label><input type=""checkbox"" id=""showGuild"" checked> Show Guild</label>
-        <label><input type=""checkbox"" id=""showMarkers"" checked> Show Markers</label>
-        <label><input type=""checkbox"" id=""showNames"" checked> Show Names</label>
-        <label><input type=""checkbox"" id=""showGrid"" checked> Show Grid</label>
+        <h2 id=""mapTitle"">
+            <span id=""mapTitleText"">TazUO Web Map</span>
+            <button id=""controlsMinimizeBtn"" title=""Minimize/Maximize"">−</button>
+        </h2>
+        <div class=""control-content"">
+            <button onclick=""zoomIn()"">Zoom In (+)</button>
+            <button onclick=""zoomOut()"">Zoom Out (-)</button>
+            <button onclick=""centerOnPlayer()"">Center</button>
+            <br>
+            <label><input type=""checkbox"" id=""followPlayer"" checked> Follow Player</label>
+            <label><input type=""checkbox"" id=""rotateMap"" checked> Rotate Map 45°</label>
+            <label><input type=""checkbox"" id=""showParty"" checked> Show Party</label>
+            <label><input type=""checkbox"" id=""showGuild"" checked> Show Guild</label>
+            <label><input type=""checkbox"" id=""showMarkers"" checked> Show Markers</label>
+            <label><input type=""checkbox"" id=""showNames"" checked> Show Names</label>
+            <label><input type=""checkbox"" id=""showGrid"" checked> Show Grid</label>
+        </div>
     </div>
     <div id=""status"">
         <span class=""status-indicator status-disconnected"" id=""statusIndicator""></span>
@@ -839,6 +883,8 @@ namespace ClassicUO.Game.Managers
         const journalBox = document.getElementById('journal');
         const journalMinimizeBtn = document.getElementById('journalMinimizeBtn');
         const journalResizeHandle = document.getElementById('journalResizeHandle');
+        const controlsBox = document.getElementById('controls');
+        const controlsMinimizeBtn = document.getElementById('controlsMinimizeBtn');
 
         let mapImage = null;
         let mapData = null;
@@ -856,6 +902,7 @@ namespace ClassicUO.Game.Managers
         let mouseZoomPoint = null; // Track the world position to keep under cursor during zoom
         let autoScrollJournal = true;
         let journalMinimized = false;
+        let controlsMinimized = false;
         let isResizingJournal = false;
         let resizeStartX = 0;
         let resizeStartY = 0;
@@ -865,6 +912,7 @@ namespace ClassicUO.Game.Managers
         const zoomLevels = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 4, 6, 8];
         let zoomIndex = 4;
         const ZOOM_SPEED = 0.15;
+        const POSITION_SPEED = 0.2; // Speed for player position tweening
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -887,17 +935,32 @@ namespace ClassicUO.Game.Managers
                 if (mouseZoomPoint) {
                     offsetX = mouseZoomPoint.canvasX - canvas.width / 2 - mouseZoomPoint.worldX * zoom;
                     offsetY = mouseZoomPoint.canvasY - canvas.height / 2 - mouseZoomPoint.worldY * zoom;
+                    targetOffsetX = offsetX;
+                    targetOffsetY = offsetY;
                 } else {
                     // For button zoom, maintain the center point
                     const zoomRatio = zoom / oldZoom;
                     offsetX *= zoomRatio;
                     offsetY *= zoomRatio;
+                    targetOffsetX *= zoomRatio;
+                    targetOffsetY *= zoomRatio;
                 }
 
                 needsRedraw = true;
             } else if (zoom !== targetZoom) {
                 zoom = targetZoom;
                 mouseZoomPoint = null; // Clear mouse zoom point when animation completes
+                needsRedraw = true;
+            }
+
+            // Smooth position interpolation (when following player)
+            if (Math.abs(offsetX - targetOffsetX) > 0.1 || Math.abs(offsetY - targetOffsetY) > 0.1) {
+                offsetX += (targetOffsetX - offsetX) * POSITION_SPEED;
+                offsetY += (targetOffsetY - offsetY) * POSITION_SPEED;
+                needsRedraw = true;
+            } else if (offsetX !== targetOffsetX || offsetY !== targetOffsetY) {
+                offsetX = targetOffsetX;
+                offsetY = targetOffsetY;
                 needsRedraw = true;
             }
 
@@ -971,7 +1034,7 @@ namespace ClassicUO.Game.Managers
 
         function updateTitle() {
             if (mapData && mapData.player && mapData.player.name) {
-                document.getElementById('mapTitle').textContent = `TazUO Web Map - ${mapData.player.name}`;
+                document.getElementById('mapTitleText').textContent = `TazUO Web Map - ${mapData.player.name}`;
             }
         }
 
@@ -1067,6 +1130,56 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        async function loadMinimizeStates() {
+            try {
+                const response = await fetch('/api/minimizestates');
+                if (response.ok) {
+                    const data = await response.json();
+                    journalMinimized = data.journalMinimized || false;
+                    controlsMinimized = data.controlsMinimized || false;
+
+                    // Apply loaded states
+                    if (journalMinimized) {
+                        // Save the current height (from loadJournalSize) before minimizing
+                        savedJournalHeight = journalBox.offsetHeight;
+                        journalBox.classList.add('minimized');
+                        journalBox.style.height = '40px';
+                        journalBox.style.minHeight = '40px';
+                        journalMinimizeBtn.textContent = '+';
+                    }
+                    if (controlsMinimized) {
+                        controlsBox.classList.add('minimized');
+                        controlsMinimizeBtn.textContent = '+';
+                    }
+
+                    console.log(`Loaded minimize states: journal=${journalMinimized}, controls=${controlsMinimized}`);
+                }
+            } catch (err) {
+                console.error('Error loading minimize states:', err);
+            }
+        }
+
+        async function saveMinimizeStates() {
+            try {
+                const response = await fetch('/api/minimizestates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        journalMinimized: journalMinimized,
+                        controlsMinimized: controlsMinimized
+                    })
+                });
+
+                if (response.ok) {
+                    console.log(`Saved minimize states: journal=${journalMinimized}, controls=${controlsMinimized}`);
+                }
+            } catch (err) {
+                console.error('Error saving minimize states:', err);
+            }
+        }
+
         // Handle journal minimize/maximize
         let savedJournalHeight = null;
 
@@ -1088,11 +1201,29 @@ namespace ClassicUO.Game.Managers
                 journalBox.style.minHeight = '150px';
                 journalMinimizeBtn.textContent = '−';
             }
+            saveMinimizeStates();
+        }
+
+        function toggleControlsMinimize() {
+            controlsMinimized = !controlsMinimized;
+            if (controlsMinimized) {
+                controlsBox.classList.add('minimized');
+                controlsMinimizeBtn.textContent = '+';
+            } else {
+                controlsBox.classList.remove('minimized');
+                controlsMinimizeBtn.textContent = '−';
+            }
+            saveMinimizeStates();
         }
 
         journalMinimizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleJournalMinimize();
+        });
+
+        controlsMinimizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleControlsMinimize();
         });
 
         // Handle journal resizing
@@ -1211,6 +1342,19 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        // Rotate a point around origin by given angle
+        function rotatePoint(x, y, angle) {
+            if (angle === 0) return { x: x, y: y };
+
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+
+            return {
+                x: cos * x - sin * y,
+                y: sin * x + cos * y
+            };
+        }
+
         function drawLabel(ctx, text, x, y, color, zoom) {
             // Constant font size on screen regardless of zoom level
             const fontSize = 16 / zoom;
@@ -1252,8 +1396,17 @@ namespace ClassicUO.Game.Managers
             const drawWidth = mapImage.width * zoom;
             const drawHeight = mapImage.height * zoom;
 
+            const isRotated = document.getElementById('rotateMap').checked;
+            const rotationAngle = isRotated ? Math.PI / 4 : 0; // 45 degrees in radians
+
             ctx.save();
             ctx.translate(centerX + offsetX, centerY + offsetY);
+
+            // Apply rotation to the map image only
+            if (isRotated) {
+                ctx.rotate(rotationAngle);
+            }
+
             ctx.scale(zoom, zoom);
             ctx.translate(-mapImage.width / 2, -mapImage.height / 2);
 
@@ -1288,36 +1441,87 @@ namespace ClassicUO.Game.Managers
             if (document.getElementById('showMarkers').checked && mapData.markers) {
                 mapData.markers.forEach(marker => {
                     const markerColor = `rgba(${marker.color.r}, ${marker.color.g}, ${marker.color.b}, ${marker.color.a / 255})`;
+
+                    // Save state before drawing marker
+                    ctx.save();
+
+                    // Position the marker (this point is already in rotated space)
+                    ctx.translate(marker.x, marker.y);
+
+                    // Counter-rotate to keep marker and label upright
+                    if (isRotated) {
+                        ctx.rotate(-rotationAngle);
+                    }
+
+                    // Scale for proper sizing
+                    ctx.scale(1 / zoom, 1 / zoom);
+
+                    // Draw marker circle
                     ctx.fillStyle = markerColor;
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1 / zoom;
+                    ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.arc(marker.x, marker.y, 3 / zoom, 0, Math.PI * 2);
+                    ctx.arc(0, 0, 3, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
 
-                    // Always show marker names when markers are visible
+                    // Draw label
                     if (marker.name) {
-                        drawLabel(ctx, marker.name, marker.x, marker.y, markerColor, zoom);
+                        ctx.font = '16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(marker.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 16;
+                        const padding = 3;
+
+                        // Draw background
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding, textWidth + padding * 2, textHeight + padding * 2);
+
+                        // Draw text
+                        ctx.fillStyle = markerColor;
+                        ctx.fillText(marker.name, 0, -6);
                     }
+
+                    ctx.restore();
                 });
             }
 
             // Draw guild members
             if (document.getElementById('showGuild').checked && mapData.guild) {
                 const showNames = document.getElementById('showNames').checked;
-                ctx.fillStyle = '#00ff00';
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1 / zoom;
                 mapData.guild.forEach(member => {
+                    ctx.save();
+                    ctx.translate(member.x, member.y);
+                    if (isRotated) ctx.rotate(-rotationAngle);
+                    ctx.scale(1 / zoom, 1 / zoom);
+
+                    ctx.fillStyle = '#00ff00';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.arc(member.x, member.y, 4 / zoom, 0, Math.PI * 2);
+                    ctx.arc(0, 0, 4, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
 
                     if (showNames && member.name) {
-                        drawLabel(ctx, member.name, member.x, member.y, '#00ff00', zoom);
+                        ctx.font = '16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(member.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 16;
+                        const padding = 3;
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding, textWidth + padding * 2, textHeight + padding * 2);
+
+                        ctx.fillStyle = '#00ff00';
+                        ctx.fillText(member.name, 0, -6);
                     }
+
+                    ctx.restore();
                 });
             }
 
@@ -1325,36 +1529,74 @@ namespace ClassicUO.Game.Managers
             if (document.getElementById('showParty').checked && mapData.party) {
                 const showNames = document.getElementById('showNames').checked;
                 mapData.party.forEach(member => {
-                    // Color based on guild/party status
                     const color = member.isGuild ? '#00ff00' : '#ffff00';
+
+                    ctx.save();
+                    ctx.translate(member.x, member.y);
+                    if (isRotated) ctx.rotate(-rotationAngle);
+                    ctx.scale(1 / zoom, 1 / zoom);
+
                     ctx.fillStyle = color;
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1 / zoom;
+                    ctx.lineWidth = 1;
                     ctx.beginPath();
-                    ctx.arc(member.x, member.y, 4 / zoom, 0, Math.PI * 2);
+                    ctx.arc(0, 0, 4, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.stroke();
 
                     if (showNames && member.name) {
-                        drawLabel(ctx, member.name, member.x, member.y, color, zoom);
+                        ctx.font = '16px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(member.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 16;
+                        const padding = 3;
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding, textWidth + padding * 2, textHeight + padding * 2);
+
+                        ctx.fillStyle = color;
+                        ctx.fillText(member.name, 0, -6);
                     }
+
+                    ctx.restore();
                 });
             }
 
             // Draw player
             if (mapData.player) {
+                ctx.save();
+                ctx.translate(mapData.player.x, mapData.player.y);
+                if (isRotated) ctx.rotate(-rotationAngle);
+                ctx.scale(1 / zoom, 1 / zoom);
+
                 ctx.fillStyle = '#ff0000';
                 ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2 / zoom;
+                ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.arc(mapData.player.x, mapData.player.y, 5 / zoom, 0, Math.PI * 2);
+                ctx.arc(0, 0, 5, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
 
                 const showNames = document.getElementById('showNames').checked;
                 if (showNames && mapData.player.name) {
-                    drawLabel(ctx, mapData.player.name, mapData.player.x, mapData.player.y, '#ff0000', zoom);
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    const metrics = ctx.measureText(mapData.player.name);
+                    const textWidth = metrics.width;
+                    const textHeight = 16;
+                    const padding = 3;
+
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding, textWidth + padding * 2, textHeight + padding * 2);
+
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillText(mapData.player.name, 0, -6);
                 }
+
+                ctx.restore();
 
                 document.getElementById('playerPos').textContent =
                     `${mapData.player.x}, ${mapData.player.y}`;
@@ -1368,12 +1610,26 @@ namespace ClassicUO.Game.Managers
         function centerOnPlayer() {
             if (!mapData || !mapData.player || !mapImage) return;
 
-            // Calculate offset to center player position on screen
+            // Calculate target offset to center player position on screen
             // The map coordinate system has (0,0) at top-left
             // We need to offset so player appears at canvas center
-            offsetX = (mapImage.width / 2 - mapData.player.x) * zoom;
-            offsetY = (mapImage.height / 2 - mapData.player.y) * zoom;
-            draw();
+
+            // Calculate the player's position relative to map center, scaled by zoom
+            let scaledX = (mapData.player.x - mapImage.width / 2) * zoom;
+            let scaledY = (mapData.player.y - mapImage.height / 2) * zoom;
+
+            // If rotated, we need to rotate these coordinates
+            const isRotated = document.getElementById('rotateMap').checked;
+            if (isRotated) {
+                const rotated = rotatePoint(scaledX, scaledY, Math.PI / 4);
+                scaledX = rotated.x;
+                scaledY = rotated.y;
+            }
+
+            // Negate to get the offset (we want to move the map in opposite direction)
+            targetOffsetX = -scaledX;
+            targetOffsetY = -scaledY;
+            // Animation loop will smoothly interpolate to these target values
         }
 
         function zoomIn() {
@@ -1438,6 +1694,8 @@ namespace ClassicUO.Game.Managers
 
                 offsetX += dx;
                 offsetY += dy;
+                targetOffsetX = offsetX;
+                targetOffsetY = offsetY;
                 lastMouseX = e.clientX;
                 lastMouseY = e.clientY;
                 draw();
@@ -1452,8 +1710,19 @@ namespace ClassicUO.Game.Managers
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
 
-                const worldX = (mouseCanvasX - centerX - offsetX) / zoom + mapImage.width / 2;
-                const worldY = (mouseCanvasY - centerY - offsetY) / zoom + mapImage.height / 2;
+                let screenX = (mouseCanvasX - centerX - offsetX) / zoom;
+                let screenY = (mouseCanvasY - centerY - offsetY) / zoom;
+
+                // If rotated, we need to inverse rotate the screen coordinates
+                const isRotated = document.getElementById('rotateMap').checked;
+                if (isRotated) {
+                    const rotated = rotatePoint(screenX, screenY, -Math.PI / 4);
+                    screenX = rotated.x;
+                    screenY = rotated.y;
+                }
+
+                const worldX = screenX + mapImage.width / 2;
+                const worldY = screenY + mapImage.height / 2;
 
                 document.getElementById('mousePos').textContent =
                     `${Math.floor(worldX)}, ${Math.floor(worldY)}`;
@@ -1512,8 +1781,17 @@ namespace ClassicUO.Game.Managers
             }
         });
 
+        // Add event listeners for checkboxes to trigger redraw
+        document.getElementById('rotateMap').addEventListener('change', draw);
+        document.getElementById('showParty').addEventListener('change', draw);
+        document.getElementById('showGuild').addEventListener('change', draw);
+        document.getElementById('showMarkers').addEventListener('change', draw);
+        document.getElementById('showNames').addEventListener('change', draw);
+        document.getElementById('showGrid').addEventListener('change', draw);
+
         // Initialize
         loadJournalSize();
+        loadMinimizeStates();
         loadMapTexture();
         loadMapData();
         connectEventStream();
