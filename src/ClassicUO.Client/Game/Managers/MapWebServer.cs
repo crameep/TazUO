@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -13,12 +16,18 @@ namespace ClassicUO.Game.Managers
 {
     internal class MapWebServer : IDisposable
     {
+        private class ClientState
+        {
+            public HttpListenerResponse Response { get; set; }
+            public int LastJournalCount { get; set; }
+        }
+
         private HttpListener _httpListener;
         private Thread _listenerThread;
         private volatile bool _isRunning;
         private int _port = 8088;
         private readonly object _clientsLock = new object();
-        private readonly List<HttpListenerResponse> _activeClients = new List<HttpListenerResponse>();
+        private readonly List<ClientState> _activeClients = new List<ClientState>();
         private byte[] _cachedMapPng = null;
         private readonly object _cacheLock = new object();
 
@@ -125,6 +134,9 @@ namespace ClassicUO.Game.Managers
                         break;
                     case "/api/events":
                         ServeEventStream(context.Response);
+                        break;
+                    case "/api/command":
+                        HandleCommand(context.Request, context.Response);
                         break;
                     default:
                         context.Response.StatusCode = 404;
@@ -245,9 +257,15 @@ namespace ClassicUO.Game.Managers
             response.Headers.Add("Cache-Control", "no-cache");
             response.Headers.Add("Connection", "keep-alive");
 
+            var clientState = new ClientState
+            {
+                Response = response,
+                LastJournalCount = JournalManager.Entries.Count
+            };
+
             lock (_clientsLock)
             {
-                _activeClients.Add(response);
+                _activeClients.Add(clientState);
             }
 
             try
@@ -266,7 +284,8 @@ namespace ClassicUO.Game.Managers
                         },
                         party = GetPartyData(),
                         guild = GetGuildData(),
-                        markers = GetMarkersData()
+                        markers = GetMarkersData(),
+                        journal = GetNewJournalEntries(clientState)
                     };
 
                     string json = JsonSerializer.Serialize(data);
@@ -288,7 +307,7 @@ namespace ClassicUO.Game.Managers
             {
                 lock (_clientsLock)
                 {
-                    _activeClients.Remove(response);
+                    _activeClients.Remove(clientState);
                 }
                 try { response.Close(); } catch { }
             }
@@ -385,6 +404,85 @@ namespace ClassicUO.Game.Managers
             return markers;
         }
 
+        private List<object> GetNewJournalEntries(ClientState clientState)
+        {
+            var newEntries = new List<object>();
+
+            int currentCount = JournalManager.Entries.Count;
+
+            if (currentCount > clientState.LastJournalCount)
+            {
+                int startIndex = clientState.LastJournalCount;
+                int entriesToSend = currentCount - clientState.LastJournalCount;
+
+                for (int i = 0; i < entriesToSend && i < 100; i++)
+                {
+                    int index = startIndex + i;
+                    if (index < currentCount)
+                    {
+                        JournalEntry entry = JournalManager.Entries[index];
+                        newEntries.Add(new
+                        {
+                            text = entry.Text,
+                            hue = entry.Hue,
+                            name = entry.Name ?? "",
+                            time = entry.Time.ToString("HH:mm:ss"),
+                            textType = entry.TextType.ToString()
+                        });
+                    }
+                }
+
+                clientState.LastJournalCount = currentCount;
+            }
+
+            return newEntries;
+        }
+
+        private void HandleCommand(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                if (request.HttpMethod != "POST")
+                {
+                    response.StatusCode = 405;
+                    response.Close();
+                    return;
+                }
+
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string body = reader.ReadToEnd();
+                    Dictionary<string, string> commandData = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+
+                    if (commandData != null && commandData.TryGetValue("command", out string command))
+                    {
+                        if (!string.IsNullOrWhiteSpace(command))
+                        {
+                            GameActions.Say(command, 0xFFFF, MessageType.Regular, 3);
+                        }
+
+                        response.StatusCode = 200;
+                        byte[] buffer = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+                        response.ContentType = "application/json";
+                        response.ContentLength64 = buffer.Length;
+                        response.OutputStream.Write(buffer, 0, buffer.Length);
+                    }
+                    else
+                    {
+                        response.StatusCode = 400;
+                    }
+                }
+
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error handling command: {ex.Message}");
+                response.StatusCode = 500;
+                response.Close();
+            }
+        }
+
         private string GetHtmlPage() => @"<!DOCTYPE html>
 <html>
 <head>
@@ -436,12 +534,106 @@ namespace ClassicUO.Game.Managers
         #info {
             position: fixed;
             bottom: 10px;
-            left: 10px;
+            right: 10px;
             background: rgba(0,0,0,0.8);
             padding: 10px 15px;
             border-radius: 8px;
             font-size: 12px;
             z-index: 1000;
+        }
+        #journal {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            width: 400px;
+            height: 300px;
+            background: rgba(0,0,0,0.9);
+            border-radius: 8px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            transition: height 0.3s ease;
+        }
+        #journal.minimized {
+            height: 40px;
+        }
+        #journal.minimized #journalContent,
+        #journal.minimized #journalInputContainer {
+            display: none;
+        }
+        #journalHeader {
+            padding: 10px 15px;
+            background: rgba(50,50,50,0.9);
+            border-radius: 8px 8px 0 0;
+            font-size: 14px;
+            font-weight: bold;
+            color: #4CAF50;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        #journal.minimized #journalHeader {
+            border-bottom: none;
+            border-radius: 8px;
+        }
+        #journalMinimizeBtn {
+            background: none;
+            border: none;
+            color: #4CAF50;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+        }
+        #journalMinimizeBtn:hover {
+            color: #45a049;
+        }
+        #journalContent {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+        }
+        #journalContent::-webkit-scrollbar {
+            width: 8px;
+        }
+        #journalContent::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.3);
+        }
+        #journalContent::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 4px;
+        }
+        #journalContent::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.5);
+        }
+        .journal-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        #journalInputContainer {
+            padding: 10px;
+            background: rgba(30,30,30,0.9);
+            border-radius: 0 0 8px 8px;
+            border-top: 1px solid #333;
+        }
+        #journalInput {
+            width: 100%;
+            padding: 8px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+        }
+        #journalInput:focus {
+            border-color: #4CAF50;
         }
         #mapCanvas {
             display: block;
@@ -494,11 +686,25 @@ namespace ClassicUO.Game.Managers
         <div>Player: <span id=""playerPos"">0, 0</span></div>
         <div>Mouse: <span id=""mousePos"">-</span></div>
     </div>
+    <div id=""journal"">
+        <div id=""journalHeader"">
+            <span>Journal</span>
+            <button id=""journalMinimizeBtn"" title=""Minimize/Maximize"">−</button>
+        </div>
+        <div id=""journalContent""></div>
+        <div id=""journalInputContainer"">
+            <input type=""text"" id=""journalInput"" placeholder=""Type command..."" />
+        </div>
+    </div>
     <canvas id=""mapCanvas""></canvas>
 
     <script>
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
+        const journalContent = document.getElementById('journalContent');
+        const journalInput = document.getElementById('journalInput');
+        const journalBox = document.getElementById('journal');
+        const journalMinimizeBtn = document.getElementById('journalMinimizeBtn');
 
         let mapImage = null;
         let mapData = null;
@@ -514,6 +720,8 @@ namespace ClassicUO.Game.Managers
         let eventSource = null;
         let animationFrameId = null;
         let mouseZoomPoint = null; // Track the world position to keep under cursor during zoom
+        let autoScrollJournal = true;
+        let journalMinimized = false;
 
         const zoomLevels = [0.125, 0.25, 0.5, 0.75, 1, 1.5, 2, 4, 6, 8];
         let zoomIndex = 4;
@@ -628,6 +836,100 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        function hueToRgb(hue) {
+            // UO hue to RGB conversion - simplified
+            // In reality, UO uses a complex hue system, but this provides basic color coding
+            if (hue === 0) return 'rgb(200, 200, 200)'; // Gray for system messages
+            if (hue < 100) return 'rgb(255, 255, 100)'; // Yellow
+            if (hue < 200) return 'rgb(100, 255, 100)'; // Green
+            if (hue < 500) return 'rgb(100, 200, 255)'; // Blue
+            if (hue < 1000) return 'rgb(255, 150, 100)'; // Orange
+            return 'rgb(255, 100, 255)'; // Magenta
+        }
+
+        function addJournalEntries(entries) {
+            if (!entries || entries.length === 0) return;
+
+            entries.forEach(entry => {
+                const div = document.createElement('div');
+                div.className = 'journal-entry';
+                const color = hueToRgb(entry.hue);
+
+                let text = '';
+                if (entry.name) {
+                    text = `[${entry.time}] ${entry.name}: ${entry.text}`;
+                } else {
+                    text = `[${entry.time}] ${entry.text}`;
+                }
+
+                div.style.color = color;
+                div.textContent = text;
+                journalContent.appendChild(div);
+            });
+
+            // Auto-scroll to bottom if enabled
+            if (autoScrollJournal) {
+                journalContent.scrollTop = journalContent.scrollHeight;
+            }
+
+            // Limit journal entries in DOM to prevent memory issues
+            while (journalContent.children.length > 500) {
+                journalContent.removeChild(journalContent.firstChild);
+            }
+        }
+
+        async function sendCommand(command) {
+            try {
+                const response = await fetch('/api/command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to send command');
+                }
+            } catch (err) {
+                console.error('Error sending command:', err);
+            }
+        }
+
+        // Handle journal minimize/maximize
+        function toggleJournalMinimize() {
+            journalMinimized = !journalMinimized;
+            if (journalMinimized) {
+                journalBox.classList.add('minimized');
+                journalMinimizeBtn.textContent = '+';
+            } else {
+                journalBox.classList.remove('minimized');
+                journalMinimizeBtn.textContent = '−';
+            }
+        }
+
+        journalMinimizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleJournalMinimize();
+        });
+
+        // Handle journal input
+        journalInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const command = journalInput.value.trim();
+                if (command) {
+                    sendCommand(command);
+                    journalInput.value = '';
+                }
+            }
+        });
+
+        // Detect manual scrolling to disable auto-scroll
+        journalContent.addEventListener('scroll', () => {
+            const isAtBottom = journalContent.scrollHeight - journalContent.scrollTop <= journalContent.clientHeight + 50;
+            autoScrollJournal = isAtBottom;
+        });
+
         function connectEventStream() {
             if (eventSource) {
                 eventSource.close();
@@ -660,6 +962,11 @@ namespace ClassicUO.Game.Managers
                     mapData.party = data.party;
                     mapData.guild = data.guild;
                     mapData.markers = data.markers;
+
+                    // Handle journal entries
+                    if (data.journal && data.journal.length > 0) {
+                        addJournalEntries(data.journal);
+                    }
 
                     updateTitle(); // Update title if player name changes
 
