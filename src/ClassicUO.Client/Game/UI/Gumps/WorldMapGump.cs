@@ -380,6 +380,9 @@ public class WorldMapGump : ResizableGump
         );
 
         _options["add_marker_on_player"] = new ContextMenuItemEntry(ResGumps.AddMarkerOnPlayer, () => AddMarkerOnPlayer());
+
+        _options["open_web_map"] = new ContextMenuItemEntry("Open Web Map (Browser)", GameActions.OpenWorldMapWebWindow);
+
         _options["saveclose"] = new ContextMenuItemEntry(ResGumps.SaveClose, Dispose);
 
         _options["show_grid_if_zoomed"] = new ContextMenuItemEntry(ResGumps.GridIfZoomed, () => { _showGridIfZoomed = !_showGridIfZoomed; SaveSettings(); }, true, _showGridIfZoomed);
@@ -593,6 +596,7 @@ public class WorldMapGump : ResizableGump
         ContextMenu.Add(_options["markers_manager"]);
         ContextMenu.Add(_options["add_marker_on_player"]);
         ContextMenu.Add("", null);
+        ContextMenu.Add(_options["open_web_map"]);
         ContextMenu.Add(_options["reset_map_cache"]);
         ContextMenu.Add(_options["saveclose"]);
     }
@@ -1497,6 +1501,8 @@ public class WorldMapGump : ResizableGump
     }
 
     public static void ClearMapCache() => _mapCache?.Clear();
+
+    public static Texture2D GetMapTextureForMap(int mapIndex) => _mapTexture;
 
     public class ZonesFileZoneData
     {

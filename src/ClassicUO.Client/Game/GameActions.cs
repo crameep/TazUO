@@ -402,6 +402,34 @@ internal static class GameActions
         }
     }
 
+    internal static void OpenWorldMapWebWindow()
+    {
+        var server = Managers.MapWebServerManager.Instance;
+
+        if (!server.IsRunning)
+        {
+            if (!server.Start())
+            {
+                GameActions.Print(World.Instance, "Failed to start map web server", 0x21);
+                return;
+            }
+        }
+
+        // Open browser
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = $"http://localhost:{server.Port}",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            GameActions.Print(World.Instance, $"Failed to open browser: {ex.Message}", 0x21);
+        }
+    }
+
     /// <summary>
     ///
     /// </summary>

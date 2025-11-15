@@ -344,6 +344,7 @@ namespace ClassicUO.Configuration
         public string WorldMapHiddenZoneFiles { get; set; } = string.Empty;
         public bool WorldMapShowGridIfZoomed { get; set; } = true;
         public bool WorldMapAllowPositionalTarget { get; set; } = true;
+        public int WorldMapWebServerPort { get; set; } = 8088;
 
         public int AutoFollowDistance { get; set; } = 2;
         public bool DisableAutoFollowAlt { get; set; } = false;
