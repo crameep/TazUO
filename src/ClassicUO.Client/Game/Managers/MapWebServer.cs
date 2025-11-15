@@ -177,7 +177,9 @@ namespace ClassicUO.Game.Managers
                     y = World.Instance.Player?.Y ?? 0,
                     name = World.Instance.Player?.Name ?? ""
                 },
-                party = GetPartyData()
+                party = GetPartyData(),
+                guild = GetGuildData(),
+                markers = GetMarkersData()
             };
 
             string json = JsonSerializer.Serialize(data);
@@ -258,9 +260,12 @@ namespace ClassicUO.Game.Managers
                         player = new
                         {
                             x = World.Instance.Player?.X ?? 0,
-                            y = World.Instance.Player?.Y ?? 0
+                            y = World.Instance.Player?.Y ?? 0,
+                            name = World.Instance.Player?.Name ?? ""
                         },
-                        party = GetPartyData()
+                        party = GetPartyData(),
+                        guild = GetGuildData(),
+                        markers = GetMarkersData()
                     };
 
                     string json = JsonSerializer.Serialize(data);
@@ -301,17 +306,81 @@ namespace ClassicUO.Game.Managers
                     Mobile mobile = World.Instance.Mobiles.Get(member.Serial);
                     if (mobile != null && !mobile.IsDestroyed)
                     {
+                        WMapEntity wme = World.Instance.WMapManager.GetEntity(member.Serial);
                         partyMembers.Add(new
                         {
                             x = mobile.X,
                             y = mobile.Y,
-                            name = member.Name
+                            name = member.Name,
+                            isGuild = wme != null && wme.IsGuild,
+                            map = World.Instance.MapIndex
                         });
                     }
                 }
             }
 
             return partyMembers;
+        }
+
+        private List<object> GetGuildData()
+        {
+            var guildMembers = new List<object>();
+
+            if (World.Instance?.WMapManager != null && World.Instance.WMapManager.Entities != null)
+            {
+                foreach (WMapEntity wme in World.Instance.WMapManager.Entities.Values)
+                {
+                    if (wme.IsGuild && !World.Instance.Party.Contains(wme.Serial))
+                    {
+                        guildMembers.Add(new
+                        {
+                            x = wme.X,
+                            y = wme.Y,
+                            name = wme.Name ?? "<out of range>",
+                            map = wme.Map
+                        });
+                    }
+                }
+            }
+
+            return guildMembers;
+        }
+
+        private List<object> GetMarkersData()
+        {
+            var markers = new List<object>();
+
+            if (UI.Gumps.WorldMapGump._markerFiles != null)
+            {
+                foreach (UI.Gumps.WorldMapGump.WMapMarkerFile markerFile in UI.Gumps.WorldMapGump._markerFiles)
+                {
+                    if (markerFile.Hidden || markerFile.Markers == null)
+                        continue;
+
+                    foreach (UI.Gumps.WorldMapGump.WMapMarker marker in markerFile.Markers)
+                    {
+                        if (marker.MapId == World.Instance.MapIndex)
+                        {
+                            markers.Add(new
+                            {
+                                x = marker.X,
+                                y = marker.Y,
+                                name = marker.Name,
+                                color = new
+                                {
+                                    r = marker.Color.R,
+                                    g = marker.Color.G,
+                                    b = marker.Color.B,
+                                    a = marker.Color.A
+                                },
+                                iconName = marker.MarkerIconName
+                            });
+                        }
+                    }
+                }
+            }
+
+            return markers;
         }
 
         private string GetHtmlPage() => @"<!DOCTYPE html>
@@ -409,6 +478,9 @@ namespace ClassicUO.Game.Managers
         <br>
         <label><input type=""checkbox"" id=""followPlayer"" checked> Follow Player</label>
         <label><input type=""checkbox"" id=""showParty"" checked> Show Party</label>
+        <label><input type=""checkbox"" id=""showGuild"" checked> Show Guild</label>
+        <label><input type=""checkbox"" id=""showMarkers"" checked> Show Markers</label>
+        <label><input type=""checkbox"" id=""showNames"" checked> Show Names</label>
         <label><input type=""checkbox"" id=""showGrid"" checked> Show Grid</label>
     </div>
     <div id=""status"">
@@ -576,6 +648,34 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        function drawLabel(ctx, text, x, y, color, zoom) {
+            const fontSize = Math.max(10, 12 / zoom);
+            ctx.font = `${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+
+            const metrics = ctx.measureText(text);
+            const textWidth = metrics.width;
+            const textHeight = fontSize;
+            const padding = 2 / zoom;
+
+            const labelX = x;
+            const labelY = y - (6 / zoom);
+
+            // Draw background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(
+                labelX - textWidth / 2 - padding,
+                labelY - textHeight,
+                textWidth + (padding * 2),
+                textHeight + padding
+            );
+
+            // Draw text
+            ctx.fillStyle = color;
+            ctx.fillText(text, labelX, labelY);
+        }
+
         function draw() {
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -613,6 +713,63 @@ namespace ClassicUO.Game.Managers
                 }
             }
 
+            // Draw markers
+            if (document.getElementById('showMarkers').checked && mapData.markers) {
+                const showNames = document.getElementById('showNames').checked;
+                mapData.markers.forEach(marker => {
+                    const markerColor = `rgba(${marker.color.r}, ${marker.color.g}, ${marker.color.b}, ${marker.color.a / 255})`;
+                    ctx.fillStyle = markerColor;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1 / zoom;
+                    ctx.beginPath();
+                    ctx.arc(marker.x, marker.y, 3 / zoom, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    if (showNames && marker.name) {
+                        drawLabel(ctx, marker.name, marker.x, marker.y, markerColor, zoom);
+                    }
+                });
+            }
+
+            // Draw guild members
+            if (document.getElementById('showGuild').checked && mapData.guild) {
+                const showNames = document.getElementById('showNames').checked;
+                ctx.fillStyle = '#00ff00';
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1 / zoom;
+                mapData.guild.forEach(member => {
+                    ctx.beginPath();
+                    ctx.arc(member.x, member.y, 4 / zoom, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    if (showNames && member.name) {
+                        drawLabel(ctx, member.name, member.x, member.y, '#00ff00', zoom);
+                    }
+                });
+            }
+
+            // Draw party members
+            if (document.getElementById('showParty').checked && mapData.party) {
+                const showNames = document.getElementById('showNames').checked;
+                mapData.party.forEach(member => {
+                    // Color based on guild/party status
+                    const color = member.isGuild ? '#00ff00' : '#ffff00';
+                    ctx.fillStyle = color;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1 / zoom;
+                    ctx.beginPath();
+                    ctx.arc(member.x, member.y, 4 / zoom, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    if (showNames && member.name) {
+                        drawLabel(ctx, member.name, member.x, member.y, color, zoom);
+                    }
+                });
+            }
+
             // Draw player
             if (mapData.player) {
                 ctx.fillStyle = '#ff0000';
@@ -623,21 +780,13 @@ namespace ClassicUO.Game.Managers
                 ctx.fill();
                 ctx.stroke();
 
+                const showNames = document.getElementById('showNames').checked;
+                if (showNames && mapData.player.name) {
+                    drawLabel(ctx, mapData.player.name, mapData.player.x, mapData.player.y, '#ff0000', zoom);
+                }
+
                 document.getElementById('playerPos').textContent =
                     `${mapData.player.x}, ${mapData.player.y}`;
-            }
-
-            // Draw party members
-            if (document.getElementById('showParty').checked && mapData.party) {
-                ctx.fillStyle = '#00ff00';
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1 / zoom;
-                mapData.party.forEach(member => {
-                    ctx.beginPath();
-                    ctx.arc(member.x, member.y, 4 / zoom, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                });
             }
 
             ctx.restore();
