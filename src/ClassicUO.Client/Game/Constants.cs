@@ -122,6 +122,8 @@ namespace ClassicUO.Game
             public const string USE_LONG_DISTANCE_PATHING = "use_long_distance_pathing";
             public const string LONG_DISTANCE_PATHING_SPEED = "long_distance_pathing_speed";
             public const string SCALE_PETS_ENABLED = "scale_pets_enabled";
+            public const string WEB_MAP_PORT = "web_map_port";
+            public const string WEB_MAP_AUTO_START = "web_map_auto_start";
         }
     }
 }

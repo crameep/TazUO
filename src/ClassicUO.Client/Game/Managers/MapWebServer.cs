@@ -257,6 +257,7 @@ namespace ClassicUO.Game.Managers
                 {
                     var data = new
                     {
+                        mapIndex = World.Instance.MapIndex,
                         player = new
                         {
                             x = World.Instance.Player?.X ?? 0,
@@ -269,13 +270,14 @@ namespace ClassicUO.Game.Managers
                     };
 
                     string json = JsonSerializer.Serialize(data);
+
                     string message = $"data: {json}\n\n";
                     byte[] buffer = Encoding.UTF8.GetBytes(message);
 
                     response.OutputStream.Write(buffer, 0, buffer.Length);
                     response.OutputStream.Flush();
 
-                    Thread.Sleep(500); // Update twice per second
+                    Thread.Sleep(500); // Check for updates twice per second
                 }
             }
             catch
@@ -471,7 +473,7 @@ namespace ClassicUO.Game.Managers
 </head>
 <body>
     <div id=""controls"">
-        <h2>TazUO World Map</h2>
+        <h2 id=""mapTitle"">TazUO Web Map</h2>
         <button onclick=""zoomIn()"">Zoom In (+)</button>
         <button onclick=""zoomOut()"">Zoom Out (-)</button>
         <button onclick=""centerOnPlayer()"">Center</button>
@@ -561,13 +563,16 @@ namespace ClassicUO.Game.Managers
 
         animate();
 
-        async function loadMapTexture() {
+        async function loadMapTexture(retryCount = 0, centerAfterLoad = false) {
             try {
                 updateStatus(false, 'Loading map...');
                 const response = await fetch('/api/maptexture');
 
                 if (!response.ok) {
-                    throw new Error(`Map not loaded (${response.status})`);
+                    console.log(`Map texture not ready, retrying... (attempt ${retryCount + 1})`);
+                    updateStatus(false, `Loading map... (attempt ${retryCount + 1})`);
+                    setTimeout(() => loadMapTexture(retryCount + 1, centerAfterLoad), 1000);
+                    return;
                 }
 
                 const blob = await response.blob();
@@ -575,7 +580,15 @@ namespace ClassicUO.Game.Managers
                 img.onload = () => {
                     mapImage = img;
                     updateStatus(true, 'Connected');
-                    draw();
+                    console.log('Map texture loaded successfully');
+
+                    if (centerAfterLoad) {
+                        console.log('Centering on player after map change');
+                        document.getElementById('followPlayer').checked = true;
+                        centerOnPlayer();
+                    } else {
+                        draw();
+                    }
                 };
                 img.onerror = (err) => {
                     console.error('Image load error:', err);
@@ -584,8 +597,7 @@ namespace ClassicUO.Game.Managers
                 img.src = URL.createObjectURL(blob);
             } catch (err) {
                 console.error('Failed to load map texture:', err);
-                updateStatus(false, 'Retrying...');
-                setTimeout(loadMapTexture, 2000);
+                updateStatus(false, 'Failed to load map');
             }
         }
 
@@ -595,7 +607,9 @@ namespace ClassicUO.Game.Managers
                 if (!response.ok) throw new Error('Not in game');
 
                 mapData = await response.json();
+                console.log(`[INITIAL LOAD] Map index: ${mapData.mapIndex}, Player: ${mapData.player.name}`);
                 updateStatus(true);
+                updateTitle();
 
                 if (document.getElementById('followPlayer').checked) {
                     centerOnPlayer();
@@ -605,6 +619,12 @@ namespace ClassicUO.Game.Managers
             } catch (err) {
                 console.error('Failed to load map data:', err);
                 updateStatus(false);
+            }
+        }
+
+        function updateTitle() {
+            if (mapData && mapData.player && mapData.player.name) {
+                document.getElementById('mapTitle').textContent = `TazUO Web Map - ${mapData.player.name}`;
             }
         }
 
@@ -618,8 +638,30 @@ namespace ClassicUO.Game.Managers
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (mapData) {
+                    // Check if map changed
+                    if (data.mapIndex !== undefined && data.mapIndex !== mapData.mapIndex) {
+                        console.log(`[MAP CHANGE DETECTED] Changing from map ${mapData.mapIndex} to map ${data.mapIndex}`);
+                        mapData.mapIndex = data.mapIndex;
+                        mapData.player = data.player;
+                        mapData.party = data.party;
+                        mapData.guild = data.guild;
+                        mapData.markers = data.markers;
+                        updateTitle();
+
+                        // Clear the map image immediately to show blank screen
+                        mapImage = null;
+                        draw(); // Redraw to show blank screen
+
+                        loadMapTexture(0, true); // Reload the map texture for the new map and center on player
+                        return; // loadMapTexture will trigger a redraw when complete
+                    }
+
                     mapData.player = data.player;
                     mapData.party = data.party;
+                    mapData.guild = data.guild;
+                    mapData.markers = data.markers;
+
+                    updateTitle(); // Update title if player name changes
 
                     if (document.getElementById('followPlayer').checked) {
                         centerOnPlayer();
@@ -697,15 +739,22 @@ namespace ClassicUO.Game.Managers
 
             // Draw grid
             if (document.getElementById('showGrid').checked && zoom >= 2) {
+                size = 8;
+                if (zoom >= 4)
+                    size = 4;
+                if (zoom >= 6)
+                    size = 2;
+                if (zoom >= 8)
+                    size = 1;
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
                 ctx.lineWidth = 1 / zoom;
-                for (let x = 0; x < mapImage.width; x += 100) {
+                for (let x = 0; x < mapImage.width; x += size) {
                     ctx.beginPath();
                     ctx.moveTo(x, 0);
                     ctx.lineTo(x, mapImage.height);
                     ctx.stroke();
                 }
-                for (let y = 0; y < mapImage.height; y += 100) {
+                for (let y = 0; y < mapImage.height; y += size) {
                     ctx.beginPath();
                     ctx.moveTo(0, y);
                     ctx.lineTo(mapImage.width, y);
@@ -715,7 +764,6 @@ namespace ClassicUO.Game.Managers
 
             // Draw markers
             if (document.getElementById('showMarkers').checked && mapData.markers) {
-                const showNames = document.getElementById('showNames').checked;
                 mapData.markers.forEach(marker => {
                     const markerColor = `rgba(${marker.color.r}, ${marker.color.g}, ${marker.color.b}, ${marker.color.a / 255})`;
                     ctx.fillStyle = markerColor;
@@ -726,7 +774,8 @@ namespace ClassicUO.Game.Managers
                     ctx.fill();
                     ctx.stroke();
 
-                    if (showNames && marker.name) {
+                    // Always show marker names when markers are visible
+                    if (marker.name) {
                         drawLabel(ctx, marker.name, marker.x, marker.y, markerColor, zoom);
                     }
                 });
@@ -846,10 +895,13 @@ namespace ClassicUO.Game.Managers
         }
 
         canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            document.getElementById('followPlayer').checked = false;
+            // Only allow dragging with left mouse button
+            if (e.button === 0) {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                document.getElementById('followPlayer').checked = false;
+            }
         });
 
         canvas.addEventListener('mousemove', (e) => {

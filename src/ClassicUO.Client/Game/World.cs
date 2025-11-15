@@ -197,6 +197,13 @@ namespace ClassicUO.Game
                     {
                         Client.Game.UO.GameCursor.Graphic = 0xFFFF;
                     }
+
+                    // Notify web server of map change
+                    if (Managers.MapWebServerManager.Instance.IsRunning)
+                    {
+                        Utility.Logging.Log.Info($"Map changed to {value}, notifying web server");
+                        Managers.MapWebServerManager.Instance.RegenerateMapPng();
+                    }
                 }
             }
         }

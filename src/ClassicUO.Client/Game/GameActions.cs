@@ -404,16 +404,10 @@ internal static class GameActions
 
     internal static void OpenWorldMapWebWindow()
     {
-        var server = Managers.MapWebServerManager.Instance;
+        MapWebServerManager server = Managers.MapWebServerManager.Instance;
 
         if (!server.IsRunning)
-        {
-            if (!server.Start())
-            {
-                GameActions.Print(World.Instance, "Failed to start map web server", 0x21);
-                return;
-            }
-        }
+            server.Start();
 
         // Open browser
         try

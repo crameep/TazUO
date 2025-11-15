@@ -988,6 +988,9 @@ sealed class PacketHandlers
 
         AsyncNetClient.Socket.Send_ToPlugins_AllSkills();
         AsyncNetClient.Socket.Send_ToPlugins_AllSpells();
+
+        if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.WebMapAutoStart && !MapWebServerManager.Instance.IsRunning)
+            MapWebServerManager.Instance.Start();
     }
 
     private static void Talk(World world, ref StackDataReader p)

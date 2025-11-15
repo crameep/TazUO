@@ -229,10 +229,15 @@ namespace ClassicUO.Game.Managers
         /// <param name="name">The name of the setting</param>
         /// <param name="defaultValue">The default value to return if the setting doesn't exist or parsing fails</param>
         /// <returns>A task that represents the asynchronous operation, containing the parsed setting value or the default value if not found or parsing fails</returns>
-        public async Task<T> GetAsync<T>(SettingsScope scope, string name, T defaultValue = default)
+        public async Task<T> GetAsync<T>(SettingsScope scope, string name, T defaultValue = default, Action<T> onComplete = null)
         {
             string stringValue = await GetAsync(scope, name, defaultValue?.ToString() ?? string.Empty);
-            return ParseValue(stringValue, defaultValue);
+
+            T final = ParseValue(stringValue, defaultValue);
+
+            onComplete?.Invoke(final);
+
+            return final;
         }
 
         /// <summary>

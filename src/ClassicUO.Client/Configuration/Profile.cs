@@ -15,6 +15,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using System.Xml;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
@@ -344,7 +345,30 @@ namespace ClassicUO.Configuration
         public string WorldMapHiddenZoneFiles { get; set; } = string.Empty;
         public bool WorldMapShowGridIfZoomed { get; set; } = true;
         public bool WorldMapAllowPositionalTarget { get; set; } = true;
-        public int WorldMapWebServerPort { get; set; } = 8088;
+
+        [JsonIgnore]
+        public int WebMapServerPort
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, value);
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
+        public bool WebMapAutoStart
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, value);
+                field = value;
+            }
+        }
 
         public int AutoFollowDistance { get; set; } = 2;
         public bool DisableAutoFollowAlt { get; set; } = false;
@@ -656,14 +680,29 @@ namespace ClassicUO.Configuration
         {
             get => field;
             set {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
+
                 field = value;
-                Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
             }
         }
 
         private long lastSave;
 
-        internal void AfterLoad() => Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+        internal void AfterLoad()
+        {
+            //These are fine if we continue without loading them yet
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+
+
+            //These must be waited before continue for various purposes elsewhere
+            Task[] mustWait = [
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, false, (b) => WebMapAutoStart = b),
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, (p) => WebMapServerPort = p)
+            ];
+
+            Task.WaitAll(mustWait, 5000);
+        }
 
         internal void Save(World world, string path, bool saveGumps = true)
         {

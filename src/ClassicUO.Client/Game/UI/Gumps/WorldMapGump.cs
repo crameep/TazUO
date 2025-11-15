@@ -97,7 +97,7 @@ public class WorldMapGump : ResizableGump
 
     private WMapMarker _gotoMarker;
 
-    private int _mapLoading;
+    private static int _mapLoading;
     private Task _loadingTask;
     private World _world;
 
@@ -383,6 +383,14 @@ public class WorldMapGump : ResizableGump
 
         _options["open_web_map"] = new ContextMenuItemEntry("Open Web Map (Browser)", GameActions.OpenWorldMapWebWindow);
 
+        _options["auto_start_web_map"] = new ContextMenuItemEntry("Auto start web map", () =>
+        {
+            ProfileManager.CurrentProfile.WebMapAutoStart = !ProfileManager.CurrentProfile.WebMapAutoStart;
+            if (!MapWebServerManager.Instance.IsRunning)
+                MapWebServerManager.Instance.Start();
+
+        }, true, ProfileManager.CurrentProfile.WebMapAutoStart);
+
         _options["saveclose"] = new ContextMenuItemEntry(ResGumps.SaveClose, Dispose);
 
         _options["show_grid_if_zoomed"] = new ContextMenuItemEntry(ResGumps.GridIfZoomed, () => { _showGridIfZoomed = !_showGridIfZoomed; SaveSettings(); }, true, _showGridIfZoomed);
@@ -597,6 +605,7 @@ public class WorldMapGump : ResizableGump
         ContextMenu.Add(_options["add_marker_on_player"]);
         ContextMenu.Add("", null);
         ContextMenu.Add(_options["open_web_map"]);
+        ContextMenu.Add(_options["auto_start_web_map"]);
         ContextMenu.Add(_options["reset_map_cache"]);
         ContextMenu.Add(_options["saveclose"]);
     }
@@ -626,10 +635,13 @@ public class WorldMapGump : ResizableGump
         _map = new Map.Map(World, index);
 
 
-        if (_loadingTask is { Status: TaskStatus.Running })
-            _loadingTask = _loadingTask.ContinueWith(_ => LoadMap(index));
-        else
-            _loadingTask = Task.Run(() => LoadMap(index));
+        if(World.InGame)
+        {
+            if (_loadingTask is { Status: TaskStatus.Running })
+                _loadingTask = _loadingTask.ContinueWith(_ => LoadMap(index, _map, _world));
+            else
+                _loadingTask = Task.Run(() => LoadMap(index, _map, _world));
+        }
     }
 
     #endregion
@@ -1182,17 +1194,10 @@ public class WorldMapGump : ResizableGump
 
     #region Loading
 
-    private unsafe void LoadMap(int mapIndex)
+    private static void LoadMap(int mapIndex, Map.Map map, World world)
     {
         if (mapIndex < 0 || mapIndex > MapLoader.MAPS_COUNT)
-        {
             return;
-        }
-
-        if (!World.InGame)
-        {
-            return;
-        }
 
         try
         {
@@ -1255,7 +1260,6 @@ public class WorldMapGump : ResizableGump
 
                 try
                 {
-                    Map.Map map = _map;
                     Interlocked.Increment(ref _mapLoading);
 
                     int size = (realWidth + OFFSET_PIX) * (realHeight + OFFSET_PIX);
@@ -1333,7 +1337,7 @@ public class WorldMapGump : ResizableGump
 
                             foreach (ref StaticsBlock sb in staticsBlocksSpan)
                             {
-                                if (sb.Color != 0 && sb.Color != 0xFFFF && GameObject.CanBeDrawn(World, sb.Color))
+                                if (sb.Color != 0 && sb.Color != 0xFFFF && GameObject.CanBeDrawn(world, sb.Color))
                                 {
                                     int block = (mapY + sb.Y + OFFSET_PIX_HALF) * (realWidth + OFFSET_PIX) + mapX + sb.X + OFFSET_PIX_HALF;
 
@@ -1453,7 +1457,7 @@ public class WorldMapGump : ResizableGump
                 _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
             }
 
-            GameActions.Print(World, ResGumps.WorldMapLoaded, 0x48);
+            GameActions.Print(ResGumps.WorldMapLoaded, 0x48);
         }
         catch (ThreadInterruptedException)
         {
@@ -1503,6 +1507,46 @@ public class WorldMapGump : ResizableGump
     public static void ClearMapCache() => _mapCache?.Clear();
 
     public static Texture2D GetMapTextureForMap(int mapIndex) => _mapTexture;
+
+    public static async Task LoadMapTextureForMap(int mapIndex)
+    {
+        if (mapIndex < 0 || mapIndex > MapLoader.MAPS_COUNT)
+        {
+            Utility.Logging.Log.Warn($"Invalid map index for texture load: {mapIndex}");
+            return;
+        }
+
+        if (!World.Instance.InGame)
+        {
+            Utility.Logging.Log.Warn("Cannot load map texture: not in game");
+            return;
+        }
+
+        try
+        {
+            FileReader mapFile = Client.Game.UO.FileManager.Maps.GetMapFile(mapIndex);
+
+            if (_mapCache.TryGetValue(mapFile.FilePath, out string fileMapPath) && File.Exists(fileMapPath))
+            {
+                // Load from cache if available
+                Utility.Logging.Log.Info($"Loading map texture from cache for map {mapIndex}: {fileMapPath}");
+                _mapTexture?.Dispose();
+                using FileStream stream = File.OpenRead(fileMapPath);
+                _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
+                Utility.Logging.Log.Info($"Map texture loaded successfully for map {mapIndex}");
+            }
+            else
+            {
+                await Task.Run(() => LoadMap(mapIndex, new Map.Map(World.Instance, mapIndex), World.Instance));
+                // Map not cached - user needs to open world map gump first
+                Utility.Logging.Log.Warn($"Map texture not cached for map {mapIndex}. User must open world map gump first to generate cache.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Utility.Logging.Log.Error($"Failed to load map texture for map {mapIndex}: {ex.Message}");
+        }
+    }
 
     public class ZonesFileZoneData
     {
