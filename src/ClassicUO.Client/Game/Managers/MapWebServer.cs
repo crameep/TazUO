@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -339,25 +340,48 @@ namespace ClassicUO.Game.Managers
         {
             var partyMembers = new List<object>();
 
-            if (World.Instance?.Party != null && World.Instance.Party.Members != null)
-            {
-                foreach (PartyMember member in World.Instance.Party.Members)
-                {
-                    if (member == null || member.Serial == World.Instance.Player?.Serial)
-                        continue;
+            if (World.Instance == null) return partyMembers;
 
-                    Mobile mobile = World.Instance.Mobiles.Get(member.Serial);
-                    if (mobile != null && !mobile.IsDestroyed)
+            for (int i = 0; i < 10; i++)
+            {
+                PartyMember partyMember = World.Instance.Party.Members[i];
+
+                if (partyMember != null && SerialHelper.IsValid(partyMember.Serial))
+                {
+                    Mobile mob = World.Instance.Mobiles.Get(partyMember.Serial);
+
+                    if (mob != null && mob.Distance <= World.Instance.ClientViewRange)
                     {
-                        WMapEntity wme = World.Instance.WMapManager.GetEntity(member.Serial);
+                        WMapEntity wme = World.Instance.WMapManager.GetEntity(mob);
+
+                        if(wme == null) continue;
+
+                        if (string.IsNullOrEmpty(wme.Name) && !string.IsNullOrEmpty(partyMember.Name)) wme.Name = partyMember.Name;
+
                         partyMembers.Add(new
                         {
-                            x = mobile.X,
-                            y = mobile.Y,
-                            name = member.Name,
-                            isGuild = wme != null && wme.IsGuild,
+                            x = wme.X,
+                            y = wme.Y,
+                            name = wme.Name,
+                            isGuild = wme.IsGuild,
                             map = World.Instance.MapIndex
                         });
+                    }
+                    else
+                    {
+                        WMapEntity wme = World.Instance.WMapManager.GetEntity(partyMember.Serial);
+
+                        if (wme != null && !wme.IsGuild)
+                        {
+                            partyMembers.Add(new
+                            {
+                                x = wme.X,
+                                y = wme.Y,
+                                name = wme.Name,
+                                isGuild = wme.IsGuild,
+                                map = World.Instance.MapIndex
+                            });
+                        }
                     }
                 }
             }
