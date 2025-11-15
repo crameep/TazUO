@@ -380,7 +380,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
         {
             EnsureCache();
 
-            if (!IsItemNameMatch(itemData.item.Name) || !MatchesSlot(itemData.item.ItemData.Layer))
+            if (!IsItemNameMatch(itemData.Name) || (itemData.item != null && !MatchesSlot(itemData.item.ItemData.Layer)))
                 return false;
 
             // Rules
@@ -466,10 +466,10 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
         {
             EnsureCache();
 
-            if (!IsItemNameMatch(itemData.item.Name))
+            if (!IsItemNameMatch(itemData.Name))
                 return false;
 
-            if (!MatchesSlot(itemData.item.ItemData.Layer))
+            if (itemData.item != null && !MatchesSlot(itemData.item.ItemData.Layer))
                 return false;
 
             var normalizedItemLines = itemData.singlePropertyData
@@ -546,7 +546,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             {
                 if (!normalizedRulesProperties.TryGetValue(filteredItemLine.Key, out (int MinValue, bool IsOptional) rule))
                     return false;
-            } 
+            }
 
             // Checking if all the required properties are present
             foreach (KeyValuePair<string, (int MinValue, bool IsOptional)> filteredNotOptionalRule in filteredNotOptionalRules)
@@ -559,7 +559,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
 
                 matchingPropertiesCount++;
             }
-            
+
             // Adding optional matching rules
             foreach (KeyValuePair<string, (int MinValue, bool IsOptional)> filteredOptionalRule in filteredOptionalRules)
             {
@@ -570,7 +570,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                     continue;
 
                 matchingPropertiesCount++;
-            }   
+            }
 
             if (!IsMatchingCount(matchingPropertiesCount, MinimumMatchingProperty, MaximumMatchingProperty))
                 return false;
