@@ -16,6 +16,7 @@ namespace ClassicUO.Renderer.Animations
 
         private AnimationDirection[][][] _cache;
 
+
         public Animations(AnimationsLoader animationLoader, GraphicsDevice device)
         {
             _animationLoader = animationLoader;
@@ -169,7 +170,9 @@ namespace ClassicUO.Renderer.Animations
 
             if (id >= _dataIndex.Length)
             {
-                Array.Resize(ref _dataIndex, id + 1);
+                // Use exponential growth to reduce frequency of resizing
+                int newSize = Math.Max(id + 1, _dataIndex.Length * 2);
+                Array.Resize(ref _dataIndex, newSize);
             }
 
             ref IndexAnimation index = ref _dataIndex[id];
@@ -229,7 +232,9 @@ namespace ClassicUO.Renderer.Animations
                     {
                         if (id >= _dataIndex.Length)
                         {
-                            Array.Resize(ref _dataIndex, id + 1);
+                            // Use exponential growth to reduce frequency of resizing
+                            int newSize = Math.Max(id + 1, _dataIndex.Length * 2);
+                            Array.Resize(ref _dataIndex, newSize);
                         }
 
                         index = ref _dataIndex[id];
@@ -282,12 +287,7 @@ namespace ClassicUO.Renderer.Animations
 
             if (animDir.FrameCount <= 0 && animDir.SpriteInfos == null)
             {
-                if (useUOP
-                //animDir.IsUOP ||
-                ///* If it's not flagged as UOP, but there is no mul data, try to load
-                //* it as a UOP anyway. */
-                //(animDir.Address == 0 && animDir.Size == 0)
-                )
+                if (useUOP)
                 {
                     var uopGroupObj = (AnimationGroupUop)groupObj;
                     var ff = new AnimationsLoader.AnimationDirection()
@@ -336,8 +336,6 @@ namespace ClassicUO.Renderer.Animations
                     if (frame.Width <= 0 || frame.Height <= 0)
                     {
                         spriteInfo = SpriteInfo.Empty;
-
-                        /* Missing frame. */
                         continue;
                     }
 

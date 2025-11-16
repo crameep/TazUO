@@ -485,8 +485,6 @@ namespace ClassicUO
             UIManager.PreDraw();
 
             Profiler.BeginFrame();
-            Profiler.ExitContext("OutOfContext");
-            Profiler.EnterContext("Draw-Tiles");
 
             _totalFrames++;
             GraphicsDevice.Clear(Color.Black);
@@ -494,7 +492,7 @@ namespace ClassicUO
             _uoSpriteBatch.Begin();
             _uoSpriteBatch.DrawTiled(_background, bufferRect, _background.Bounds, bgHueShader);
             _uoSpriteBatch.End();
-            Profiler.ExitContext("Draw-Tiles");
+            Profiler.ExitContext("OutOfContext");
 
             Profiler.EnterContext("Draw-Scene");
             if (drawScene)
@@ -505,19 +503,20 @@ namespace ClassicUO
             UIManager.Draw(_uoSpriteBatch);
             Profiler.ExitContext("Draw-UI");
 
-            Profiler.EnterContext("OutOfContext");
+            Profiler.EnterContext("Game Cursor");
             SelectedObject.HealthbarObject = null;
             SelectedObject.SelectedContainer = null;
 
             _uoSpriteBatch.Begin();
             UO.GameCursor?.Draw(_uoSpriteBatch);
             _uoSpriteBatch.End();
-            Profiler.ExitContext("OutOfContext");
+            Profiler.ExitContext("Game Cursor");
 
             Profiler.EnterContext("ImGui");
             ImGuiManager.Update(gameTime);
             Profiler.ExitContext("ImGui");
 
+            Profiler.EnterContext("OutOfContext");
             base.Draw(gameTime);
 
             if(_pluginsInitialized)
