@@ -6818,6 +6818,9 @@ sealed class PacketHandlers
 
         Gump gump = UIManager.GetGumpServer(gumpID);
 
+        if (gump != null && (gump.IsDisposed || gump.LocalSerial != sender))
+            gump = null;
+
         bool mustBeAdded = gump == null;
 
         if (UIManager.GetGumpCachePosition(gumpID, out Point pos))
