@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ClassicUO.Configuration;
@@ -829,7 +830,13 @@ namespace ClassicUO.Game.GameObjects
         bool IsCardinalDirection(Direction direction) => direction == Direction.North || direction == Direction.South ||
                    direction == Direction.East || direction == Direction.West;
 
-        bool IsObstacle(Direction direction, int x, int y, sbyte z) => !Pathfinder.CanWalk(ref direction, ref x, ref y, ref z);
+        bool IsObstacle(Direction direction, int x, int y, sbyte z)
+        {
+            // Use local copies to avoid modifying the caller's x,y values
+            int testX = x;
+            int testY = y;
+            return !Pathfinder.CanWalk(ref direction, ref testX, ref testY, ref z);
+        }
 
         Direction TryToAvoid(Direction direction, int x, int y, sbyte z)
         {
