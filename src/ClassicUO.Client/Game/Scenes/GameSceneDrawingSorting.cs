@@ -47,6 +47,9 @@ namespace ClassicUO.Game.Scenes
             _oldPlayerZ;
         private int _foliageCount;
 
+        // Smooth camera following
+        private Vector2 _currentSmoothedOffset = Vector2.Zero;
+
 
         private readonly List<GameObject> _renderListStatics = new List<GameObject>();
         private readonly List<GameObject> _renderListTransparentObjects = new List<GameObject>();
@@ -1170,8 +1173,38 @@ namespace ClassicUO.Game.Scenes
             _maxPixel.X = maxPixelsX;
             _maxPixel.Y = maxPixelsY;
 
-            _offset.X = winDrawOffsetX;
-            _offset.Y = winDrawOffsetY;
+            // Apply smooth camera interpolation
+            Vector2 targetOffset = new Vector2(winDrawOffsetX, winDrawOffsetY);
+            float smoothingFactor = ProfileManager.CurrentProfile.CameraSmoothingFactor;
+
+            if (smoothingFactor > 0f)
+            {
+                // Calculate distance to target
+                float distance = Vector2.Distance(_currentSmoothedOffset, targetOffset);
+
+                if (distance > 0.5f)
+                {
+                    // Smooth interpolation with easing - similar to Camera.CalculatePeek()
+                    // Higher smoothing factor = slower camera movement (more smoothing)
+                    float lerpAmount = Math.Min(Time.Delta * (10f / smoothingFactor), 1f);
+                    _currentSmoothedOffset = Vector2.Lerp(_currentSmoothedOffset, targetOffset, lerpAmount);
+                }
+                else
+                {
+                    // Snap to target when very close to avoid jitter
+                    _currentSmoothedOffset = targetOffset;
+                }
+
+                _offset.X = (int)_currentSmoothedOffset.X;
+                _offset.Y = (int)_currentSmoothedOffset.Y;
+            }
+            else
+            {
+                // No smoothing - instant camera follow (classic behavior)
+                _currentSmoothedOffset = targetOffset;
+                _offset.X = winDrawOffsetX;
+                _offset.Y = winDrawOffsetY;
+            }
 
             _last_scaled_offset.X = winGameScaledOffsetX;
             _last_scaled_offset.Y = winGameScaledOffsetY;

@@ -19,6 +19,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _useLongDistancePathing;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
+        private float _cameraSmoothingFactor;
         private int _currentThemeIndex;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
@@ -31,6 +32,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
+            _cameraSmoothingFactor = _profile.CameraSmoothingFactor;
             _useLongDistancePathing = World.Instance?.Player?.Pathfinder.UseLongDistancePathfinding ?? false;
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
             _petScaling = _profile.EnablePetScaling;
@@ -141,6 +143,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             if(ImGui.Button("Open Theme Editor"))
                 ImGuiThemeEditorWindow.Show();
+
+            ImGui.SetNextItemWidth(125);
+            if (ImGui.SliderFloat("Camera Smoothing", ref _cameraSmoothingFactor, 0f, 3f, "%.1f"))
+            {
+                _cameraSmoothingFactor = Math.Clamp(_cameraSmoothingFactor, 0f, 1f);
+                _profile.CameraSmoothingFactor = _cameraSmoothingFactor;
+            }
+            ImGuiComponents.Tooltip("Smooth camera following when moving. 0 = instant (classic), 1 = very smooth/floaty.");
 
             if (ImGui.Checkbox("Highlight game objects", ref _highlightObjects))
             {
