@@ -52,6 +52,7 @@ namespace ClassicUO.Game.UI.Gumps
             if (World.Mobiles.TryGetValue(serial, out Mobile m))
             {
                 LocalSerial = serial;
+                GameActions.RequestMobileStatus(_world, m.Serial);
                 _name = m.Name;
                 _isDead = m.IsDead;
 
@@ -606,6 +607,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (entity != null && !entity.IsDestroyed)
             {
+                if (entity.NextHitsUpdate < Time.Ticks)
+                {
+                    GameActions.RequestMobileStatus(World, entity, true);
+                    entity.NextHitsUpdate = Time.Ticks + Constants.RECHECK_HITS_STATUS;
+                }
+
                 _hpLineRed.IsVisible = entity.HitsMax > 0;
 
                 var mobile = entity as Mobile;
@@ -1843,6 +1850,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (entity != null && !entity.IsDestroyed)
             {
+                if (entity.NextHitsUpdate < Time.Ticks)
+                {
+                    GameActions.RequestMobileStatus(World, entity, true);
+                    entity.NextHitsUpdate = Time.Ticks + Constants.RECHECK_HITS_STATUS;
+                }
+
                 _hpLineRed.IsVisible = entity.HitsMax > 0;
 
                 var mobile = entity as Mobile;

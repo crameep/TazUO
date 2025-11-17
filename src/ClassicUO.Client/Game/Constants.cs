@@ -113,6 +113,8 @@ namespace ClassicUO.Game
             true, true, true, false, false, false, false, false
         };
 
+        public const uint RECHECK_HITS_STATUS = 20000;
+
         public static class SqlSettings
         {
             public const string MANAGED_ZLIB = "USE_MANAGED_ZLIB";
