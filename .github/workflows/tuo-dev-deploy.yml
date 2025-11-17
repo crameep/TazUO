@@ -177,12 +177,11 @@ jobs:
         run: ls -R zips
 
       - name: Remove old Release
-        uses: dev-drprasad/delete-tag-and-release@v0.2.1
-        with:
-          delete_release: true
-          tag_name: ${{ env.TAG_NAME }}
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete ${{ env.TAG_NAME }} --yes --cleanup-tag || true
 
       - name: Upload all zips to release
         uses: ncipollo/release-action@v1.20.0
