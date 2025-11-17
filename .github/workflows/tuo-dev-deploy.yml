@@ -168,8 +168,13 @@ jobs:
         with:
           path: all-zips
 
+      - name: Flatten artifact structure
+        run: |
+          mkdir -p zips
+          find all-zips -name "*.zip" -type f -exec mv {} zips/ \;
+
       - name: List downloaded zips
-        run: ls -R all-zips
+        run: ls -R zips
 
       - name: Remove old Release
         uses: dev-drprasad/delete-tag-and-release@v0.2.1
@@ -180,9 +185,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload all zips to release
-        uses: ncipollo/release-action@v1.16.0
+        uses: ncipollo/release-action@v1.20.0
         with:
-          artifacts: "all-zips/**/*.zip"
+          artifacts: "zips/*.zip"
           name: 'Development v${{ needs.build.outputs.version }}'
           body: |
             ${{ env.UPLOAD_BODY }}
