@@ -6805,7 +6805,7 @@ sealed class PacketHandlers
     )
     {
         ScriptRecorder.Instance.RecordWaitForGump(gumpID.ToString());
-        ScriptingInfoGump.AddOrUpdateInfo("Last Gump Opened", gumpID);
+        ScriptingInfoGump.AddOrUpdateInfo("Last Gump Opened", $"0x{gumpID:X}");
 
         if (string.IsNullOrEmpty(layout))
             return null;
