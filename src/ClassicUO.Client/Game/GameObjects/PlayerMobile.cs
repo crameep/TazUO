@@ -39,11 +39,9 @@ namespace ClassicUO.Game.GameObjects
                 }
             };
 
-            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
-            {
+
+            if(ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
                 UIManager.Add(new CastTimerProgressBar(world));
-                AttachCastingEventHandlers();
-            }
 
             IsPlayer = true;
         }
@@ -128,11 +126,12 @@ namespace ClassicUO.Game.GameObjects
         /// <summary>
         /// True while a spell is being cast.
         /// </summary>
-        public bool IsCasting { get; private set; }
+        public bool IsCasting { get; set; }
+
         /// <summary>
         /// True while a spell is in recovery phase.
         /// </summary>
-        public bool IsRecovering { get; private set; }
+        public bool IsRecovering => IsCasting; //May incorporate this again later, for now just reference is casting
 
         public Item FindBandage(ushort graphic = 0x0E21)
         {
@@ -148,54 +147,6 @@ namespace ClassicUO.Game.GameObjects
                 item = FindItemByLayer(Layer.Waist)?.FindItem(graphic);
 
             return item;
-        }
-
-        private void AttachCastingEventHandlers()
-        {
-            EventSink.SpellCastBegin += OnSpellCastBegin;
-            EventSink.SpellCastEnd += OnSpellCastEnd;
-            EventSink.SpellRecoveryBegin += OnSpellRecoveryBegin;
-            EventSink.SpellRecoveryEnd += OnSpellRecoveryEnd;
-        }
-
-        private void DetachCastingEventHandlers()
-        {
-            EventSink.SpellCastBegin -= OnSpellCastBegin;
-            EventSink.SpellCastEnd -= OnSpellCastEnd;
-            EventSink.SpellRecoveryBegin -= OnSpellRecoveryBegin;
-            EventSink.SpellRecoveryEnd -= OnSpellRecoveryEnd;
-        }
-
-        private void OnSpellCastBegin(object sender, int spellID)
-        {
-            if (World?.Player == this)
-            {
-                IsCasting = true;
-            }
-        }
-
-        private void OnSpellCastEnd(object s, object o)
-        {
-            if (World?.Player == this)
-            {
-                IsCasting = false;
-            }
-        }
-
-        private void OnSpellRecoveryBegin(object sender, int spellID)
-        {
-            if (World?.Player == this)
-            {
-                IsRecovering = true;
-            }
-        }
-
-        private void OnSpellRecoveryEnd(object sender, object o)
-        {
-            if (World?.Player == this)
-            {
-                IsRecovering = false;
-            }
         }
 
         public Item FindItemByGraphic(ushort graphic)
@@ -504,7 +455,6 @@ namespace ClassicUO.Game.GameObjects
             }
 
             DeathScreenTimer = 0;
-            DetachCastingEventHandlers();
 
             Log.Warn("PlayerMobile disposed!");
             base.Destroy();

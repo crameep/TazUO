@@ -6794,9 +6794,9 @@ sealed class PacketHandlers
         if (cmdlen <= 0)
             return null;
 
-        UIManager.GetGumpServer(gumpID)?.Dispose();
+        Gump gump = UIManager.GetGumpServer(gumpID);
 
-        bool mustBeAdded = true;
+        bool mustBeAdded = gump == null;
 
         if (UIManager.GetGumpCachePosition(gumpID, out Point pos))
         {
@@ -6806,16 +6806,23 @@ sealed class PacketHandlers
         else
             UIManager.SavePosition(gumpID, new Point(x, y));
 
-        var gump = new Gump(world, sender, gumpID)
+        if(mustBeAdded)
+            gump = new Gump(world, sender, gumpID)
+            {
+                X = x,
+                Y = y,
+                CanMove = true,
+                CanCloseWithRightClick = true,
+                CanCloseWithEsc = true,
+                InvalidateContents = false,
+                IsFromServer = true
+            };
+        else
         {
-            X = x,
-            Y = y,
-            CanMove = true,
-            CanCloseWithRightClick = true,
-            CanCloseWithEsc = true,
-            InvalidateContents = false,
-            IsFromServer = true
-        };
+            //Reusing existing gump, need to clear it out
+            gump.Clear();
+            gump.CleanUpDisposedChildren();
+        }
 
         var gumpTextBuilder = new StringBuilder(string.Join("\n", lines));
 

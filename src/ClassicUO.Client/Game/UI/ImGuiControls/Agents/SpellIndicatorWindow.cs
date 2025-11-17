@@ -112,7 +112,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             if (ImGui.BeginTable("SpellEditorTable", 2, ImGuiTableFlags.SizingFixedFit))
             {
-                ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 120);
+                ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 200);
                 ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
 
                 // Name
@@ -349,11 +349,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
-        private void SaveSpell()
-        {
-            SpellVisualRangeManager.Instance.DelayedSave();
-            if (selectedSpell != null)
-                SpellVisualRangeManager.Instance.ReindexSpellPowerWords(selectedSpell);
-        }
+        private void SaveSpell() => SpellVisualRangeManager.Instance.DelayedSave();
     }
 }
