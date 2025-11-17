@@ -7485,7 +7485,6 @@ sealed class PacketHandlers
 
         if (world.Player != null)
         {
-            world.Player.HasGump = true;
             world.Player.LastGumpID = gumpID;
         }
 

@@ -2241,13 +2241,11 @@ namespace ClassicUO.LegionScripting
         public uint HasGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread<uint>
         (() =>
             {
-                if (World.Player != null && World.Player.HasGump && (World.Player.LastGumpID == ID || ID == uint.MaxValue))
+                if (World.Player != null && (World.Player.LastGumpID == ID || ID == uint.MaxValue))
                 {
-                    if(UIManager.GetGumpServer(World.Player.LastGumpID) is { IsDisposed:false })
-                        return World.Player.LastGumpID;
-
-                    //Gump doesn't exist, let's reset this to false
-                    World.Player.HasGump = false;
+                    Gump g = UIManager.GetGumpServer(ID == uint.MaxValue ? World.Player.LastGumpID : ID);
+                    if(g is { IsDisposed:false })
+                        return g.ServerSerial;
                 }
 
                 return 0;

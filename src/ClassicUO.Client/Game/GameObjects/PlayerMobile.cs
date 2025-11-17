@@ -57,7 +57,6 @@ namespace ClassicUO.Game.GameObjects
         public ref Ability SecondaryAbility => ref Abilities[1];
         public override bool IsWalking => LastStepTime > Time.Ticks - Constants.PLAYER_WALKING_DELAY;
 
-        public bool HasGump { get; set; }
         public uint LastGumpID { get; set; }
 
         internal WalkerManager Walker { get; }
