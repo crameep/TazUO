@@ -75,16 +75,31 @@ sealed class PacketHandlers
 
     public void Add(byte id, OnPacketBufferReader handler) => _handlers[id] = handler;
 
-    private byte[] _readingBuffer = new byte[4096];
+    // Increased from 4096 to 65536 (64KB) to reduce Array.Resize frequency during packet processing
+    private byte[] _readingBuffer = new byte[65536];
     private readonly PacketLogger _packetLogger = new PacketLogger();
     private readonly CircularBuffer _buffer = new CircularBuffer();
     private readonly CircularBuffer _pluginsBuffer = new CircularBuffer();
 
     public int ParsePackets(World world, Span<byte> data)
     {
+        Profiler.EnterContext("APPEND");
         Append(data, false);
+        Profiler.ExitContext("APPEND");
 
-        return ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
+#if DEBUG
+        string packet = _buffer == null || _buffer.Length == 0 ? "0xFF" : _buffer[0].ToString();
+
+        Profiler.EnterContext(packet);
+#endif
+
+        int c = ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
+
+#if DEBUG
+        Profiler.ExitContext(packet);
+#endif
+
+        return c;
     }
 
     private int ParsePackets(World world, CircularBuffer stream, bool allowPlugins)
@@ -126,7 +141,14 @@ sealed class PacketHandlers
 
                 while (packetlength > packetBuffer.Length)
                 {
-                    Array.Resize(ref packetBuffer, packetBuffer.Length * 2);
+                    Profiler.EnterContext("PACKET_BUFFER_RESIZE");
+                    int oldSize = packetBuffer.Length;
+                    int newSize = packetBuffer.Length * 2;
+
+                    Log.Warn($"PacketHandler buffer resize from {oldSize} to {newSize} for packet length {packetlength} (may cause spike)");
+
+                    Array.Resize(ref packetBuffer, newSize);
+                    Profiler.ExitContext("PACKET_BUFFER_RESIZE");
                 }
 
                 _ = stream.Dequeue(packetBuffer, 0, packetlength);

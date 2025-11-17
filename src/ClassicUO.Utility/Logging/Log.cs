@@ -44,9 +44,12 @@ namespace ClassicUO.Utility.Logging
         public static void Trace(string text) => _logger?.Message(LogTypes.Trace, text);
 
         [Conditional("DEBUG")]
-        public static void TraceDebug(string text) => _logger?.Message(LogTypes.Trace, text);
+        public static void TraceDebug(string text) => Trace(text);
 
         public static void Warn(string text) => _logger?.Message(LogTypes.Warning, text);
+
+        [Conditional("DEBUG")]
+        public static void WarnDebug(string text) => Warn(text);
 
         public static void Error(string text) => _logger?.Message(LogTypes.Error, text);
 

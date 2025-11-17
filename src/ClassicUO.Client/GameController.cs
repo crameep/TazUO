@@ -131,17 +131,20 @@ namespace ClassicUO
 
         private void ProcessNetworkPackets()
         {
-            // if (AsyncNetClient.Socket.TryDequeuePacket(out byte[] message))
-            // {
-            //     var c = PacketHandlers.Handler.ParsePackets(Client.Game.UO.World, message);
-            //     AsyncNetClient.Socket.Statistics.TotalPacketsReceived += (uint)c;
-            // }
-            //Trying just one packet pet update()
-            //
             int packetsProcessed = 0;
-            while (packetsProcessed < MAX_PACKETS_PER_FRAME && AsyncNetClient.Socket.TryDequeuePacket(out byte[] message))
+            while (packetsProcessed < MAX_PACKETS_PER_FRAME)
             {
+                Profiler.EnterContext("DEQUEUE");
+                bool hasPacket = AsyncNetClient.Socket.TryDequeuePacket(out byte[] message);
+                Profiler.ExitContext("DEQUEUE");
+
+                if (!hasPacket)
+                    break;
+
+                Profiler.EnterContext("PARSE");
                 int c = PacketHandlers.Handler.ParsePackets(Client.Game.UO.World, message);
+                Profiler.ExitContext("PARSE");
+
                 AsyncNetClient.Socket.Statistics.TotalPacketsReceived += (uint)c;
                 packetsProcessed++;
             }
