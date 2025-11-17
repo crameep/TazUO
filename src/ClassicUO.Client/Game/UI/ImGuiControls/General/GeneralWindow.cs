@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
@@ -221,6 +222,20 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (Managers.WalkableManager.Instance != null) Managers.WalkableManager.Instance.TargetGenerationTimeMs = _pathfindingGenerationTimeMs;
             }
             ImGuiComponents.Tooltip("Target time in milliseconds for pathfinding cache generation per cycle. Higher values generate cache faster but may cause performance issues.");
+
+            // Display current map generation progress
+            if (WalkableManager.Instance != null)
+            {
+                var (current, total) = WalkableManager.Instance.GetCurrentMapGenerationProgress();
+                if (total > 0)
+                {
+                    float fraction = (float)current / total;
+                    float percentage = fraction * 100f;
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.ProgressBar(fraction, new Vector2(150, 0), $"{percentage:F1}%");
+                    ImGuiComponents.Tooltip($"Current map cache generation progress: {current}/{total} chunks");
+                }
+            }
 
             ImGui.SetNextItemWidth(150);
             if (ImGui.Button("Reset current map cache"))
