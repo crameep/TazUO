@@ -1807,7 +1807,7 @@ namespace ClassicUO.LegionScripting
         ///   API.SysMsg("Targeted serial: " + str(target))
         /// ```
         /// </summary>
-        /// <param name="timeout">Mac duration to wait for them to target something.</param>
+        /// <param name="timeout">Max duration to wait for them to target something.</param>
         /// <returns>The serial of the object targeted</returns>
         public uint RequestTarget(double timeout = 5)
         {
@@ -1859,7 +1859,11 @@ namespace ClassicUO.LegionScripting
         public PyGameObject RequestAnyTarget(double timeout = 5)
         {
             DateTime expire = DateTime.Now.AddSeconds(timeout);
-            MainThreadQueue.InvokeOnMainThread(() => World.TargetManager.SetTargeting(CursorTarget.Internal, CursorType.Target, TargetType.Neutral));
+            MainThreadQueue.InvokeOnMainThread(() =>
+            {
+                World.TargetManager.LastTargetInfo.Clear();
+                World.TargetManager.SetTargeting(CursorTarget.Internal, CursorType.Target, TargetType.Neutral);
+            });
 
             while (DateTime.Now < expire)
             {

@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `11/17/25`.*
+*This was generated on `11/19/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -1570,7 +1570,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
-| `timeout` | `double` | ✅ Yes | Mac duration to wait for them to target something. |
+| `timeout` | `double` | ✅ Yes | Max duration to wait for them to target something. |
 
 **Return Type:** `uint`
 

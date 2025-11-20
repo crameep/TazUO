@@ -71,6 +71,7 @@ public class SpellBarManager
 
         // Remove NUM lock from modifier checks
         mod &= ~SDL.SDL_Keymod.SDL_KMOD_NUM;
+        mod &= ~SDL.SDL_Keymod.SDL_KMOD_CAPS;
 
         // Normalize left/right modifiers to generic modifiers
         if ((mod & (SDL.SDL_Keymod.SDL_KMOD_LCTRL | SDL.SDL_Keymod.SDL_KMOD_RCTRL)) != 0)

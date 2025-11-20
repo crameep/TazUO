@@ -126,7 +126,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         public GridContainer(World world, uint local, ushort originalContainerGraphic, bool? useGridStyle = null) : base(world, GetWidth(), GetHeight(), GetWidth(2), GetHeight(1), local, 0)
         {
-            if (container == null)
+            if (container == null || world == null || world.Player == null)
             {
                 Dispose();
                 return;
@@ -1593,7 +1593,7 @@ namespace ClassicUO.Game.UI.Gumps
                 // Second pass: Fill remaining empty slots with items that don't have saved positions
                 // This includes new items or items being auto-sorted
                 foreach (Item i in filteredItems)
-                {                    
+                {
                     foreach (KeyValuePair<int, GridItem> slot in gridSlots)
                     {
                         // Skip slots that already have items
