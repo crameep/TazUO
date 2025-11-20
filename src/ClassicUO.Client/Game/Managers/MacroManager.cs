@@ -17,6 +17,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 using ClassicUO.Game.UI.Gumps.SpellBar;
+using ClassicUO.LegionScripting;
 using static SDL3.SDL;
 
 namespace ClassicUO.Game.Managers
@@ -2116,7 +2117,11 @@ namespace ClassicUO.Game.Managers
 
                         Item foundItem = _world.Player.FindItemByGraphicAndHue(graphic, hue);
 
-                        if (foundItem != null) GameActions.DoubleClick(_world, foundItem);
+                        if (foundItem != null)
+                        {
+                            GameActions.DoubleClick(_world, foundItem);
+                            ScriptRecorder.Instance.RecordUseItem(foundItem);
+                        }
                     }
 
                     break;

@@ -278,6 +278,9 @@ namespace ClassicUO.Game.Managers
 
             if (!headerHandled)
             {
+                if(string.IsNullOrEmpty(itemPropertiesData.Name))
+                    itemPropertiesData.Name = "";
+
                 sb.AppendLine(
                     ProfileManager.CurrentProfile == null
                         ? $"/c[yellow]{itemPropertiesData.Name}"

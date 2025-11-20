@@ -5,6 +5,14 @@ import os
 motd = [
 """
 ```ini
+[ Web Map ]
+```
+> TazUO allows you to see your map in your web browser. \n
+See more -> <https://tazuo.org/wiki/web-map>
+""",
+
+"""
+```ini
 [ Scavenger ]
 ```
 > TazUO added a scavenger to pick up those pesky items on the ground. \n
@@ -232,7 +240,7 @@ See more -> <https://tazuo.org/wiki/tazuoskill-progress-bar>
 [ Account selector ]
 ```
 > A simple right-click on the account input of the login screen will bring up an option to select other accounts you have logged into.\n
-See more -> <https://tazuo.org/wiki/tazuoaccount-selector>
+See more -> <https://tazuo.org/wiki/account-selector>
 """,
 
 """
@@ -499,6 +507,20 @@ See more -> <https://tazuo.org/wiki/tazuoupdater-launcher>
 See more -> <https://tazuo.org/wiki/tazuogrid-containers#quick-move>
 """,
 ]
+
+def entry(name, desc, link):
+    motd.append(
+    f"""
+```ini
+[ {name} ]
+```
+> {desc}.\n
+See more -> <{link}>
+    """
+    )
+
+entry("Pet Scaling", "Did you know you can scale your pets down to not block so much of your screen?", "https://tazuo.org/wiki/pet-scaling")
+entry("Auto Sell Agent", "Did you know you can setup items to automatically sell to vendors?", "https://tazuo.org/wiki/auto-sell-agent")
 
 url = os.getenv("DISCORD_WEBHOOK")
 if not url:

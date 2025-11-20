@@ -693,6 +693,11 @@ namespace ClassicUO.Configuration
 
         internal void AfterLoad()
         {
+            if (Client.Settings == null)
+            {
+                Log.Error("Warning, SQL settings failed to load!");
+                return;
+            }
             //These are fine if we continue without loading them yet
             Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
 

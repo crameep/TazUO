@@ -319,7 +319,7 @@ namespace ClassicUO.Game.Managers
                         party = GetPartyData(),
                         guild = GetGuildData(),
                         markers = GetMarkersData(),
-                        journal = GetNewJournalEntries(clientState)
+                        journal = MainThreadQueue.InvokeOnMainThread(() => GetNewJournalEntries(clientState))
                     };
 
                     string json = JsonSerializer.Serialize(data);

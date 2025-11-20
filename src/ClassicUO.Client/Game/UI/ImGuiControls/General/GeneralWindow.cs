@@ -145,7 +145,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGuiThemeEditorWindow.Show();
 
             ImGui.SetNextItemWidth(125);
-            if (ImGui.SliderFloat("Camera Smoothing", ref _cameraSmoothingFactor, 0f, 3f, "%.1f"))
+            if (ImGui.SliderFloat("Camera Smoothing", ref _cameraSmoothingFactor, 0f, 1f, "%.1f"))
             {
                 _cameraSmoothingFactor = Math.Clamp(_cameraSmoothingFactor, 0f, 1f);
                 _profile.CameraSmoothingFactor = _cameraSmoothingFactor;

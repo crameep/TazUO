@@ -1198,6 +1198,8 @@ public class WorldMapGump : ResizableGump
         if (mapIndex < 0 || mapIndex > MapLoader.MAPS_COUNT)
             return;
 
+        _mapLoading = 1;
+
         lock (Map.Map.GetMapPngLock())
         {
             try
@@ -1220,6 +1222,10 @@ public class WorldMapGump : ResizableGump
                 }
             }
             catch (ThreadInterruptedException)
+            {
+                _mapLoading = 0;
+            }
+            finally
             {
                 _mapLoading = 0;
             }
