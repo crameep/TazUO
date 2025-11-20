@@ -514,7 +514,7 @@ def entry(name, desc, link):
 ```ini
 [ {name} ]
 ```
-> {desc}.\n
+> {desc}\n
 See more -> <{link}>
     """
     )
