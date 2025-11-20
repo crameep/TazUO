@@ -71,8 +71,12 @@ namespace ClassicUO.Game.Map
                     return;
                 }
 
-                im.MapFile.Seek((long)im.MapAddress, System.IO.SeekOrigin.Begin);
-                MapBlock block = im.MapFile.Read<MapBlock>();
+                MapBlock block;
+                lock (Map.MapFileIOLock)
+                {
+                    im.MapFile.Seek((long)im.MapAddress, System.IO.SeekOrigin.Begin);
+                    block = im.MapFile.Read<MapBlock>();
+                }
 
                 MapCellsArray cells = block.Cells;
                 int bx = X << 3;
@@ -124,8 +128,11 @@ namespace ClassicUO.Game.Map
                 {
                     StaticsBlock[] staticsBlockBuffer = ArrayPool<StaticsBlock>.Shared.Rent((int)im.StaticCount);
                     Span<StaticsBlock> staticsSpan = staticsBlockBuffer.AsSpan(0, (int)im.StaticCount);
-                    im.StaticFile.Seek((long)im.StaticAddress, System.IO.SeekOrigin.Begin);
-                    im.StaticFile.Read(MemoryMarshal.AsBytes(staticsSpan));
+                    lock (Map.MapFileIOLock)
+                    {
+                        im.StaticFile.Seek((long)im.StaticAddress, System.IO.SeekOrigin.Begin);
+                        im.StaticFile.Read(MemoryMarshal.AsBytes(staticsSpan));
+                    }
 
                     foreach (ref StaticsBlock sb in staticsSpan)
                     {

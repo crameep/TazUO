@@ -334,6 +334,7 @@ class PyGameObject:
     Graphic: int = None
     Hue: int = None
     Distance: int = None
+    IsDestroyed: bool = None
     __class__: str = None
 
     def SetHue(self, hue: "int") -> None:

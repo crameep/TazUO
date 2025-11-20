@@ -765,7 +765,7 @@ namespace ClassicUO.Game.Scenes
 
                     Chunk chunk = ASyncMapLoading ? map.PreloadChunk2(chunkX, chunkY) : map.GetChunk2(chunkX, chunkY, true);
 
-                    if (chunk?.IsDestroyed != false)
+                    if(chunk == null || chunk.IsDestroyed || chunk.IsLoading)
                         continue;
 
                     // Access tiles directly instead of calling GetHeadObject 64 times

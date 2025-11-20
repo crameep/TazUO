@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -26,9 +27,9 @@ namespace ClassicUO.Game.Map
         private static readonly bool[] _blockAccessList = new bool[0x1000];
         private readonly LinkedList<int> _usedIndices = new LinkedList<int>();
         private readonly World _world;
-        private static readonly object _chunkLock = new object();
-        private static readonly object _pendingLock = new object();
-        private static HashSet<int> _pendingBlocks = new();
+        private static readonly HashSet<int> _pendingBlocks = new();
+        private static readonly ConcurrentQueue<(int block, Chunk chunk)> _loadedChunksQueue = new();
+        internal static readonly object MapFileIOLock = new object();
 
         // Map PNG generation for web map and caching
         private static readonly object _mapPngLock = new object();
@@ -78,6 +79,9 @@ namespace ClassicUO.Game.Map
 
         public Chunk GetChunk2(int chunkX, int chunkY, bool load = true)
         {
+            // First, process any chunks that were loaded asynchronously
+            ProcessLoadedChunks();
+
             int block = GetBlock(chunkX, chunkY);
 
             if (block >= BlocksCount || block >= _terrainChunks.Length)
@@ -119,6 +123,39 @@ namespace ClassicUO.Game.Map
             return chunk;
         }
 
+        /// <summary>
+        /// Processes chunks that were loaded asynchronously.
+        /// This should only be called from the main thread.
+        /// </summary>
+        private void ProcessLoadedChunks()
+        {
+            while (_loadedChunksQueue.TryDequeue(out var item))
+            {
+                int block = item.block;
+                Chunk loadedChunk = item.chunk;
+
+                if (block >= BlocksCount || block >= _terrainChunks.Length)
+                {
+                    continue;
+                }
+
+                ref Chunk existingChunk = ref _terrainChunks[block];
+
+                // Only place the chunk if the slot is still empty or destroyed
+                if (existingChunk == null || existingChunk.IsDestroyed)
+                {
+                    // Add to the used indices list
+                    LinkedListNode<int> node = _usedIndices.AddLast(block);
+                    loadedChunk.Node = node;
+                    loadedChunk.LastAccessTime = Time.Ticks;
+
+                    _terrainChunks[block] = loadedChunk;
+                }
+                // If a chunk already exists and is valid, discard the loaded chunk
+                // (this can happen if sync loading occurred while async was in progress)
+            }
+        }
+
         public Chunk PreloadChunk(int x, int y)
         {
             if (x < 0 || y < 0)
@@ -132,6 +169,9 @@ namespace ClassicUO.Game.Map
 
         public Chunk PreloadChunk2(int chunkx, int chunky)
         {
+            // First, process any chunks that were loaded asynchronously
+            ProcessLoadedChunks();
+
             int block = GetBlock(chunkx, chunky);
 
             if (block >= BlocksCount || block >= _terrainChunks.Length)
@@ -141,66 +181,49 @@ namespace ClassicUO.Game.Map
 
             ref Chunk chunk = ref _terrainChunks[block];
 
-            if (chunk is { IsDestroyed: false, IsLoading: false })
+            // If chunk is already loaded and valid, return it
+            if (chunk is { IsDestroyed: false })
             {
                 chunk.LastAccessTime = Time.Ticks;
                 return chunk;
             }
 
-            lock (_pendingLock)
+            // Try to add to pending blocks (thread-safe)
+            lock (_pendingBlocks)
             {
                 if (!_pendingBlocks.Add(block))
+                {
+                    // Already being loaded, return null
                     return null;
+                }
             }
 
+            // Start async load
             _ = AsyncGetChunk(chunkx, chunky, block);
 
             return null;
         }
 
-        private Task<Chunk> AsyncGetChunk(int chunkX, int chunkY, int block)
+        private Task AsyncGetChunk(int chunkX, int chunkY, int block)
         {
             var task = Task.Run(() =>
             {
-                lock (_chunkLock)
+                try
                 {
-                    ref Chunk chunk = ref _terrainChunks[block];
+                    // Create a new chunk completely independently
+                    Chunk chunk = Chunk.Create(_world, chunkX, chunkY, isAsync: true);
+                    chunk.Load(Index);
 
-                    if (chunk == null)
-                    {
-                        LinkedListNode<int> node = _usedIndices.AddLast(block);
-                        chunk = Chunk.Create(_world, chunkX, chunkY, isAsync: true);
-                        chunk.Load(Index);
-                        chunk.Node = node;
-                        chunk.LastAccessTime = Time.Ticks;
-                    }
-                    else if (chunk.IsDestroyed)
-                    {
-                        // make sure node is clear
-                        if (chunk.Node != null && (chunk.Node.Previous != null || chunk.Node.Next != null))
-                        {
-                            chunk.Node.List?.Remove(chunk.Node);
-                        }
-
-                        LinkedListNode<int> node = _usedIndices.AddLast(block);
-                        chunk.X = chunkX;
-                        chunk.Y = chunkY;
-                        chunk.IsLoading = true;
-                        chunk.Load(Index);
-                        chunk.Node = node;
-                        chunk.LastAccessTime = Time.Ticks;
-                    }
-                    else
-                    {
-                        chunk.LastAccessTime = Time.Ticks;
-                    }
-
-                    lock (_pendingLock)
+                    // Queue the loaded chunk for the main thread to process
+                    _loadedChunksQueue.Enqueue((block, chunk));
+                }
+                finally
+                {
+                    // Remove from pending blocks
+                    lock (_pendingBlocks)
                     {
                         _pendingBlocks.Remove(block);
                     }
-
-                    return chunk;
                 }
             });
 
@@ -228,8 +251,11 @@ namespace ClassicUO.Game.Map
 
             unsafe
             {
-                blockIndex.MapFile.Seek((long)blockIndex.MapAddress, System.IO.SeekOrigin.Begin);
-                return blockIndex.MapFile.Read<MapBlock>().Cells[(my << 3) + mx].Z;
+                lock (MapFileIOLock)
+                {
+                    blockIndex.MapFile.Seek((long)blockIndex.MapAddress, System.IO.SeekOrigin.Begin);
+                    return blockIndex.MapFile.Read<MapBlock>().Cells[(my << 3) + mx].Z;
+                }
             }
         }
 

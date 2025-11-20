@@ -55,6 +55,10 @@ description:  Base class for all Python-accessible game world objects.   Encapsu
 
 **Type:** `int`
 
+### `IsDestroyed`
+
+**Type:** `bool`
+
 ### `__class__`
 
 **Type:** `string`
