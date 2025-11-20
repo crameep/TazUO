@@ -1282,7 +1282,8 @@ sealed class PacketHandlers
         world.Player.NotorietyFlag = (NotorietyFlag)noto;
         world.Player.Walker.ConfirmWalk(seq);
 
-        world.Player.AddToTile();
+        // AddToTile is already handled in Mobile.ProcessSteps when the step visually completes
+        // Calling it again here was redundant and caused performance issues
     }
 
     private static void DragAnimation(World world, ref StackDataReader p)

@@ -20,7 +20,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
-        private int _currentThemeIndex;
+        private int _currentThemeIndex, _minGumpMoveDist;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
         private GeneralWindow() : base("General Tab")
@@ -36,6 +36,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _useLongDistancePathing = World.Instance?.Player?.Pathfinder.UseLongDistancePathfinding ?? false;
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
             _petScaling = _profile.EnablePetScaling;
+            _minGumpMoveDist = _profile.MinGumpMoveDistance;
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -180,6 +181,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         mob.Scale = _petScaling ? 0.6f : 1f;
                 }
             }
+
+            ImGui.SetNextItemWidth(125);
+            if (ImGui.SliderInt("Min Gump Drag Distance", ref _minGumpMoveDist, 0, 20))
+            {
+                _minGumpMoveDist = Math.Clamp(_minGumpMoveDist, 0, 20);
+                _profile.MinGumpMoveDistance = _minGumpMoveDist;
+            }
+            ImGuiComponents.Tooltip("How far you need to drag before a gump will move, this helps prevent accidentally dragging instead of clicking.");
 
             ImGui.EndGroup();
 

@@ -330,6 +330,10 @@ namespace ClassicUO.Game
 
         public void Update()
         {
+            // Process asynchronously loaded map chunks once per frame
+            // instead of on every GetChunk call for better performance
+            Map?.ProcessLoadedChunks();
+
             if (Player != null)
             {
                 if (SerialHelper.IsValid(ObjectToRemove))

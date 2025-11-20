@@ -79,8 +79,8 @@ namespace ClassicUO.Game.Map
 
         public Chunk GetChunk2(int chunkX, int chunkY, bool load = true)
         {
-            // First, process any chunks that were loaded asynchronously
-            ProcessLoadedChunks();
+            // ProcessLoadedChunks() is now called once per frame in World.Update
+            // instead of on every GetChunk call to avoid hot path overhead
 
             int block = GetBlock(chunkX, chunkY);
 
@@ -126,10 +126,11 @@ namespace ClassicUO.Game.Map
         /// <summary>
         /// Processes chunks that were loaded asynchronously.
         /// This should only be called from the main thread.
+        /// Called once per frame from World.Update to avoid overhead in GetChunk hot path.
         /// </summary>
-        private void ProcessLoadedChunks()
+        internal void ProcessLoadedChunks()
         {
-            while (_loadedChunksQueue.TryDequeue(out var item))
+            while (_loadedChunksQueue.TryDequeue(out (int block, Chunk chunk) item))
             {
                 int block = item.block;
                 Chunk loadedChunk = item.chunk;
@@ -211,7 +212,7 @@ namespace ClassicUO.Game.Map
                 try
                 {
                     // Create a new chunk completely independently
-                    Chunk chunk = Chunk.Create(_world, chunkX, chunkY, isAsync: true);
+                    var chunk = Chunk.Create(_world, chunkX, chunkY, isAsync: true);
                     chunk.Load(Index);
 
                     // Queue the loaded chunk for the main thread to process

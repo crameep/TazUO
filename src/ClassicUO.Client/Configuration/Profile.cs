@@ -689,6 +689,19 @@ namespace ClassicUO.Configuration
             }
         }
 
+        [JsonIgnore]
+        public int MinGumpMoveDistance
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, value);
+
+                field = value;
+            }
+        } = 5;
+
         private long lastSave;
 
         internal void AfterLoad()
@@ -700,6 +713,7 @@ namespace ClassicUO.Configuration
             }
             //These are fine if we continue without loading them yet
             Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
 
 
             //These must be waited before continue for various purposes elsewhere

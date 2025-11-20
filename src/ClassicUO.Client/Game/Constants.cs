@@ -126,6 +126,7 @@ namespace ClassicUO.Game
             public const string SCALE_PETS_ENABLED = "scale_pets_enabled";
             public const string WEB_MAP_PORT = "web_map_port";
             public const string WEB_MAP_AUTO_START = "web_map_auto_start";
+            public const string MIN_GUMP_MOVE_DIST = "min_gump_move_dist";
         }
     }
 }
