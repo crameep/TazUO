@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Network;
 
@@ -135,9 +136,10 @@ namespace ClassicUO.Game.Managers
                     _player.World.RangeSize.X = StepInfos[0].X;
                     _player.World.RangeSize.Y = StepInfos[0].Y;
 
-                    for (int i = 1; i < StepsCount; i++)
+                    // Use Array.Copy for more efficient struct copying
+                    if (StepsCount > 1)
                     {
-                        StepInfos[i - 1] = StepInfos[i];
+                        Array.Copy(StepInfos, 1, StepInfos, 0, StepsCount - 1);
                     }
 
                     StepsCount--;

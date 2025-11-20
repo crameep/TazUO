@@ -199,6 +199,7 @@ namespace ClassicUO.Game.Scenes
             _healthLinesManager = new HealthLinesManager(_world);
 
             _world.CommandManager.Initialize();
+            WalkableManager.Instance.Initialize();
             ItemDatabaseManager.Instance.Initialize();
 
             var viewport = new WorldViewportGump(_world, this);
@@ -384,6 +385,9 @@ namespace ClassicUO.Game.Scenes
 
             Instance = null;
 
+            LongDistancePathfinder.Dispose();
+            WalkableManager.Instance.Shutdown();
+
             GridContainerSaveData.Instance.Save();
             GridContainerSaveData.Reset();
             JournalFilterManager.Instance.Save();
@@ -432,6 +436,7 @@ namespace ClassicUO.Game.Scenes
 
             ProfileManager.CurrentProfile?.Save(_world, ProfileManager.ProfilePath);
             ImGuiManager.Dispose();
+            Managers.MapWebServerManager.Instance.Stop();
             TileMarkerManager.Instance.Save();
             SpellVisualRangeManager.Instance.Save();
             SpellVisualRangeManager.Instance.OnSceneUnload();
@@ -760,7 +765,7 @@ namespace ClassicUO.Game.Scenes
 
                     Chunk chunk = ASyncMapLoading ? map.PreloadChunk2(chunkX, chunkY) : map.GetChunk2(chunkX, chunkY, true);
 
-                    if (chunk?.IsDestroyed != false)
+                    if(chunk == null || chunk.IsDestroyed || chunk.IsLoading)
                         continue;
 
                     // Access tiles directly instead of calling GetHeadObject 64 times
@@ -847,11 +852,19 @@ namespace ClassicUO.Game.Scenes
 
             base.Update();
 
-            if (_time_cleanup < Time.Ticks)
-            {
-                _world.Map?.ClearUnusedBlocks();
-                _time_cleanup = Time.Ticks + 500;
-            }
+            // Temporary to see if memory usage get's too high or not. This will keep map chunks loaded
+            // for better performance at the cost of more ram.
+            // if (_time_cleanup < Time.Ticks)
+            // {
+            //     _world.Map?.ClearUnusedBlocks();
+            //     _time_cleanup = Time.Ticks + 500;
+            // }
+
+            // Update WalkableManager for chunk generation
+            WalkableManager.Instance.Update();
+
+            // Update LongDistancePathfinder
+            LongDistancePathfinder.Update();
 
             PacketHandlers.SendMegaClilocRequests(_world);
 

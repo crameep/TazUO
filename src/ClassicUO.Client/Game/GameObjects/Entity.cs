@@ -45,6 +45,8 @@ namespace ClassicUO.Game.GameObjects
                 {
                     hits = value;
                 }
+
+                NextHitsUpdate = Time.Ticks + Constants.RECHECK_HITS_STATUS;
             }
         }
         public ushort HitsMax;
@@ -54,6 +56,7 @@ namespace ClassicUO.Game.GameObjects
         public string Name;
         public uint Serial;
         public HitsRequestStatus HitsRequest;
+        public uint NextHitsUpdate;
         private ushort hits;
 
         public bool IsHidden => (Flags & Flags.Hidden) != 0;
@@ -154,7 +157,7 @@ namespace ClassicUO.Game.GameObjects
 
             if (HitsMax > 0)
             {
-                int perc = MathHelper.PercetangeOf(Hits, HitsMax);
+                int perc = MathHelper.PercentageOf(Hits, HitsMax);
                 perc = perc > 100 ? 100 : perc < 0 ? 0 : perc;
 
                 UpdateHits((byte)perc);

@@ -15,6 +15,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using System.Xml;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
@@ -345,6 +346,30 @@ namespace ClassicUO.Configuration
         public bool WorldMapShowGridIfZoomed { get; set; } = true;
         public bool WorldMapAllowPositionalTarget { get; set; } = true;
 
+        [JsonIgnore]
+        public int WebMapServerPort
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, value);
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
+        public bool WebMapAutoStart
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, value);
+                field = value;
+            }
+        }
+
         public int AutoFollowDistance { get; set; } = 2;
         public bool DisableAutoFollowAlt { get; set; } = false;
         [JsonConverter(typeof(Point2Converter))] public Point ResizeJournalSize { get; set; } = new Point(410, 350);
@@ -613,6 +638,8 @@ namespace ClassicUO.Configuration
         [JsonConverter(typeof(Point2Converter))]
         public Point PlayerOffset { get; set; } = new Point(0, 0);
 
+        public float CameraSmoothingFactor { get; set; } = 0f;
+
         public double PaperdollScale { get; set; } = 1f;
 
         public uint SOSGumpID { get; set; } = 1915258020;
@@ -650,7 +677,54 @@ namespace ClassicUO.Configuration
         public bool DisableDismountInWarMode { get; set; }
         public bool EnableASyncMapLoading { get; set; }
 
+        [JsonIgnore]
+        public bool EnablePetScaling
+        {
+            get => field;
+            set {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
+
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
+        public int MinGumpMoveDistance
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, value);
+
+                field = value;
+            }
+        } = 5;
+
         private long lastSave;
+
+        internal void AfterLoad()
+        {
+            if (Client.Settings == null)
+            {
+                Log.Error("Warning, SQL settings failed to load!");
+                return;
+            }
+            //These are fine if we continue without loading them yet
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
+
+
+            //These must be waited before continue for various purposes elsewhere
+            Task[] mustWait = [
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, false, (b) => WebMapAutoStart = b),
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, (p) => WebMapServerPort = p)
+            ];
+
+            Task.WaitAll(mustWait, 5000);
+        }
+
         internal void Save(World world, string path, bool saveGumps = true)
         {
             if (Time.Ticks - lastSave < 10) //Don't save if saved in the last 10 ms, prevent duplcate saving when exiting game with options menu open
@@ -1297,6 +1371,11 @@ namespace ClassicUO.Configuration
                     SingletonImGuiWindow<AssistantWindow> w2 = AssistantWindow.GetInstance();
                     w2.Load(xml);
                     ImGuiManager.AddWindow(w2);
+                    break;
+                case "ClassicUO.Game.UI.ImGuiControls.RunningScriptsWindow":
+                    SingletonImGuiWindow<RunningScriptsWindow> w3 = RunningScriptsWindow.GetInstance();
+                    w3.Load(xml);
+                    ImGuiManager.AddWindow(w3);
                     break;
             }
         }

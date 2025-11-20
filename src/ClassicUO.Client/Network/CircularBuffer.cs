@@ -1,22 +1,30 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
+using System.Buffers;
 using System.Runtime.CompilerServices;
+using ClassicUO.Utility;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Network
 {
-    public sealed class CircularBuffer
+    public sealed class CircularBuffer : IDisposable
     {
         private byte[] _buffer;
         private int _head;
         private int _tail;
+        private bool _disposed;
 
         /// <summary>
         ///     Constructs a new instance of a byte queue.
         /// </summary>
-        public CircularBuffer(int size = 4096)
+        /// <remarks>
+        ///     Default size increased to 32KB to reduce resize frequency during packet processing.
+        ///     Uses ArrayPool to reduce GC pressure.
+        /// </remarks>
+        public CircularBuffer(int size = 32768)
         {
-            _buffer = new byte[size];
+            _buffer = ArrayPool<byte>.Shared.Rent(size);
         }
 
         /// <summary>
@@ -41,24 +49,38 @@ namespace ClassicUO.Network
         /// </summary>
         private void SetCapacity(int capacity)
         {
-            byte[] newBuffer = new byte[capacity];
+            Profiler.EnterContext("BUFFER_RESIZE");
+
+            int oldCapacity = _buffer.Length;
+            if (capacity > oldCapacity * 2)
+            {
+                Log.Warn($"CircularBuffer resize from {oldCapacity} to {capacity} (large jump, may cause spike)");
+            }
+
+            byte[] oldBuffer = _buffer;
+            byte[] newBuffer = ArrayPool<byte>.Shared.Rent(capacity);
 
             if (Length > 0)
             {
                 if (_head < _tail)
                 {
-                    _buffer.AsSpan(_head, Length).CopyTo(newBuffer.AsSpan());
+                    oldBuffer.AsSpan(_head, Length).CopyTo(newBuffer.AsSpan());
                 }
                 else
                 {
-                    _buffer.AsSpan(_head, _buffer.Length - _head).CopyTo(newBuffer.AsSpan());
-                    _buffer.AsSpan(0, _tail).CopyTo(newBuffer.AsSpan(_buffer.Length - _head));
+                    oldBuffer.AsSpan(_head, oldBuffer.Length - _head).CopyTo(newBuffer.AsSpan());
+                    oldBuffer.AsSpan(0, _tail).CopyTo(newBuffer.AsSpan(oldBuffer.Length - _head));
                 }
             }
 
             _head = 0;
             _tail = Length;
             _buffer = newBuffer;
+
+            // Return old buffer to pool
+            ArrayPool<byte>.Shared.Return(oldBuffer);
+
+            Profiler.ExitContext("BUFFER_RESIZE");
         }
 
         public void Enqueue(Span<byte> buffer) => Enqueue(buffer, 0, buffer.Length);
@@ -181,6 +203,20 @@ namespace ClassicUO.Network
             }
 
             return size;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            if (_buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = null;
+            }
+
+            _disposed = true;
         }
     }
 }

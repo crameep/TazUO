@@ -59,7 +59,21 @@ public class PyEntity : PyGameObject
     /// </summary>
     public void Destroy()
     {
-        GetEntity()?.Destroy();
+        Entity e = GetEntity();
+
+        if (e == null) return;
+
+        MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            if (World.Instance != null && e.Serial > 0)
+            {                
+                if (SerialHelper.IsMobile(e))
+                    World.Instance.RemoveMobile(e);
+                else
+                    World.Instance.RemoveItem(e);
+            }
+        });
+
         entity = null;
     }
 

@@ -71,8 +71,6 @@ namespace ClassicUO.Game.GameObjects
                 return false;
             }
 
-            GameScene scene = Client.Game.GetScene<GameScene>();
-
             ushort graphic = Graphic;
             ushort hue = Hue;
             bool partial = ItemData.IsPartialHue;
@@ -118,7 +116,7 @@ namespace ClassicUO.Game.GameObjects
             Vector3 hueVec = ShaderHueTranslator.GetHueVector(hue, partial, AlphaHue / 255f);
 
             graphic = GetDisplayGraphic(graphic);
-            bool isTree = StaticFilters.IsTree(graphic, out _);
+            bool isTree = graphic == Constants.TREE_REPLACE_GRAPHIC;
 
             DrawStaticAnimated(
                 batcher,
@@ -133,9 +131,9 @@ namespace ClassicUO.Game.GameObjects
                 _profile.AnimatedWaterEffect && ItemData.IsWet
             );
 
-            if (_isLight && scene != null)
+            if (_isLight && GameScene.Instance != null)
             {
-                scene.AddLight(this, this, posX + LIGHT_OFFSET, posY + LIGHT_OFFSET);
+                GameScene.Instance.AddLight(this, this, posX + LIGHT_OFFSET, posY + LIGHT_OFFSET);
             }
 
             return true;

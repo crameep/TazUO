@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
@@ -38,29 +39,13 @@ public class SpellBar : Gump
         Build();
 
         EventSink.SpellCastBegin += EventSinkOnSpellCastBegin;
-        EventSink.SpellRecoveryBegin += EventSinkOnSpellRecoveryBegin;
     }
 
     private void EventSinkOnSpellCastBegin(object sender, int e)
     {
         foreach (SpellEntry entry in spellEntries)
-        {
             if (entry.CurrentSpellID == e)
-            {
                 entry.BeginTrackingCasting();
-            }
-        }
-    }
-
-    private void EventSinkOnSpellRecoveryBegin(object sender, int e)
-    {
-        foreach (SpellEntry entry in spellEntries)
-        {
-            if (entry.CurrentSpellID == e)
-            {
-                entry.BeginTrackingRecovery();
-            }
-        }
     }
 
     public override GumpType GumpType { get; } = GumpType.SpellBar;
@@ -87,10 +72,7 @@ public class SpellBar : Gump
 
         rowLabel.SetText(SpellBarManager.CurrentRow.ToString());
 
-        for (int s = 0; s < spellEntries.Length; s++)
-        {
-            spellEntries[s].SetSpell(SpellBarManager.GetSpell(SpellBarManager.CurrentRow, s), SpellBarManager.CurrentRow, s);
-        }
+        for (int s = 0; s < spellEntries.Length; s++) spellEntries[s].SetSpell(SpellBarManager.GetSpell(SpellBarManager.CurrentRow, s), SpellBarManager.CurrentRow, s);
 
         background.Hue = SpellBarManager.SpellBarRows[SpellBarManager.CurrentRow].RowHue;
     }
@@ -204,12 +186,10 @@ public class SpellBar : Gump
             return;
 
         foreach (string preset in SpellBarManager.ListPresets())
-        {
             par.Add(new ContextMenuItemEntry(preset, () =>
             {
                 SpellBarManager.ImportPreset(preset);
             }));
-        }
     }
 
     protected override void OnMouseUp(int x, int y, MouseButtonType button)
@@ -220,28 +200,20 @@ public class SpellBar : Gump
         {
             ref readonly SpriteInfo texture = ref Client.Game.UO.Gumps.GetGump(0x82C);
             if (texture.Texture != null)
-            {
                 if (x >= 0 && x <= texture.UV.Width && y >= 0 && y <= texture.UV.Height)
-                {
                     IsLocked = !IsLocked;
-                }
-            }
         }
     }
 
     public void SetupHotkeyLabels()
     {
-        foreach (SpellEntry entry in spellEntries)
-        {
-            entry.BuildHotkeyLabel();
-        }
+        foreach (SpellEntry entry in spellEntries) entry.BuildHotkeyLabel();
     }
 
     public override void Dispose()
     {
         base.Dispose();
         EventSink.SpellCastBegin -= EventSinkOnSpellCastBegin;
-        EventSink.SpellRecoveryBegin -= EventSinkOnSpellRecoveryBegin;
     }
 
     public override bool Draw(UltimaBatcher2D batcher, int x, int y)
@@ -284,12 +256,10 @@ public class SpellBar : Gump
         private AlphaBlendControl background;
         private int row, col;
         private bool trackCasting;
-        private bool trackRecovery;
         private World World;
         private Gump parentGump;
         private TextBox hotkeyLabel;
         private Microsoft.Xna.Framework.Graphics.Texture2D castingTexture = SolidColorTextureCache.GetTexture(Color.Black);
-        private Microsoft.Xna.Framework.Graphics.Texture2D recoveryTexture = SolidColorTextureCache.GetTexture(Color.Black);
         private DateTime savedStateTime;
 
         public SpellEntry(World world, Gump parent)
@@ -353,7 +323,7 @@ public class SpellBar : Gump
         }
 
         /// <summary>
-        /// Only call this when you're sure it's being casted.
+        /// Only call this when you're sure it's being cast.
         /// </summary>
         public void BeginTrackingCasting()
         {
@@ -361,22 +331,9 @@ public class SpellBar : Gump
             trackCasting = true;
         }
 
-        /// <summary>
-        /// Only call this when you're sure to be in a recovery phase.
-        /// </summary>
-        public void BeginTrackingRecovery()
-        {
-            savedStateTime = DateTime.Now;
-            trackCasting = false;
-            trackRecovery = true;
-        }
-
         public void Cast()
         {
-            if (spell != null && spell != SpellDefinition.EmptySpell)
-            {
-                GameActions.CastSpell(spell.ID);
-            }
+            if (spell != null && spell != SpellDefinition.EmptySpell) GameActions.CastSpell(spell.ID);
         }
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
@@ -385,10 +342,7 @@ public class SpellBar : Gump
             if (button == MouseButtonType.Right)
                 ContextMenu?.Show();
 
-            if (button == MouseButtonType.Left && !Keyboard.Alt && !Keyboard.Ctrl)
-            {
-                Cast();
-            }
+            if (button == MouseButtonType.Left && !Keyboard.Alt && !Keyboard.Ctrl) Cast();
         }
 
         public void BuildHotkeyLabel()
@@ -409,7 +363,8 @@ public class SpellBar : Gump
             BuildHotkeyLabel();
 
             ContextMenu = new(parentGump);
-            ContextMenu.Add(new ContextMenuItemEntry("Set spell", () =>
+            ContextMenu.Add("Set spell", GenSpellList());
+            ContextMenu.Add(new ContextMenuItemEntry("Quick set spell", () =>
             {
                 UIManager.Add
                 (
@@ -428,21 +383,94 @@ public class SpellBar : Gump
             }));
         }
 
-        private void resetStates()
-        {
-            trackCasting = false;
-            trackRecovery = false;
-        }
+        private List<ContextMenuItemEntry> GenSpellList()
+            {
+                var list = new List<ContextMenuItemEntry>();
+
+                var entry = new ContextMenuItemEntry("Magery");
+                foreach (SpellDefinition spell in SpellsMagery.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Necromancy");
+                foreach (SpellDefinition spell in SpellsNecromancy.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Chivalry");
+                foreach (SpellDefinition spell in SpellsChivalry.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Bushido");
+                foreach (SpellDefinition spell in SpellsBushido.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Ninjitsu");
+                foreach (SpellDefinition spell in SpellsNinjitsu.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Spellweaving");
+                foreach (SpellDefinition spell in SpellsSpellweaving.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Mysticism");
+                foreach (SpellDefinition spell in SpellsMysticism.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+
+
+                entry = new ContextMenuItemEntry("Mastery");
+                foreach (SpellDefinition spell in SpellsMastery.GetAllSpells.Values)
+                    entry.Add(new ContextMenuItemEntry(spell.Name, () =>
+                    {
+                        SetSpell(spell, row, col);
+                    }));
+                list.Add(entry);
+                return list;
+            }
+
+        private void resetStates() => trackCasting = false;
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
             if (!base.Draw(batcher, x, y))
                 return false;
 
-            if (!trackCasting && !trackRecovery)
+            if (!trackCasting)
                 return true;
 
-            if (trackCasting && !SpellVisualRangeManager.Instance.IsCastingWithoutTarget())
+            if (!SpellVisualRangeManager.Instance.IsCastingWithoutTarget())
             {
                 resetStates();
                 return true;
@@ -455,7 +483,7 @@ public class SpellBar : Gump
                 return true;
             }
 
-            double castTime = trackCasting ? i.GetEffectiveCastTime() : i.GetEffectiveRecoveryTime();
+            double castTime = i.GetEffectiveCastTime();
             if (castTime > 0)
             {
                 double percent = (DateTime.Now - savedStateTime).TotalSeconds / castTime;
@@ -469,12 +497,10 @@ public class SpellBar : Gump
                 int yb = Height - filledHeight; // This shifts the rect up as it grows
 
                 Rectangle rect = new(x, y + yb, Width, filledHeight);
-                batcher.Draw(trackCasting ? castingTexture : recoveryTexture, rect, new Vector3(0, 0, 0.65f));
+                batcher.Draw(castingTexture, rect, new Vector3(0, 0, 0.65f));
             }
             else
-            {
                 resetStates();
-            }
 
 
             return true;
@@ -483,51 +509,26 @@ public class SpellBar : Gump
         private static int GetSpellTooltip(int id)
         {
             if (id >= 1 && id <= 64) // Magery
-            {
                 return 3002011 + (id - 1);
-            }
 
             if (id >= 101 && id <= 117) // necro
-            {
                 return 1060509 + (id - 101);
-            }
 
-            if (id >= 201 && id <= 210)
-            {
-                return 1060585 + (id - 201);
-            }
+            if (id >= 201 && id <= 210) return 1060585 + (id - 201);
 
-            if (id >= 401 && id <= 406)
-            {
-                return 1060595 + (id - 401);
-            }
+            if (id >= 401 && id <= 406) return 1060595 + (id - 401);
 
-            if (id >= 501 && id <= 508)
-            {
-                return 1060610 + (id - 501);
-            }
+            if (id >= 501 && id <= 508) return 1060610 + (id - 501);
 
-            if (id >= 601 && id <= 616)
-            {
-                return 1071026 + (id - 601);
-            }
+            if (id >= 601 && id <= 616) return 1071026 + (id - 601);
 
-            if (id >= 678 && id <= 693)
-            {
-                return 1031678 + (id - 678);
-            }
+            if (id >= 678 && id <= 693) return 1031678 + (id - 678);
 
             if (id >= 701 && id <= 745)
             {
-                if (id <= 706)
-                {
-                    return 1115612 + (id - 701);
-                }
+                if (id <= 706) return 1115612 + (id - 701);
 
-                if (id <= 745)
-                {
-                    return 1155896 + (id - 707);
-                }
+                if (id <= 745) return 1155896 + (id - 707);
             }
 
             return 0;

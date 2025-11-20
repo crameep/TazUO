@@ -161,6 +161,7 @@ namespace ClassicUO.Game.Managers
         /// Called when the visual spell manager detects a spell recovery phase.
         /// The event argument is the spell ID.
         /// </summary>
+        [Obsolete]
         public static event EventHandler<int> SpellRecoveryBegin;
         /// <summary>Invokes <see cref="SpellRecoveryBegin"/>.</summary>
         public static void InvokeSpellRecoveryBegin(int spell) => SpellRecoveryBegin?.Invoke(null, spell);
@@ -168,10 +169,10 @@ namespace ClassicUO.Game.Managers
         /// Called when the visual spell manager detects a spell recovery phase end.
         /// The event argument is the spell ID.
         /// </summary>
+        [Obsolete]
         public static event EventHandler SpellRecoveryEnd;
         /// <summary>Invokes <see cref="SpellRecoveryEnd"/>.</summary>
         public static void InvokeSpellRecoveryEnd() => SpellRecoveryEnd?.Invoke(null, null);
-
     }
 
     public class OPLEventArgs : EventArgs

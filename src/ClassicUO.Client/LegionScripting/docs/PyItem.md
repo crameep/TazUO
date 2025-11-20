@@ -42,6 +42,13 @@ description:  Represents a Python-accessible item in the game world.   Inherits 
 
 **Type:** `bool`
 
+### `IsContainer`
+
+**Type:** `bool`
+
+ Check if this item is a container(Bag, chest, etc)
+
+
 ### `MatchingHighlightName`
 
 **Type:** `string`
@@ -61,3 +68,29 @@ description:  Represents a Python-accessible item in the game world.   Inherits 
 *No enums found.*
 
 ## Methods
+### GetContainerGump
+
+ If this item is a container ( item.IsContainer ) and is open, this will return the grid container or container gump for it.
+
+
+**Return Type:** `PyBaseControl`
+
+---
+
+### NameAndProps
+`(wait, timeout)`
+ Gets the item name and properties (tooltip text).
+ This returns the name and properties in a single string. You can split it by newline if you want to separate them.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `wait` | `bool` | ✅ Yes | True or false to wait for name and props |
+| `timeout` | `int` | ✅ Yes | Timeout in seconds |
+
+**Return Type:** `string`
+
+---
+

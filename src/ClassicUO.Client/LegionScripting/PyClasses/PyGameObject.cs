@@ -107,6 +107,8 @@ public class PyGameObject
         return _gameObject?.HasLineOfSightFrom(observerObj) ?? false;
     }
 
+    public bool IsDestroyed => _gameObject?.IsDestroyed ?? true;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PyGameObject"/> class from a <see cref="GameObject"/>.
     /// </summary>

@@ -197,6 +197,13 @@ namespace ClassicUO.Game
                     {
                         Client.Game.UO.GameCursor.Graphic = 0xFFFF;
                     }
+
+                    // Notify web server of map change
+                    if (Managers.MapWebServerManager.Instance.IsRunning)
+                    {
+                        Utility.Logging.Log.Info($"Map changed to {value}, notifying web server");
+                        Managers.MapWebServerManager.Instance.RegenerateMapPng();
+                    }
                 }
             }
         }
@@ -323,6 +330,10 @@ namespace ClassicUO.Game
 
         public void Update()
         {
+            // Process asynchronously loaded map chunks once per frame
+            // instead of on every GetChunk call for better performance
+            Map?.ProcessLoadedChunks();
+
             if (Player != null)
             {
                 if (SerialHelper.IsValid(ObjectToRemove))
@@ -394,7 +405,7 @@ namespace ClassicUO.Game
                                 mob.Serial,
                                 mob.X,
                                 mob.Y,
-                                MathHelper.PercetangeOf(mob.Hits, mob.HitsMax),
+                                MathHelper.PercentageOf(mob.Hits, mob.HitsMax),
                                 MapIndex,
                                 true,
                                 mob.Name
@@ -407,7 +418,7 @@ namespace ClassicUO.Game
                                 mob.Serial,
                                 mob.X,
                                 mob.Y,
-                                MathHelper.PercetangeOf(mob.Hits, mob.HitsMax),
+                                MathHelper.PercentageOf(mob.Hits, mob.HitsMax),
                                 MapIndex,
                                 false,
                                 mob.Name

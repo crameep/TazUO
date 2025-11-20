@@ -280,29 +280,33 @@ namespace ClassicUO.Game.UI.Gumps
                     }
 
                     staticsZ.Fill(d);
-                    indexMap.StaticFile.Seek((long)indexMap.StaticAddress, System.IO.SeekOrigin.Begin);
-                    indexMap.MapFile.Seek((long)indexMap.MapAddress, System.IO.SeekOrigin.Begin);
-                    MapCellsArray cells = indexMap.MapFile.Read<MapBlock>().Cells;
+
+                    MapCellsArray cells;
+                    lock (Map.Map.MapFileIOLock)
+                    {
+                        indexMap.StaticFile.Seek((long)indexMap.StaticAddress, System.IO.SeekOrigin.Begin);
+                        indexMap.MapFile.Seek((long)indexMap.MapAddress, System.IO.SeekOrigin.Begin);
+                        cells = indexMap.MapFile.Read<MapBlock>().Cells;
+
+                        for (int c = 0; c < indexMap.StaticCount; ++c)
+                        {
+                            StaticsBlock stblock = indexMap.StaticFile.Read<StaticsBlock>();
+                            if (stblock.Color > 0 && stblock.Color != 0xFFFF && GameObject.CanBeDrawn(World, stblock.Color))
+                            {
+                                ref ColorInfo st = ref staticsZ[stblock.Y * 8 + stblock.X];
+                                if (st.Z < stblock.Z)
+                                {
+                                    st.Color = stblock.Hue > 0 ? (ushort)(stblock.Hue + 0x4000) : stblock.Color;
+                                    st.Z = stblock.Z;
+                                    st.IsLand = stblock.Hue > 0;
+                                }
+                            }
+                        }
+                    }
 
                     Chunk block = World.Map.GetChunk(blockIndex);
                     int realBlockX = i << 3;
                     int realBlockY = j << 3;
-
-
-                    for (int c = 0; c < indexMap.StaticCount; ++c)
-                    {
-                        StaticsBlock stblock = indexMap.StaticFile.Read<StaticsBlock>();
-                        if (stblock.Color > 0 && stblock.Color != 0xFFFF && GameObject.CanBeDrawn(World, stblock.Color))
-                        {
-                            ref ColorInfo st = ref staticsZ[stblock.Y * 8 + stblock.X];
-                            if (st.Z < stblock.Z)
-                            {
-                                st.Color = stblock.Hue > 0 ? (ushort)(stblock.Hue + 0x4000) : stblock.Color;
-                                st.Z = stblock.Z;
-                                st.IsLand = stblock.Hue > 0;
-                            }
-                        }
-                    }
 
                     for (int x = 0; x < 8; x++)
                     {

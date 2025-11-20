@@ -70,7 +70,7 @@ internal static class GameActions
     /// <returns>False if no script manager window was open</returns>
     internal static bool CloseLegionScriptingGump()
     {
-        var window = ScriptManagerWindow.Instance;
+        ScriptManagerWindow window = ScriptManagerWindow.Instance;
 
         if (window != null && window.IsVisible)
         {
@@ -402,6 +402,28 @@ internal static class GameActions
         }
     }
 
+    internal static void OpenWorldMapWebWindow()
+    {
+        MapWebServerManager server = Managers.MapWebServerManager.Instance;
+
+        if (!server.IsRunning)
+            server.Start();
+
+        // Open browser
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = $"http://localhost:{server.Port}",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            GameActions.Print(World.Instance, $"Failed to open browser: {ex.Message}", 0x21);
+        }
+    }
+
     /// <summary>
     ///
     /// </summary>
@@ -570,7 +592,13 @@ internal static class GameActions
 
     internal static void DoubleClickQueued(uint serial) => Client.Game.GetScene<GameScene>()?.DoubleClickDelayed(serial);
 
-    internal static void DoubleClick(World world, uint serial)
+    internal static void DoubleClickQueued(uint serial, bool ignoreWarMode)
+    {
+        if (World.Instance != null)
+            GlobalPriorityQueue.Instance.Enqueue(() => { DoubleClick(World.Instance, serial, ignoreWarMode); });
+    }
+
+    internal static void DoubleClick(World world, uint serial, bool ignoreWarMode = false)
     {
         // Record action for script recording (only for items)
         if (SerialHelper.IsItem(serial))
@@ -581,7 +609,7 @@ internal static class GameActions
         if (obj != null)
             ScriptingInfoGump.AddOrUpdateInfo("Last Object Graphic", $"0x{obj.Graphic:X}");
 
-        if (serial != world.Player && SerialHelper.IsMobile(serial) && world.Player.InWarMode)
+        if (serial != world.Player && SerialHelper.IsMobile(serial) && world.Player.InWarMode && !ignoreWarMode)
         {
             RequestMobileStatus(world, serial);
             Attack(world, serial);
@@ -1239,7 +1267,7 @@ internal static class GameActions
         Entity mount = World.Instance.Get(ProfileManager.CurrentProfile.SavedMountSerial);
         if (mount != null)
         {
-            DoubleClickQueued(ProfileManager.CurrentProfile.SavedMountSerial);
+            DoubleClickQueued(ProfileManager.CurrentProfile.SavedMountSerial, true);
             ScriptRecorder.Instance.RecordMount(mount);
             return true;
         }

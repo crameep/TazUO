@@ -27,6 +27,20 @@ namespace ClassicUO.Renderer
 
         public int TexturesCount => _textureList.Count;
 
+        public void EnsureCapacity(int estimatedWidth, int estimatedHeight)
+        {
+            // Ensure at least one texture exists before starting uploads
+            // This prevents the very first texture creation from happening during
+            // the critical upload loop, reducing initial spike
+            if (_textureList.Count == 0)
+            {
+                CreateNewTexture2D();
+            }
+
+            // Note: We can't reliably pre-check available space without the packer's
+            // internal state, so we just ensure a texture exists for the first upload
+        }
+
         public unsafe Texture2D AddSprite(
             ReadOnlySpan<uint> pixels,
             int width,

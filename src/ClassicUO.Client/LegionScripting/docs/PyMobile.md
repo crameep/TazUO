@@ -73,6 +73,14 @@ description:  Represents a Python-accessible mobile (NPC, creature, or player ch
 
 **Type:** `bool`
 
+### `IsYellowHits`
+
+**Type:** `bool`
+
+### `Notoriety`
+
+**Type:** `Notoriety`
+
 ### `InWarMode`
 
 **Type:** `bool`
@@ -105,3 +113,20 @@ description:  Represents a Python-accessible mobile (NPC, creature, or player ch
 *No enums found.*
 
 ## Methods
+### NameAndProps
+`(wait, timeout)`
+ Gets the mobile name and properties (tooltip text).
+ This returns the name and properties in a single string. You can split it by newline if you want to separate them.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `wait` | `bool` | ✅ Yes | True or false to wait for name and props |
+| `timeout` | `int` | ✅ Yes | Timeout in seconds |
+
+**Return Type:** `string`
+
+---
+

@@ -12,6 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers
 {
@@ -143,7 +144,7 @@ namespace ClassicUO.Game.Managers
             {
                 if (ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.HoldAltToMoveGumps || Keyboard.Alt)
                 {
-                    AttemptDragControl(_mouseDownControls[(int)MouseButtonType.Left], true);
+                    AttemptDragControl(_mouseDownControls[(int)MouseButtonType.Left]);
                 }
             }
 
@@ -679,9 +680,13 @@ namespace ClassicUO.Game.Managers
                 dragTarget = dragTarget.Parent;
             }
 
+
             if (dragTarget.CanMove)
             {
-                if (attemptAlwaysSuccessful || !_isDraggingControl)
+                Point delta = Mouse.LDragOffset;
+
+                bool doDrag = (ProfileManager.CurrentProfile == null || Math.Abs(delta.X) >= ProfileManager.CurrentProfile.MinGumpMoveDistance || Math.Abs(delta.Y) >= ProfileManager.CurrentProfile.MinGumpMoveDistance) || attemptAlwaysSuccessful;
+                if (doDrag && !_isDraggingControl)
                 {
                     DraggingControl = dragTarget;
                     _dragOrigin = Mouse.LClickPosition;
@@ -692,9 +697,7 @@ namespace ClassicUO.Game.Managers
                     }
                 }
 
-                Point delta = Mouse.Position - _dragOrigin;
-
-                if (attemptAlwaysSuccessful || delta != Point.Zero)
+                if (doDrag)
                 {
                     _isDraggingControl = true;
                     dragTarget.InvokeDragBegin(delta);

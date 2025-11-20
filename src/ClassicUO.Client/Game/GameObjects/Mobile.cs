@@ -204,6 +204,7 @@ namespace ClassicUO.Game.GameObjects
         public ushort ManaMax;
         public int StepSoundOffset;
         public string Title = string.Empty;
+        public float Scale = 1f; //Functional, but not ready for deployment yet
 
         public static Mobile Create(World world, uint serial)
         {
@@ -809,15 +810,14 @@ namespace ClassicUO.Game.GameObjects
                                 {
                                     int count = World.Player.Walker.StepsCount - sequence;
 
-                                    for (int i = 0; i < count; i++)
-                                    {
-                                        World.Player.Walker.StepInfos[sequence - 1] = World
-                                            .Player
-                                            .Walker
-                                            .StepInfos[sequence];
-
-                                        sequence++;
-                                    }
+                                    // Use Array.Copy for more efficient struct copying
+                                    Array.Copy(
+                                        World.Player.Walker.StepInfos,
+                                        sequence,
+                                        World.Player.Walker.StepInfos,
+                                        sequence - 1,
+                                        count
+                                    );
                                 }
 
                                 World.Player.Walker.StepsCount--;

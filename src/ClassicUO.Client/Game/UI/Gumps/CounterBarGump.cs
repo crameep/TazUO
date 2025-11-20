@@ -8,6 +8,8 @@ using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using ClassicUO.Assets;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Gumps.SpellBar;
 using ClassicUO.Renderer;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
@@ -381,6 +383,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ContextMenu.Add(ResGumps.UseObject, Use);
                 ContextMenu.Add(ResGumps.Remove, RemoveItem);
                 ContextMenu.Add("Set spell", GenSpellList());
+                ContextMenu.Add("Quick set spell", QuickSetSpell);
             }
 
             public ushort Graphic { get; private set; }
@@ -458,7 +461,20 @@ namespace ClassicUO.Game.UI.Gumps
             //     ClearTooltip();
             // }
 
-            public List<ContextMenuItemEntry> GenSpellList()
+            private void QuickSetSpell() =>
+                UIManager.Add
+                (
+                    new SpellQuickSearch
+                    (World.Instance,
+                        ScreenCoordinateX - 20, ScreenCoordinateY - 90, (s) =>
+                        {
+                            SetGraphic((ushort)(s.GumpIconSmallID), 0, true);
+                            SpellID = s.ID;
+                        }, true
+                    )
+                );
+
+            private List<ContextMenuItemEntry> GenSpellList()
             {
                 var list = new List<ContextMenuItemEntry>();
 

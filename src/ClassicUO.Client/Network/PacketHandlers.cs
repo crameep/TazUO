@@ -75,16 +75,31 @@ sealed class PacketHandlers
 
     public void Add(byte id, OnPacketBufferReader handler) => _handlers[id] = handler;
 
-    private byte[] _readingBuffer = new byte[4096];
+    // Increased from 4096 to 65536 (64KB) to reduce Array.Resize frequency during packet processing
+    private byte[] _readingBuffer = new byte[65536];
     private readonly PacketLogger _packetLogger = new PacketLogger();
     private readonly CircularBuffer _buffer = new CircularBuffer();
     private readonly CircularBuffer _pluginsBuffer = new CircularBuffer();
 
     public int ParsePackets(World world, Span<byte> data)
     {
+        Profiler.EnterContext("APPEND");
         Append(data, false);
+        Profiler.ExitContext("APPEND");
 
-        return ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
+#if DEBUG
+        string packet = _buffer == null || _buffer.Length == 0 ? "0xFF" : _buffer[0].ToString();
+
+        Profiler.EnterContext(packet);
+#endif
+
+        int c = ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
+
+#if DEBUG
+        Profiler.ExitContext(packet);
+#endif
+
+        return c;
     }
 
     private int ParsePackets(World world, CircularBuffer stream, bool allowPlugins)
@@ -126,7 +141,14 @@ sealed class PacketHandlers
 
                 while (packetlength > packetBuffer.Length)
                 {
-                    Array.Resize(ref packetBuffer, packetBuffer.Length * 2);
+                    Profiler.EnterContext("PACKET_BUFFER_RESIZE");
+                    int oldSize = packetBuffer.Length;
+                    int newSize = packetBuffer.Length * 2;
+
+                    Log.Warn($"PacketHandler buffer resize from {oldSize} to {newSize} for packet length {packetlength} (may cause spike)");
+
+                    Array.Resize(ref packetBuffer, newSize);
+                    Profiler.ExitContext("PACKET_BUFFER_RESIZE");
                 }
 
                 _ = stream.Dequeue(packetBuffer, 0, packetlength);
@@ -727,16 +749,12 @@ sealed class PacketHandlers
                 }
             }
 
-            if (mobile == world.Player)
-            {
-                TitleBarStatsManager.UpdateTitleBar();
-            }
+            if (mobile == world.Player) TitleBarStatsManager.UpdateTitleBar();
 
             // Check for bandage healing
-            if (oldHits != mobile.Hits)
-            {
-                BandageManager.Instance.OnMobileHpChanged(mobile, oldHits, mobile.Hits);
-            }
+            if (oldHits != mobile.Hits) BandageManager.Instance.OnMobileHpChanged(mobile, oldHits, mobile.Hits);
+
+            if (mobile.IsRenamable && ProfileManager.CurrentProfile.EnablePetScaling) mobile.Scale = 0.6f;//Customizable later
         }
     }
 
@@ -992,6 +1010,9 @@ sealed class PacketHandlers
 
         AsyncNetClient.Socket.Send_ToPlugins_AllSkills();
         AsyncNetClient.Socket.Send_ToPlugins_AllSpells();
+
+        if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.WebMapAutoStart && !MapWebServerManager.Instance.IsRunning)
+            MapWebServerManager.Instance.Start();
     }
 
     private static void Talk(World world, ref StackDataReader p)
@@ -1261,7 +1282,8 @@ sealed class PacketHandlers
         world.Player.NotorietyFlag = (NotorietyFlag)noto;
         world.Player.Walker.ConfirmWalk(seq);
 
-        world.Player.AddToTile();
+        // AddToTile is already handled in Mobile.ProcessSteps when the step visually completes
+        // Calling it again here was redundant and caused performance issues
     }
 
     private static void DragAnimation(World world, ref StackDataReader p)
@@ -4870,26 +4892,26 @@ sealed class PacketHandlers
                 ushort spell = p.ReadUInt16BE();
                 bool active = p.ReadBool();
 
-                foreach (Gump g in UIManager.Gumps)
+                for (LinkedListNode<Gump> last = UIManager.Gumps.Last; last != null; last = last.Previous)
                 {
-                    if (!g.IsDisposed && g.IsVisible)
-                    {
-                        if (g is UseSpellButtonGump spellButton && spellButton.SpellID == spell)
-                        {
-                            if (active)
-                            {
-                                spellButton.Hue = 38;
-                                world.ActiveSpellIcons.Add(spell);
-                            }
-                            else
-                            {
-                                spellButton.Hue = 0;
-                                world.ActiveSpellIcons.Remove(spell);
-                            }
+                    Control c = last.Value;
 
-                            break;
-                        }
+                    if (c.IsDisposed || !c.IsVisible) continue;
+
+                    if (c is not UseSpellButtonGump spellButton || spellButton.SpellID != spell) continue;
+
+                    if (active)
+                    {
+                        spellButton.Hue = 38;
+                        world.ActiveSpellIcons.Add(spell);
                     }
+                    else
+                    {
+                        spellButton.Hue = 0;
+                        world.ActiveSpellIcons.Remove(spell);
+                    }
+
+                    break;
                 }
 
                 break;
@@ -4903,6 +4925,8 @@ sealed class PacketHandlers
                 {
                     val = 0;
                 }
+
+                if (world.Player == null) break;
 
                 world.Player.SpeedMode = (CharacterSpeedType)val;
 
@@ -6324,9 +6348,6 @@ sealed class PacketHandlers
 
         container.PushToBack(item);
 
-        // Queue item for grid highlighting
-        GridHighlightData.ProcessItemOpl(world, serial);
-
         if (SerialHelper.IsMobile(containerSerial))
         {
             Mobile m = world.Mobiles.Get(containerSerial);
@@ -6571,10 +6592,6 @@ sealed class PacketHandlers
 
             // Update item database
             ItemDatabaseManager.Instance.AddOrUpdateItem(item, world);
-
-            // Queue item for grid highlighting
-            if(item.Container != 0xFFFF_FFFF)
-                GridHighlightData.ProcessItemOpl(world, serial);
         }
         else
         {
@@ -6789,7 +6806,7 @@ sealed class PacketHandlers
     )
     {
         ScriptRecorder.Instance.RecordWaitForGump(gumpID.ToString());
-        ScriptingInfoGump.AddOrUpdateInfo("Last Gump Opened", gumpID);
+        ScriptingInfoGump.AddOrUpdateInfo("Last Gump Opened", $"0x{gumpID:X}");
 
         if (string.IsNullOrEmpty(layout))
             return null;
@@ -6798,13 +6815,14 @@ sealed class PacketHandlers
         int cmdlen = cmdlist.Count;
 
         if (cmdlen <= 0)
-        {
             return null;
-        }
 
-        UIManager.GetGumpServer(gumpID)?.Dispose();
+        Gump gump = UIManager.GetGumpServer(gumpID);
 
-        bool mustBeAdded = true;
+        if (gump != null && (gump.IsDisposed || gump.LocalSerial != sender))
+            gump = null;
+
+        bool mustBeAdded = gump == null;
 
         if (UIManager.GetGumpCachePosition(gumpID, out Point pos))
         {
@@ -6812,20 +6830,25 @@ sealed class PacketHandlers
             y = pos.Y;
         }
         else
-        {
             UIManager.SavePosition(gumpID, new Point(x, y));
-        }
 
-        var gump = new Gump(world, sender, gumpID)
+        if(mustBeAdded)
+            gump = new Gump(world, sender, gumpID)
+            {
+                X = x,
+                Y = y,
+                CanMove = true,
+                CanCloseWithRightClick = true,
+                CanCloseWithEsc = true,
+                InvalidateContents = false,
+                IsFromServer = true
+            };
+        else
         {
-            X = x,
-            Y = y,
-            CanMove = true,
-            CanCloseWithRightClick = true,
-            CanCloseWithEsc = true,
-            InvalidateContents = false,
-            IsFromServer = true
-        };
+            //Reusing existing gump, need to clear it out
+            gump.Clear();
+            gump.CleanUpDisposedChildren();
+        }
 
         var gumpTextBuilder = new StringBuilder(string.Join("\n", lines));
 
@@ -7463,7 +7486,6 @@ sealed class PacketHandlers
 
         if (world.Player != null)
         {
-            world.Player.HasGump = true;
             world.Player.LastGumpID = gumpID;
         }
 

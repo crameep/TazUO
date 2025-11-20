@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ClassicUO.Configuration;
@@ -39,11 +40,9 @@ namespace ClassicUO.Game.GameObjects
                 }
             };
 
-            if (ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
-            {
+
+            if(ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
                 UIManager.Add(new CastTimerProgressBar(world));
-                AttachCastingEventHandlers();
-            }
 
             IsPlayer = true;
         }
@@ -58,7 +57,6 @@ namespace ClassicUO.Game.GameObjects
         public ref Ability SecondaryAbility => ref Abilities[1];
         public override bool IsWalking => LastStepTime > Time.Ticks - Constants.PLAYER_WALKING_DELAY;
 
-        public bool HasGump { get; set; }
         public uint LastGumpID { get; set; }
 
         internal WalkerManager Walker { get; }
@@ -128,11 +126,12 @@ namespace ClassicUO.Game.GameObjects
         /// <summary>
         /// True while a spell is being cast.
         /// </summary>
-        public bool IsCasting { get; private set; }
+        public bool IsCasting { get; set; }
+
         /// <summary>
         /// True while a spell is in recovery phase.
         /// </summary>
-        public bool IsRecovering { get; private set; }
+        public bool IsRecovering => IsCasting; //May incorporate this again later, for now just reference is casting
 
         public Item FindBandage(ushort graphic = 0x0E21)
         {
@@ -148,54 +147,6 @@ namespace ClassicUO.Game.GameObjects
                 item = FindItemByLayer(Layer.Waist)?.FindItem(graphic);
 
             return item;
-        }
-
-        private void AttachCastingEventHandlers()
-        {
-            EventSink.SpellCastBegin += OnSpellCastBegin;
-            EventSink.SpellCastEnd += OnSpellCastEnd;
-            EventSink.SpellRecoveryBegin += OnSpellRecoveryBegin;
-            EventSink.SpellRecoveryEnd += OnSpellRecoveryEnd;
-        }
-
-        private void DetachCastingEventHandlers()
-        {
-            EventSink.SpellCastBegin -= OnSpellCastBegin;
-            EventSink.SpellCastEnd -= OnSpellCastEnd;
-            EventSink.SpellRecoveryBegin -= OnSpellRecoveryBegin;
-            EventSink.SpellRecoveryEnd -= OnSpellRecoveryEnd;
-        }
-
-        private void OnSpellCastBegin(object sender, int spellID)
-        {
-            if (World?.Player == this)
-            {
-                IsCasting = true;
-            }
-        }
-
-        private void OnSpellCastEnd(object s, object o)
-        {
-            if (World?.Player == this)
-            {
-                IsCasting = false;
-            }
-        }
-
-        private void OnSpellRecoveryBegin(object sender, int spellID)
-        {
-            if (World?.Player == this)
-            {
-                IsRecovering = true;
-            }
-        }
-
-        private void OnSpellRecoveryEnd(object sender, object o)
-        {
-            if (World?.Player == this)
-            {
-                IsRecovering = false;
-            }
         }
 
         public Item FindItemByGraphic(ushort graphic)
@@ -217,6 +168,18 @@ namespace ClassicUO.Game.GameObjects
             if (backpack != null)
             {
                 return FindItemByClilocInContainerRecursive(backpack, cliloc);
+            }
+
+            return null;
+        }
+
+        public Item FindItemByGraphicAndHue(ushort graphic, ushort? hue)
+        {
+            Item backpack = Backpack;
+
+            if (backpack != null)
+            {
+                return FindItemByGraphicAndHueInContainerRecursive(backpack, graphic, hue);
             }
 
             return null;
@@ -273,6 +236,39 @@ namespace ClassicUO.Game.GameObjects
                         found = FindItemByClilocInContainerRecursive(item, cliloc);
 
                         if (found != null && cliloc == World.OPL.GetNameCliloc(found.Serial))
+                        {
+                            return found;
+                        }
+                    }
+                }
+            }
+
+            return found;
+        }
+
+        private Item FindItemByGraphicAndHueInContainerRecursive(Item container, ushort graphic, ushort? hue)
+        {
+            Item found = null;
+
+            if (container != null)
+            {
+                for (LinkedObject i = container.Items; i != null; i = i.Next)
+                {
+                    var item = (Item)i;
+
+                    bool graphicMatches = item.Graphic == graphic;
+                    bool hueMatches = !hue.HasValue || item.Hue == hue.Value;
+
+                    if (graphicMatches && hueMatches)
+                    {
+                        return item;
+                    }
+
+                    if (!item.IsEmpty)
+                    {
+                        found = FindItemByGraphicAndHueInContainerRecursive(item, graphic, hue);
+
+                        if (found != null)
                         {
                             return found;
                         }
@@ -459,7 +455,6 @@ namespace ClassicUO.Game.GameObjects
             }
 
             DeathScreenTimer = 0;
-            DetachCastingEventHandlers();
 
             Log.Warn("PlayerMobile disposed!");
             base.Destroy();
@@ -648,7 +643,7 @@ namespace ClassicUO.Game.GameObjects
 
         public bool Walk(Direction direction, bool run)
         {
-            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules || Pathfinder.AutoWalking)
+            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules || Pathfinder.AutoWalking || !WalkableManager.Instance.IsMapGenerationComplete(World.Instance?.MapIndex ?? 0))
             {
                 return WalkNotAvoid(direction, run);
             }
@@ -834,7 +829,13 @@ namespace ClassicUO.Game.GameObjects
         bool IsCardinalDirection(Direction direction) => direction == Direction.North || direction == Direction.South ||
                    direction == Direction.East || direction == Direction.West;
 
-        bool IsObstacle(Direction direction, int x, int y, sbyte z) => !Pathfinder.CanWalk(ref direction, ref x, ref y, ref z);
+        bool IsObstacle(Direction direction, int x, int y, sbyte z)
+        {
+            // Use local copies to avoid modifying the caller's x,y values
+            int testX = x;
+            int testY = y;
+            return !Pathfinder.CanWalk(ref direction, ref testX, ref testY, ref z);
+        }
 
         Direction TryToAvoid(Direction direction, int x, int y, sbyte z)
         {

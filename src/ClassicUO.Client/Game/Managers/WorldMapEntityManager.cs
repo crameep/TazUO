@@ -68,12 +68,12 @@ namespace ClassicUO.Game.Managers
         {
             if ((_world.ClientFeatures.Flags & CharacterListFlags.CLF_NEW_MOVEMENT_SYSTEM) != 0 && !_ackReceived)
             {
-                Log.Warn("Server support new movement system. Can't use the 0xF0 packet to query guild/party position");
+                Log.WarnDebug("Server support new movement system. Can't use the 0xF0 packet to query guild/party position");
                 v = false;
             }
             else if (AsyncNetClient.Encryption?.EncryptionType != 0 && !_ackReceived)
             {
-                Log.Warn("Server has encryption. Can't use the 0xF0 packet to query guild/party position");
+                Log.WarnDebug("Server has encryption. Can't use the 0xF0 packet to query guild/party position");
                 v = false;
             }
 

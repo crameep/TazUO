@@ -11,6 +11,47 @@ internal class VersionHistory : NineSliceGump
     private static readonly string[] _updateTexts =
     [
         """
+        /c[white][4.14.0]/cd
+        # Misc
+        - Testing out long-distance pathfinding
+        - **Removed `.lscript` support**
+        - Added UseType macro
+        - Added max buy price for auto-buy agent
+        - Added new web-based world map
+        - Added quick spell search to counter bar, added spell menu select to spell bar
+        - Add optional camera smoothing effect
+
+        # Legion Py
+        - All gump related controls are now py wrappers
+        - All gump methods have been moved to API.Gumps.xxx, please begin changing your scripts over.
+        - If you use API.PyProfile, change to API.Profile
+        - Improved API.py generation
+        - Add .IsContainer and .GetContainerGump() to API items
+        - API.Mount and Dismount no long attack your pet in war mode
+        - Added API.CreateTiledGumpPic() to API.Gumps
+        - Add NameAndProps method to PyItem and PyMobile (#314)
+        - Add Notoriety to PyMobile
+        - Fix for API.HasGump ignoring specified gump id
+        - Fix API.RequestTargetAny()
+        - Add API.IsDestroyed to Py game objects
+
+        # Bugs
+        - Dress agent crash fix when an item or config are null
+        - Crash fix when updating spell icons while collection was modified
+        - Crash fix for race condition in bandage manager
+        - Fix .CancelPathfinding() in API
+        - Fix Py item/mobile .Destroy()
+        - Checks for vet buff in bandage agent now
+        - Reduce some stuttering when loading animations
+        - Fixed a stutter related to animations
+        - Fixed a stutter in packet processing
+        - Crash fix in grid containers
+        - Caps lock no longer affects spell bar hotkeys
+        - Crash fix for null item name
+        - Fix Async map loading
+        """,
+
+        """
         /c[white][4.13.0]/cd
         # Misc
         - Add tooltips to auto loot config explaining hue and graphic ( -1 = any )
@@ -410,75 +451,7 @@ internal class VersionHistory : NineSliceGump
         "- More controller QOL improvements\n" +
         "- Added tooltips for counterbar items\n" +
         "- Added a nearby items feature(See wiki for details)\n" +
-        "- Various bug fixes\n" +
-        "/c[white][3.24.2]/cd\n" +
-        "- Fix Invisible items in Osi New Legacy Server\n" +
-        "- Fix added more slots for show items layer in paperdoll \n" +
-        "- Add scrollbar to cooldowns in options  \n" +
-        "- Created progress bar for auto loot \n" +
-        "- Fix skill progress bars \n" +
-        "- Fix scroll area in autoloot options \n" +
-        "- Create gump toggle mcros gumps for controller gameplay \n" +
-        "- Save position of durability gump while in game \n" +
-        "/c[white][3.24.2]/cd\n" +
-        "- Fix Render Maps for Server Osi New Legacy\n" +
-        "- Fix Ignore List \n" +
-        "- Fix Big Tags in Weapons props \n" +
-        "- Fix Pathfinding algorithm using Z more efficiently from ghzatomic \n" +
-        "/c[white][3.24.1]/cd\n" +
-        "- Fix for Modern Paperdoll not loading\n" +
-        "- Fix Using Weapons Abilitys\n" +
-        "/c[white][3.24.0]/cd\n" +
-        "- Updated the algorithm for reading mul encryption\n" +
-        "- Fix scrolling in the infobar manager\n" +
-        "- Fix ignoring player in chat too\n" +
-        "- Add auto avoid obstacles",
-        "/c[white][3.23.2]/cd\n" +
-        "- Fixed Disarm and Stun ability AOS",
-        "/c[white][3.23.1]/cd\n" +
-        "- Fixed Weird lines with nameplate",
-        "/c[white][3.23.0]/cd\n" +
-        "- Nameplate healthbar poison and invul/paralyzed colors from Elderwyn\n" +
-        "- Target indiciator option from original client from Elderwyn\n" +
-        "- Advanced skill gump improvements from Elderwyn",
-        "/c[white][3.22.0]/cd\n" +
-        "- Spell book icon fix\n" +
-        "- Add option to add treasure maps as map markers instead of goto only\n" +
-        "- Added the same option for SOS messages\n" +
-        "- Fix text height for nameplates\n" +
-        "- Added option to disable auto follow",
-        "/c[white][3.21.4]/cd\n" +
-        "- Various bug fixes\n" +
-        "- Removed gump closing animation. Too many unforeseen issues with it.",
-        "/c[white][3.21.3]/cd\n" +
-        "- Changes to improve gump closing animations",
-        "/c[white][3.21.2]/cd\n" +
-        "- A bugfix release for 3.21 causing crashes",
-        "/c[white][3.21.0]/cd\n" +
-        "- A few bug fixes\n" +
-        "- A few fixes from CUO\n" +
-        "- Converted nameplates to use TTF fonts\n" +
-        "- Added an available client commands gump\n" +
-        "- World map alt lock now works, and middle mouse click will toggle freeview",
-        "/c[white][3.20.0]/cd\n" +
-        "- Being frozen wont cancel auto follow\n" +
-        "- Fix from CUO for buffs\n" +
-        "- Add ability to load custom spell definitions from an external file\n" +
-        "- Customize the options gump via ui file\n" +
-        "- Added saveposition tag for xml gumps\n" +
-        "- Can now open multiple journals\n",
-        "/c[white][3.19.0]/cd\n" +
-        "- SOS Gump ID configurable in settings\n" +
-        "- Added macro option to execute a client-side command\n" +
-        "- Added a command doesn't exist message\n" +
-        "- Follow party members on world map option\n" +
-        "- Added option to override party member body hues\n" +
-        "- Bug fix",
-        "/c[white][3.18.0]/cd\n" +
-        "- Added a language file that will contain UI text for easy language translations\n",
-        "/c[white][3.17.0]/cd\n" +
-        "- Added original paperdoll to customizable gump system\n" +
-        "- Imroved script loading time",
+        "- Various bug fixes\n",
 
         "\n\n/c[white]For further history please visit our discord."
     ];
