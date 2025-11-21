@@ -246,14 +246,57 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             #region Negative
 
             mainScrollArea.Add(pos.Position(SectionDivider()));
-            mainScrollArea.Add(temp = pos.Position(new Label("Disqualifying Properties", true, 0xffff)));
+            mainScrollArea.Add(pos.Position(new Label("Disqualifying Properties", true, 0xffff)));
+
+            // Weight filter
             Checkbox weightCheckbox;
-            mainScrollArea.Add(pos.PositionRightOf(weightCheckbox = new Checkbox(0x00D2, 0x00D3) { IsChecked = data.Overweight }, temp));
+            mainScrollArea.Add(pos.Position(weightCheckbox = new Checkbox(0x00D2, 0x00D3) { IsChecked = data.Overweight }));
+            string weightTooltip = "Enable weight-based filtering.\n" +
+                "Items with weight outside the specified range will be excluded.\n" +
+                "Set to 0 to disable min or max check.";
+            weightCheckbox.SetTooltip(weightTooltip);
             weightCheckbox.ValueChanged += (s, e) =>
             {
                 data.Overweight = weightCheckbox.IsChecked;
+                GridHighlightData.RecheckMatchStatus();
             };
-            mainScrollArea.Add(pos.PositionRightOf(new Label("Overweight (=50)", true, 0xffff), weightCheckbox));
+            mainScrollArea.Add(temp = pos.PositionRightOf(new Label("Weight filter", true, 0xffff), weightCheckbox));
+
+            InputField minWeightInput;
+            mainScrollArea.Add(pos.PositionRightOf(minWeightInput = new InputField(0x0BB8, 0xFF, 0xFFFF, true, 40, 20) { NumbersOnly = true }, temp, 10));
+            minWeightInput.SetText(data.MinimumWeight.ToString());
+            minWeightInput.SetTooltip("Minimum weight (0 = no minimum)");
+            minWeightInput.TextChanged += (s, e) =>
+            {
+                if (int.TryParse(minWeightInput.Text, out int val))
+                {
+                    data.MinimumWeight = val;
+                    GridHighlightData.RecheckMatchStatus();
+                }
+                else
+                {
+                    minWeightInput.Add(new FadingLabel(20, "Couldn't parse number", true, 0xff) { X = 0, Y = 0 });
+                }
+            };
+            mainScrollArea.Add(temp = pos.PositionRightOf(new Label("Min", true, 0xffff), minWeightInput));
+
+            InputField maxWeightInput;
+            mainScrollArea.Add(pos.PositionRightOf(maxWeightInput = new InputField(0x0BB8, 0xFF, 0xFFFF, true, 40, 20) { NumbersOnly = true }, temp, 10));
+            maxWeightInput.SetText(data.MaximumWeight.ToString());
+            maxWeightInput.SetTooltip("Maximum weight (0 = no maximum)");
+            maxWeightInput.TextChanged += (s, e) =>
+            {
+                if (int.TryParse(maxWeightInput.Text, out int val))
+                {
+                    data.MaximumWeight = val;
+                    GridHighlightData.RecheckMatchStatus();
+                }
+                else
+                {
+                    maxWeightInput.Add(new FadingLabel(20, "Couldn't parse number", true, 0xff) { X = 0, Y = 0 });
+                }
+            };
+            mainScrollArea.Add(pos.PositionRightOf(new Label("Max", true, 0xffff), maxWeightInput));
 
             mainScrollArea.Add(pos.Position(new Label("Items with any of these properties will be excluded", true, 0xffff)));
 
