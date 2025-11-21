@@ -675,7 +675,7 @@ namespace ClassicUO.Configuration
         public ushort PostProcessingType { get; set; }
         public bool DisableHotkeys { get; set; }
         public bool DisableDismountInWarMode { get; set; }
-        public bool EnableASyncMapLoading { get; set; }
+        public bool EnableASyncMapLoading { get; set; } = true;
 
         [JsonIgnore]
         public bool EnablePetScaling
