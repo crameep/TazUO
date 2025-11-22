@@ -312,6 +312,7 @@ namespace ClassicUO.Game.UI.Controls
 
         private static readonly Regex _baseFontColorRegex = RegexHelper.GetRegex("<basefont color=\"?'?(?<color>.*?)\"?'?>", RegexOptions.Multiline | RegexOptions.IgnoreCase);
         private static readonly Regex _bodyTextColorRegex = RegexHelper.GetRegex("<bodytextcolor\"?'?(?<color>.*?)\"?'?>", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        private static readonly Regex _colorTagRegex = RegexHelper.GetRegex("<color=\"?'?=?(?<color>.*?)\"?'?>", RegexOptions.Multiline | RegexOptions.IgnoreCase);
 
         public static string ConvertHTMLColorsToFSS(string text)
         {
@@ -320,7 +321,8 @@ namespace ClassicUO.Game.UI.Controls
 
             string finalString = _baseFontColorRegex.Replace(text, " /c[${color}]");
             finalString = _bodyTextColorRegex.Replace(finalString, " /c[${color}]");
-            finalString = finalString.Replace("</basefont>", "/cd").Replace("</BASEFONT>", "/cd").Replace("\n", "\n/cd").Replace("<BASEFONT>", "");
+            finalString = _colorTagRegex.Replace(finalString, " /c[${color}]");
+            finalString = finalString.Replace("</basefont>", "/cd").Replace("</BASEFONT>", "/cd").Replace("</color>", "/cd").Replace("</COLOR>", "/cd").Replace("\n", "\n/cd").Replace("<BASEFONT>", "");
 
             return finalString;
         }
