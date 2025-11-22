@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -18,34 +19,31 @@ public class EventSourceGenerator : IIncrementalGenerator
             SourceText.From(AttributeSource, Encoding.UTF8)));
 
         // Find methods with the attribute
-        var methodsWithAttribute = context.SyntaxProvider
+        IncrementalValuesProvider<MethodInfo> methodsWithAttribute = context.SyntaxProvider
             .CreateSyntaxProvider(
                 predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
                 transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
             .Where(static m => m is not null);
 
         // Combine with compilation
-        var compilationAndMethods = context.CompilationProvider.Combine(methodsWithAttribute.Collect());
+        IncrementalValueProvider<(Compilation Left, ImmutableArray<MethodInfo> Right)> compilationAndMethods = context.CompilationProvider.Combine(methodsWithAttribute.Collect());
 
         // Generate the source
         context.RegisterSourceOutput(compilationAndMethods,
             static (spc, source) => Execute(source.Left, source.Right, spc));
     }
 
-    static bool IsSyntaxTargetForGeneration(SyntaxNode node)
-    {
-        return node is MethodDeclarationSyntax m && m.AttributeLists.Count > 0;
-    }
+    static bool IsSyntaxTargetForGeneration(SyntaxNode node) => node is MethodDeclarationSyntax m && m.AttributeLists.Count > 0;
 
     static MethodInfo GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
     {
         var methodDeclaration = (MethodDeclarationSyntax)context.Node;
-        var methodSymbol = context.SemanticModel.GetDeclaredSymbol(methodDeclaration);
+        ISymbol methodSymbol = context.SemanticModel.GetDeclaredSymbol(methodDeclaration);
 
         if (methodSymbol == null)
             return null;
 
-        foreach (var attributeData in methodSymbol.GetAttributes())
+        foreach (AttributeData attributeData in methodSymbol.GetAttributes())
         {
             if (attributeData.AttributeClass?.Name != "GenApiEventAttribute")
                 continue;
@@ -53,12 +51,12 @@ public class EventSourceGenerator : IIncrementalGenerator
             if (attributeData.ConstructorArguments.Length != 1)
                 continue;
 
-            var eventName = attributeData.ConstructorArguments[0].Value?.ToString();
+            string eventName = attributeData.ConstructorArguments[0].Value?.ToString();
             if (string.IsNullOrEmpty(eventName))
                 continue;
 
             // Get the event args type from EventSink
-            var eventArgsType = GetEventArgsType(context.SemanticModel.Compilation, eventName);
+            string eventArgsType = GetEventArgsType(context.SemanticModel.Compilation, eventName);
             if (string.IsNullOrEmpty(eventArgsType))
                 continue;
 
@@ -77,17 +75,17 @@ public class EventSourceGenerator : IIncrementalGenerator
 
     static string GetEventArgsType(Compilation compilation, string eventName)
     {
-        var eventSinkType = compilation.GetTypeByMetadataName("ClassicUO.Game.Managers.EventSink");
+        INamedTypeSymbol eventSinkType = compilation.GetTypeByMetadataName("ClassicUO.Game.Managers.EventSink");
         if (eventSinkType == null)
             return "object";
 
-        var eventMember = eventSinkType.GetMembers(eventName).OfType<IEventSymbol>().FirstOrDefault();
+        IEventSymbol eventMember = eventSinkType.GetMembers(eventName).OfType<IEventSymbol>().FirstOrDefault();
         if (eventMember == null)
             return "object";
 
         if (eventMember.Type is INamedTypeSymbol namedType && namedType.IsGenericType)
         {
-            var typeArg = namedType.TypeArguments.FirstOrDefault();
+            ITypeSymbol typeArg = namedType.TypeArguments.FirstOrDefault();
             return typeArg?.ToDisplayString() ?? "object";
         }
 
@@ -99,11 +97,11 @@ public class EventSourceGenerator : IIncrementalGenerator
         if (methods == null || !methods.Any())
             return;
 
-        var methodsByClass = methods.GroupBy(m => (m.Namespace, m.ClassName));
+        IEnumerable<IGrouping<(string Namespace, string ClassName), MethodInfo>> methodsByClass = methods.GroupBy(m => (m.Namespace, m.ClassName));
 
-        foreach (var group in methodsByClass)
+        foreach (IGrouping<(string Namespace, string ClassName), MethodInfo> group in methodsByClass)
         {
-            var source = GeneratePartialClass(group.Key.Namespace, group.Key.ClassName, group.ToList());
+            string source = GeneratePartialClass(group.Key.Namespace, group.Key.ClassName, group.ToList());
             context.AddSource($"{group.Key.ClassName}.Events.g.cs", SourceText.From(source, Encoding.UTF8));
         }
     }
@@ -121,9 +119,9 @@ public class EventSourceGenerator : IIncrementalGenerator
         sb.AppendLine("{");
 
         // Generate fields
-        foreach (var method in methods)
+        foreach (MethodInfo method in methods)
         {
-            var fieldName = GetFieldName(method.EventName);
+            string fieldName = GetFieldName(method.EventName);
             sb.AppendLine($"    private EventHandler<{method.EventArgsType}> {fieldName};");
         }
 
@@ -131,10 +129,10 @@ public class EventSourceGenerator : IIncrementalGenerator
             sb.AppendLine();
 
         // Generate complete method implementations
-        foreach (var method in methods)
+        foreach (MethodInfo method in methods)
         {
-            var fieldName = GetFieldName(method.EventName);
-            var unsubscribeMethodName = $"Unsubscribe{method.EventName}";
+            string fieldName = GetFieldName(method.EventName);
+            string unsubscribeMethodName = $"Unsubscribe{method.EventName}";
 
             sb.AppendLine($"    public partial void {method.MethodName}(object callback)");
             sb.AppendLine($"    {{");
@@ -171,10 +169,7 @@ public class EventSourceGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
-    static string GetFieldName(string eventName)
-    {
-        return $"_{char.ToLower(eventName[0])}{eventName.Substring(1)}Handler";
-    }
+    static string GetFieldName(string eventName) => $"_{char.ToLower(eventName[0])}{eventName.Substring(1)}Handler";
 
     private const string AttributeSource = @"
 using System;

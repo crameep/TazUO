@@ -49,8 +49,8 @@ namespace ClassicUO.Utility
                     checksumData.Append(mapFileChecksum);
                 }
 
-                var dataBytes = Encoding.UTF8.GetBytes(checksumData.ToString());
-                var hashBytes = sha256.ComputeHash(dataBytes);
+                byte[] dataBytes = Encoding.UTF8.GetBytes(checksumData.ToString());
+                byte[] hashBytes = sha256.ComputeHash(dataBytes);
 
                 return Convert.ToBase64String(hashBytes);
             }
@@ -109,7 +109,7 @@ namespace ClassicUO.Utility
             {
                 // For large files, we'll sample the beginning, middle, and end
                 // to create a representative checksum without reading the entire file
-                var sampleData = new byte[BUFFER_SIZE * 3]; // 3 samples
+                byte[] sampleData = new byte[BUFFER_SIZE * 3]; // 3 samples
                 int totalRead = 0;
 
                 // Read beginning
@@ -134,16 +134,16 @@ namespace ClassicUO.Utility
 
                 // Include file size and modification time in checksum
                 var fileInfo = new FileInfo(filePath);
-                var combinedData = new byte[totalRead + 16]; // 8 bytes for size + 8 bytes for time
+                byte[] combinedData = new byte[totalRead + 16]; // 8 bytes for size + 8 bytes for time
                 Array.Copy(sampleData, 0, combinedData, 0, totalRead);
 
-                var sizeBytes = BitConverter.GetBytes(fileInfo.Length);
-                var timeBytes = BitConverter.GetBytes(fileInfo.LastWriteTime.ToBinary());
+                byte[] sizeBytes = BitConverter.GetBytes(fileInfo.Length);
+                byte[] timeBytes = BitConverter.GetBytes(fileInfo.LastWriteTime.ToBinary());
 
                 Array.Copy(sizeBytes, 0, combinedData, totalRead, 8);
                 Array.Copy(timeBytes, 0, combinedData, totalRead + 8, 8);
 
-                var hashBytes = sha256.ComputeHash(combinedData, 0, totalRead + 16);
+                byte[] hashBytes = sha256.ComputeHash(combinedData, 0, totalRead + 16);
                 return Convert.ToBase64String(hashBytes);
             }
         }

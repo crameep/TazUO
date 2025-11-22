@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -70,7 +71,7 @@ namespace ClassicUO.Configuration
                     throw; // Re-throw the original exception
                 }
             }
-            catch (IOException e)
+            catch (Exception e)
             {
                 Log.Error(e.ToString());
             }

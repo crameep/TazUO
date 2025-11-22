@@ -1174,7 +1174,7 @@ namespace ClassicUO.Game.Scenes
             _maxPixel.Y = maxPixelsY;
 
             // Apply smooth camera interpolation
-            Vector2 targetOffset = new Vector2(winDrawOffsetX, winDrawOffsetY);
+            var targetOffset = new Vector2(winDrawOffsetX, winDrawOffsetY);
             float smoothingFactor = ProfileManager.CurrentProfile.CameraSmoothingFactor;
 
             if (smoothingFactor > 0f)

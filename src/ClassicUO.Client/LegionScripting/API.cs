@@ -3393,7 +3393,7 @@ namespace ClassicUO.LegionScripting
 
                 foreach (Skill s in World.Player.Skills)
                 {
-                    if (s.Name.Contains(skill))
+                    if (s?.Name?.Contains(skill) == true)
                         return s;
                 }
 
