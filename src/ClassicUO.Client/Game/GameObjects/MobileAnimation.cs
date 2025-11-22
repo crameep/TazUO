@@ -64,6 +64,14 @@ namespace ClassicUO.Game.GameObjects
                         break;
                     }
 
+                case 0x025F:
+                case 0x0260:
+                    {
+                        g -= 2;
+
+                        break;
+                    }
+
                 case 0x02B6:
                     g = 667;
 
