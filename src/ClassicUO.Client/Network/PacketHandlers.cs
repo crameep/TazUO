@@ -5861,6 +5861,8 @@ sealed class PacketHandlers
         uint cliloc = p.ReadUInt32BE();
         string name = p.ReadUnicodeLE();
 
+        Log.Info($"Waypoint received: {type} - {name}");
+
         switch (type)
         {
             case WaypointsType.Corpse:
