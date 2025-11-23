@@ -686,7 +686,7 @@ namespace ClassicUO.Game.Managers
                 Point delta = Mouse.LDragOffset;
 
                 bool doDrag = (ProfileManager.CurrentProfile == null || Math.Abs(delta.X) >= ProfileManager.CurrentProfile.MinGumpMoveDistance || Math.Abs(delta.Y) >= ProfileManager.CurrentProfile.MinGumpMoveDistance) || attemptAlwaysSuccessful;
-                if (doDrag && !_isDraggingControl)
+                if (doDrag && (!_isDraggingControl || attemptAlwaysSuccessful))
                 {
                     DraggingControl = dragTarget;
                     _dragOrigin = Mouse.LClickPosition;
