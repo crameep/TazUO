@@ -3,7 +3,7 @@ using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using Microsoft.Xna.Framework;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -106,14 +106,22 @@ namespace ClassicUO.Game.UI.Gumps
 
         public static class QueManager
         {
-            private static ConcurrentQueue<SkillProgressBar> skillProgressBars = new ConcurrentQueue<SkillProgressBar>();
+            private static List<SkillProgressBar> skillProgressBars = new List<SkillProgressBar>();
+            private static readonly object _lock = new object();
             public static SkillProgressBar CurrentProgressBar;
             private static bool beingReset;
 
 
             public static void AddSkill(World world, int skillIndex)
             {
-                skillProgressBars.Enqueue(new SkillProgressBar(world, skillIndex));
+                lock (_lock)
+                {
+                    // Remove any existing queued updates for the same skill
+                    skillProgressBars.RemoveAll(bar => bar.skillIndex == skillIndex);
+
+                    // Add the new skill update
+                    skillProgressBars.Add(new SkillProgressBar(world, skillIndex));
+                }
 
                 if (CurrentProgressBar == null || CurrentProgressBar.IsDisposed)
                 {
@@ -125,7 +133,7 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 if (beingReset)
                     return;
-                
+
                 if (!world.InGame)
                     return;
 
@@ -135,12 +143,19 @@ namespace ClassicUO.Game.UI.Gumps
                     return;
                 }
 
-                if (!skillProgressBars.TryDequeue(out SkillProgressBar skillProgressBar))
-                    return;
+                SkillProgressBar skillProgressBar = null;
+                lock (_lock)
+                {
+                    if (skillProgressBars.Count > 0)
+                    {
+                        skillProgressBar = skillProgressBars[0];
+                        skillProgressBars.RemoveAt(0);
+                    }
+                }
 
                 if (skillProgressBar == null)
                     return;
-                    
+
                 CurrentProgressBar = skillProgressBar;
                 skillProgressBar.SetDuration(4000); //Expire in 4 seconds
                 UIManager.Add(skillProgressBar);
@@ -149,11 +164,16 @@ namespace ClassicUO.Game.UI.Gumps
             public static void Reset()
             {
                 beingReset = true;
-                
-                while (skillProgressBars.TryDequeue(out SkillProgressBar skillProgressBar))
-                    skillProgressBar?.Dispose();
 
-                skillProgressBars = new ConcurrentQueue<SkillProgressBar>();
+                lock (_lock)
+                {
+                    foreach (SkillProgressBar skillProgressBar in skillProgressBars)
+                    {
+                        skillProgressBar?.Dispose();
+                    }
+                    skillProgressBars.Clear();
+                }
+
                 beingReset = false;
             }
         }
