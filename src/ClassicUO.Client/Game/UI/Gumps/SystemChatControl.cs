@@ -474,16 +474,16 @@ namespace ClassicUO.Game.UI.Gumps
                             int bracketSpaceIndex = text.IndexOf(' ');
                             command = text.Substring(1, bracketSpaceIndex - 1);
                             Mode = ChatMode.ServUOCommand;
-                            // Remove the command from the textbox, keep parameters
-                            TextBoxControl.SetText(text.Substring(bracketSpaceIndex));
+                            // Remove the command from the textbox, keep parameters (trim leading space)
+                            TextBoxControl.SetText(text.Substring(bracketSpaceIndex).TrimStart());
                             break;
 
                         case '.' when text.Length > 1 && text.Contains(" "):
                             int dotSpaceIndex = text.IndexOf(' ');
                             command = text.Substring(1, dotSpaceIndex - 1);
                             Mode = ChatMode.PolCommand;
-                            // Remove the command from the textbox, keep parameters
-                            TextBoxControl.SetText(text.Substring(dotSpaceIndex));
+                            // Remove the command from the textbox, keep parameters (trim leading space)
+                            TextBoxControl.SetText(text.Substring(dotSpaceIndex).TrimStart());
                             break;
                     }
                 }
@@ -530,7 +530,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             switch (key)
             {
-                case SDL.SDL_Keycode.SDLK_Q when Keyboard.Ctrl && _messageHistoryIndex > -1 && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
+                case SDL.SDL_Keycode.SDLK_Q when Keyboard.Ctrl && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
 
                     GameScene scene = Client.Game.GetScene<GameScene>();
 
@@ -549,10 +549,14 @@ namespace ClassicUO.Game.UI.Gumps
                         return;
                     }
 
-                    if (_messageHistoryIndex > 0)
+                    // Can't go back if we're already at the oldest message
+                    if (_messageHistoryIndex <= 0)
                     {
-                        _messageHistoryIndex--;
+                        _messageHistoryIndex = 0;
+                        return;
                     }
+
+                    _messageHistoryIndex--;
 
                     Mode = _messageHistory[_messageHistoryIndex].Item1;
 
@@ -579,6 +583,13 @@ namespace ClassicUO.Game.UI.Gumps
                         return;
                     }
 
+                    // Can't go forward if we're already past the newest message
+                    if (_messageHistoryIndex >= _messageHistory.Count)
+                    {
+                        _messageHistoryIndex = _messageHistory.Count;
+                        return;
+                    }
+
                     if (_messageHistoryIndex < _messageHistory.Count - 1)
                     {
                         _messageHistoryIndex++;
@@ -589,6 +600,8 @@ namespace ClassicUO.Game.UI.Gumps
                     }
                     else
                     {
+                        // At the newest message, go to empty state
+                        _messageHistoryIndex = _messageHistory.Count;
                         TextBoxControl.ClearText();
                     }
 
@@ -621,7 +634,31 @@ namespace ClassicUO.Game.UI.Gumps
                         autoComplete.Insert(0, TextBoxControl.Text);
                         void selected(string s)
                         {
-                            TextBoxControl?.SetText(s);
+                            if (TextBoxControl == null)
+                                return;
+
+                            // Pre-process commands to avoid double-prefix issue
+                            if (s.Length > 1 && s.Contains(" "))
+                            {
+                                if (s[0] == '[')
+                                {
+                                    int spaceIndex = s.IndexOf(' ');
+                                    command = s.Substring(1, spaceIndex - 1);
+                                    Mode = ChatMode.ServUOCommand;
+                                    TextBoxControl.SetText(s.Substring(spaceIndex).TrimStart());
+                                    return;
+                                }
+                                else if (s[0] == '.')
+                                {
+                                    int spaceIndex = s.IndexOf(' ');
+                                    command = s.Substring(1, spaceIndex - 1);
+                                    Mode = ChatMode.PolCommand;
+                                    TextBoxControl.SetText(s.Substring(spaceIndex).TrimStart());
+                                    return;
+                                }
+                            }
+
+                            TextBoxControl.SetText(s);
                         }
 
                         var listGump = new SelectableItemListGump(autoComplete, selected, selected);
@@ -644,10 +681,7 @@ namespace ClassicUO.Game.UI.Gumps
                 Mode = ChatMode.Default;
             }
 
-            if (string.IsNullOrEmpty(text))
-            {
-                return;
-            }
+            _messageHistoryIndex = _messageHistory.Count;
 
             ChatMode sentMode = Mode;
             Mode = ChatMode.Default;
@@ -969,6 +1003,8 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 DisposeChatModePrefix();
                 command = string.Empty;
+                // Reset history index after sending message
+                _messageHistoryIndex = _messageHistory.Count;
             }
         }
 

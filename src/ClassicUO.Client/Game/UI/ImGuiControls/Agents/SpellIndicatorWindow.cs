@@ -414,7 +414,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         }
                         else
                         {
-                            SpellRangeInfo newSpell = new SpellRangeInfo
+                            var newSpell = new SpellRangeInfo
                             {
                                 ID = spellId,
                                 Name = newSpellNameInput.Trim(),

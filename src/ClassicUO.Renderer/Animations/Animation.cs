@@ -25,45 +25,6 @@ namespace ClassicUO.Renderer.Animations
             _atlas = new TextureAtlas(device, 4096, 4096, SurfaceFormat.Color);
         }
 
-        public void PreloadCommonAnimations()
-        {
-            // Preload common human body animations to reduce initial spikes
-            // These are the most frequently used animation IDs in typical gameplay
-            ushort[] commonBodies = new ushort[]
-            {
-                400, 401,  // Male/Female human bodies
-                605, 606,  // Elf male/female
-                666, 667,  // Gargoyle male/female
-            };
-
-            byte[] commonActions = new byte[] { 0, 1, 2, 3, 4, 5 }; // Walk, stand, run, etc.
-            byte[] commonDirs = new byte[] { 0, 2, 4, 6 }; // Main 4 directions
-
-            // Load animations in background to avoid blocking
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                foreach (ushort bodyId in commonBodies)
-                {
-                    foreach (byte action in commonActions)
-                    {
-                        foreach (byte dir in commonDirs)
-                        {
-                            try
-                            {
-                                // This will load and cache the animation
-                                GetAnimationFrames(bodyId, action, dir, out _, out _);
-                            }
-                            catch
-                            {
-                                // Ignore errors during preload
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-
         private ref AnimationDirection GetSprite(int body, int action, int dir)
         {
             if (_cache == null)
