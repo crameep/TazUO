@@ -435,6 +435,12 @@ namespace ClassicUO.LegionScripting
                     object contextSerial = action.Parameters.ContainsKey("serial") ? action.Parameters["serial"] : "?";
                     object contextIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
                     return $"Context Menu 0x{contextSerial:X8} [{contextIndex}]";
+                case "menuresponse":
+                    object menuIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
+                    return $"Menu Response [{menuIndex}]";
+                case "graymenuresponse":
+                    object grayMenuIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
+                    return $"Gray Menu Response [{grayMenuIndex}]";
                 case "useskill":
                     object skillName = action.Parameters.ContainsKey("skill") ? action.Parameters["skill"] : "?";
                     return $"Use Skill \"{skillName}\"";
