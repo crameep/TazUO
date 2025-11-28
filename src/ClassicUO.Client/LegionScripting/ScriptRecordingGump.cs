@@ -533,11 +533,7 @@ namespace ClassicUO.LegionScripting
                 System.IO.File.WriteAllText(filePath, script);
                 GameActions.Print($"Script saved as {fileName}");
 
-                Task.Run(async () =>
-                {
-                    await Task.Delay(300);
-                    MainThreadQueue.EnqueueAction(() => ScriptManagerWindow.Instance?.Refresh());
-                });
+                MainThreadQueue.EnqueueAction(() => ScriptManagerWindow.Instance?.Refresh());
             }
             catch (Exception ex)
             {
