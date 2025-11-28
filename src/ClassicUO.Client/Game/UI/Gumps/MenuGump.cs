@@ -1,8 +1,9 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System.Linq;
-using ClassicUO.Game.UI.Controls;
 using ClassicUO.Assets;
+using ClassicUO.Game.UI.Controls;
+using ClassicUO.LegionScripting;
 using ClassicUO.Network;
 using ClassicUO.Renderer;
 using ClassicUO.Utility.Logging;
@@ -122,6 +123,8 @@ namespace ClassicUO.Game.UI.Gumps
                     graphic,
                     hue
                 );
+                ScriptRecorder.Instance.RecordMenuResponse(LocalSerial, (ushort)ServerSerial, index, graphic, hue);
+                ScriptingInfoGump.AddOrUpdateInfo("Last Menu Response", $"{name} ({index})");
                 Dispose();
                 e.Result = true;
             };
@@ -318,6 +321,8 @@ namespace ClassicUO.Game.UI.Gumps
                                 (ushort)ServerSerial,
                                 index
                             );
+                            ScriptRecorder.Instance.RecordGrayMenuResponse(LocalSerial, (ushort)ServerSerial, index);
+                            ScriptingInfoGump.AddOrUpdateInfo("Last Menu Response", $"{radioButton.Text} ({index})");
 
                             Dispose();
                             break;

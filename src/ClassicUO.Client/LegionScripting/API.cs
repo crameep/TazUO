@@ -575,6 +575,45 @@ namespace ClassicUO.LegionScripting
         );
 
         /// <summary>
+        /// Send a response to the currently open menu (uses the latest MenuGump).
+        /// Useful when menu IDs change every time (e.g., Tracking skill).
+        /// Returns true if a menu was found and a response was sent.
+        /// </summary>
+        public bool MenuResponseCurrent(int index, ushort itemGraphic = 0, ushort itemHue = 0) => MainThreadQueue.InvokeOnMainThread<bool>
+        (() =>
+            {
+                MenuGump menu = UIManager.Gumps.OfType<MenuGump>()
+                    .LastOrDefault(g => !g.IsDisposed && g.IsVisible);
+
+                if (menu == null)
+                    return false;
+
+                AsyncNetClient.Socket.Send_MenuResponse(menu.LocalSerial, (ushort)menu.ServerSerial, index, itemGraphic, itemHue);
+                menu.Dispose();
+                return true;
+            }
+        );
+
+        /// <summary>
+        /// Send a response to the currently open gray menu (text list menu).
+        /// Returns true if a gray menu was found and a response was sent.
+        /// </summary>
+        public bool GrayMenuResponseCurrent(ushort index) => MainThreadQueue.InvokeOnMainThread<bool>
+        (() =>
+            {
+                GrayMenuGump menu = UIManager.Gumps.OfType<GrayMenuGump>()
+                    .LastOrDefault(g => !g.IsDisposed && g.IsVisible);
+
+                if (menu == null)
+                    return false;
+
+                AsyncNetClient.Socket.Send_GrayMenuResponse(menu.LocalSerial, (ushort)menu.ServerSerial, index);
+                menu.Dispose();
+                return true;
+            }
+        );
+
+        /// <summary>
         /// Attempt to equip an item. Layer is automatically detected.
         /// Example:
         /// ```py
