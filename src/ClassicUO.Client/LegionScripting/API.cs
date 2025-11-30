@@ -3355,7 +3355,7 @@ namespace ClassicUO.LegionScripting
         /// <summary>
         /// Use API.Gumps.CreateDropDown instead.
         /// </summary>
-        public PyControlDropDown CreateDropDown(int width, string[] items, int selectedIndex = 0) => Gumps.CreateDropDown(width, items, selectedIndex);
+        public PyControlDropDown CreateDropDown(int width, IList<string> items, int selectedIndex = 0) => Gumps.CreateDropDown(width, items, selectedIndex);
         /// <summary>
         /// Use API.Gumps.CreateModernGump instead.
         /// </summary>

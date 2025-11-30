@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using ClassicUO.Assets;
 using ClassicUO.Game;
 using ClassicUO.Game.Managers;
@@ -418,7 +420,7 @@ public class PyGumps(API api)
     /// <param name="items">Array of strings to display as dropdown options</param>
     /// <param name="selectedIndex">The initially selected item index (default: 0)</param>
     /// <returns>A PyControlDropDown wrapper containing the combobox control</returns>
-    public PyControlDropDown CreateDropDown(int width, string[] items, int selectedIndex = 0) => new PyControlDropDown(new Combobox(0, 0, width, items, selectedIndex));
+    public PyControlDropDown CreateDropDown(int width, IList<string> items, int selectedIndex = 0) => new(new Combobox(0, 0, width, items.ToArray(), selectedIndex));
 
     /// <summary>
     /// Add an onClick callback to a control.
