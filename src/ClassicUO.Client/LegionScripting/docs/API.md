@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `11/25/25`.*
+*This was generated on `12/1/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -450,6 +450,41 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | `entry` | `ushort` | ❌ No | Entries start at 0, the top entry will be 0, then 1, 2, etc. (Usually) |
 
 **Return Type:** `void` *(Does not return anything)*
+
+---
+
+### MenuResponseCurrent
+`(index, itemGraphic, itemHue)`
+ Send a response to the currently open menu (uses the latest MenuGump).
+ Useful when menu IDs change every time (e.g., Tracking skill).
+ Returns true if a menu was found and a response was sent.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `index` | `int` | ❌ No |  |
+| `itemGraphic` | `ushort` | ✅ Yes |  |
+| `itemHue` | `ushort` | ✅ Yes |  |
+
+**Return Type:** `bool`
+
+---
+
+### GrayMenuResponseCurrent
+`(index)`
+ Send a response to the currently open gray menu (text list menu).
+ Returns true if a gray menu was found and a response was sent.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `index` | `ushort` | ❌ No |  |
+
+**Return Type:** `bool`
 
 ---
 
@@ -2888,7 +2923,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `width` | `int` | ❌ No |  |
-| `items` | `string[]` | ❌ No |  |
+| `items` | `IList<string>` | ❌ No |  |
 | `selectedIndex` | `int` | ✅ Yes |  |
 
 **Return Type:** `PyControlDropDown`

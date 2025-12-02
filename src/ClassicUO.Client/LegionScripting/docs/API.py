@@ -158,6 +158,7 @@ class PyBaseGump(PyBaseControl, IPyGump):
     IsDisposed: bool = None
     PacketGumpText: str = None
     CanCloseWithRightClick: bool = None
+    LayerOrder = None
     Gump: PyBaseGump = None
 
     def SetInScreen(self) -> None:
@@ -238,6 +239,25 @@ class PyControlDropDown(PyBaseControl):
     def GetSelectedIndex(self) -> "int":
         """
          Get the selected index of the dropdown. The first entry is 0.
+        
+        """
+        pass
+
+    def OnDropDownOptionSelected(self, onSelectionChanged: "Any") -> "PyControlDropDown":
+        """
+         Add an onSelectionChanged callback to this dropdown control.
+         The callback function will receive the selected index as a parameter.
+         Example:
+         ```py
+         def on_select(index):
+           API.SysMsg(f"Selected index: {index}")
+        
+         dropdown = API.Gumps.CreateDropDown(100, ["first", "second", "third"], 0)
+         dropdown.OnDropDownOptionSelected(on_select)
+        
+         while True:
+           API.ProcessCallbacks()
+         ```
         
         """
         pass
@@ -1246,6 +1266,23 @@ def ContextMenu(serial: "int", entry: "int") -> None:
      ```py
      API.ContextMenu(API.Player, 1)
      ```
+    
+    """
+    pass
+
+def MenuResponseCurrent(index: "int", itemGraphic: "int" = 0, itemHue: "int" = 0) -> "bool":
+    """
+     Send a response to the currently open menu (uses the latest MenuGump).
+     Useful when menu IDs change every time (e.g., Tracking skill).
+     Returns true if a menu was found and a response was sent.
+    
+    """
+    pass
+
+def GrayMenuResponseCurrent(index: "int") -> "bool":
+    """
+     Send a response to the currently open gray menu (text list menu).
+     Returns true if a gray menu was found and a response was sent.
     
     """
     pass

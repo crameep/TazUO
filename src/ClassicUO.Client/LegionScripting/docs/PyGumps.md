@@ -462,7 +462,7 @@ description: PyGumps class documentation
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `width` | `int` | ❌ No | The width of the dropdown control |
-| `items` | `string[]` | ❌ No | Array of strings to display as dropdown options |
+| `items` | `IList<string>` | ❌ No | Array of strings to display as dropdown options |
 | `selectedIndex` | `int` | ✅ Yes | The initially selected item index (default: 0) |
 
 **Return Type:** `PyControlDropDown`
