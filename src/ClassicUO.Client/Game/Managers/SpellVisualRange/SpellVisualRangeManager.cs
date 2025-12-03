@@ -85,6 +85,12 @@ namespace ClassicUO.Game.Managers
             LastSpellTime = DateTime.Now;
             currentSpell = spell;
             isCasting = true;
+
+            if (World?.Player == null)
+            {
+                return;
+            }
+
             if (currentSpell != null && currentSpell.FreezeCharacterWhileCasting)
             {
                 World.Player.Flags |= Flags.Frozen;
@@ -99,8 +105,13 @@ namespace ClassicUO.Game.Managers
             isCasting = false;
             currentSpell = null;
             LastSpellTime = DateTime.MinValue;
-            World.Player.Flags &= ~Flags.Frozen;
-            World.Player.IsCasting = false;
+
+            if (World?.Player != null)
+            {
+                World.Player.Flags &= ~Flags.Frozen;
+                World.Player.IsCasting = false;
+            }
+
             EventSink.InvokeSpellCastEnd();
         }
 
