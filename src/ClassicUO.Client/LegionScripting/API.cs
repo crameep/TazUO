@@ -2575,6 +2575,21 @@ namespace ClassicUO.LegionScripting
 
             return true;
         }
+        
+        /// <summary>
+        /// Close all menu and context menus open.
+        /// </summary>
+        public void CloseContextMenus() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            UIManager.ContextMenu?.Dispose();
+
+            MenuGump mg = UIManager.GetGump<MenuGump>();
+            while (mg != null)
+            {
+                mg.Dispose();
+                mg = UIManager.GetGump<MenuGump>();
+            }
+        });
 
         /// <summary>
         /// Toggle flying if you are a gargoyle.

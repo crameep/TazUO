@@ -2257,6 +2257,13 @@ def WaitForGump(ID: "int" = 1337, delay: "float" = 5) -> "bool":
     """
     pass
 
+def CloseContextMenus() -> None:
+    """
+     Close all menu and context menus open.
+    
+    """
+    pass
+
 def ToggleFly() -> None:
     """
      Toggle flying if you are a gargoyle.

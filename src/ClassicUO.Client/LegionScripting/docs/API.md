@@ -2087,6 +2087,15 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### CloseContextMenus
+
+ Close all menu and context menus open.
+
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### ToggleFly
 
  Toggle flying if you are a gargoyle.
