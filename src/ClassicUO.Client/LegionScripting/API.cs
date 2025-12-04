@@ -2575,7 +2575,7 @@ namespace ClassicUO.LegionScripting
 
             return true;
         }
-        
+
         /// <summary>
         /// Close all menu and context menus open.
         /// </summary>
@@ -3726,6 +3726,9 @@ namespace ClassicUO.LegionScripting
         /// <param name="map"></param>
         public void RemoveMarkedTile(int x, int y, int map = -1) => MainThreadQueue.InvokeOnMainThread(() =>
         {
+            if (World?.Map == null)
+                return;
+
             if (map < 0)
                 map = World.Map.Index;
 
