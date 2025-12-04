@@ -5,6 +5,8 @@ using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Utility;
 
 namespace ClassicUO.Game.UI.Gumps.GridHighLight
 {
@@ -70,6 +72,46 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             };
 
             mainScrollArea.Add(pos.PositionRightOf(new Label("Auto loot on match", true, 0xffff), lootOnMatchCheckbox));
+
+            // Destination container input and target button
+            InputField destinationInput;
+            mainScrollArea.Add(pos.Position(destinationInput = new InputField(0x0BB8, 0xFF, 0xFFFF, true, 100, 20)));
+            string destStr = data.DestinationContainer == 0 ? "" : $"0x{data.DestinationContainer:X}";
+            destinationInput.SetText(destStr);
+            destinationInput.SetTooltip("Optional destination container serial (leave empty to use default grab bag)");
+            destinationInput.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(destinationInput.Text))
+                {
+                    data.DestinationContainer = 0;
+                }
+                else if (uint.TryParse(destinationInput.Text.Replace("0x", "").Replace("0X", ""), System.Globalization.NumberStyles.HexNumber, null, out uint destSerial))
+                {
+                    data.DestinationContainer = destSerial;
+                }
+            };
+            mainScrollArea.Add(temp = pos.PositionRightOf(new Label("Loot to container", true, 0xffff), destinationInput));
+
+            NiceButton targetContainerBtn;
+            mainScrollArea.Add(pos.PositionRightOf(targetContainerBtn = new NiceButton(0, 0, 60, 20, ButtonAction.Activate, "Target") { IsSelectable = false }, temp, 10));
+            targetContainerBtn.SetTooltip("Target a container to loot items into");
+            targetContainerBtn.MouseUp += (s, e) =>
+            {
+                if (e.Button == Input.MouseButtonType.Left)
+                {
+                    World.Instance.TargetManager.SetTargeting((targetedContainer) =>
+                    {
+                        if (targetedContainer != null && targetedContainer is Entity targetedEntity)
+                        {
+                            if (SerialHelper.IsItem(targetedEntity))
+                            {
+                                data.DestinationContainer = targetedEntity.Serial;
+                                destinationInput.SetText($"0x{targetedEntity.Serial:X}");
+                            }
+                        }
+                    });
+                }
+            };
 
             InputField minMatchingInput;
             mainScrollArea.Add(pos.Position(minMatchingInput = new InputField(0x0BB8, 0xFF, 0xFFFF, true, 40, 20)));

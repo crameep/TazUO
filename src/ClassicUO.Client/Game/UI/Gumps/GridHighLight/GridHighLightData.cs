@@ -150,6 +150,34 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             set => _entry.LootOnMatch = value;
         }
 
+        public uint DestinationContainer
+        {
+            get => _entry.DestinationContainer;
+            set
+            {
+                _entry.DestinationContainer = value;
+                _cachedLootEntry = null; // Invalidate cache when container changes
+            }
+        }
+
+        private AutoLootManager.AutoLootConfigEntry _cachedLootEntry;
+
+        private AutoLootManager.AutoLootConfigEntry GetLootEntry()
+        {
+            if (DestinationContainer == 0)
+                return null;
+
+            if (_cachedLootEntry == null || _cachedLootEntry.DestinationContainer != DestinationContainer)
+            {
+                _cachedLootEntry = new AutoLootManager.AutoLootConfigEntry
+                {
+                    DestinationContainer = DestinationContainer
+                };
+            }
+
+            return _cachedLootEntry;
+        }
+
         private List<string> _cachedNormalizedRulesExcludeNegatives;
         private HashSet<string> _cachedNormalizedRulesRequiredRarities;
         private HashSet<string> _cachedNormalizedAllRarities;
@@ -263,9 +291,12 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                     if (bestMatch.LootOnMatch)
                     {
                         Item root = World.Items.Get(data.item.RootContainer);
+                        Log.WarnDebug("LOOTING?");
                         if (root != null && root.IsCorpse)
                         {
-                            AutoLootManager.Instance.LootItem(data.item);
+                        Log.WarnDebug("LOOTING -->> YES");
+
+                            AutoLootManager.Instance.LootItem(data.item, bestMatch.GetLootEntry());
                             data.item.ShouldAutoLoot = true;
                         }
                     }
