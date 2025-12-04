@@ -109,6 +109,9 @@ namespace ClassicUO.Game.UI.Controls
             AcceptMouseInput = false;
             LocalSerial = serial;
             _updateUI = true;
+
+            // Only set Scale/InternalScale for non-ScalableGump parents
+            // ScalableGump.Add() will handle scaling automatically
             Scale = InternalScale = scale;
         }
 

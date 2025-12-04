@@ -24,6 +24,7 @@ namespace ClassicUO.Game.UI.Controls
         private Point _offset;
         private Control _parent;
         private float alpha = 1.0f;
+        private bool _hasBeenScaled = false;
 
         protected Control(Control parent = null)
         {
@@ -484,6 +485,51 @@ namespace ClassicUO.Game.UI.Controls
         {
             InternalScale = scale;
             return this;
+        }
+
+        /// <summary>
+        /// Apply scaling to this control in one call. Scales position, size, and sets internal scale.
+        /// Prevents double-scaling by tracking if control has already been scaled.
+        /// NOTE: This method is NOT thread-safe. Only call from the UI thread.
+        /// </summary>
+        /// <param name="scale">The scale factor to apply</param>
+        /// <param name="scalePosition">Whether to scale X/Y position (default: true)</param>
+        /// <param name="scaleSize">Whether to scale Width/Height (default: true)</param>
+        /// <param name="force">Force scaling even if already scaled (default: false)</param>
+        /// <returns>This control for method chaining</returns>
+        public virtual Control ApplyScale(double scale, bool scalePosition = true, bool scaleSize = true, bool force = false)
+        {
+            if (_hasBeenScaled && !force && scale != 1.0)
+            {
+                return this;
+            }
+
+            if (scaleSize)
+                ScaleWidthAndHeight(scale);
+            if (scalePosition)
+                ScaleXAndY(scale);
+            // Don't set Scale property - it's used for rendering transforms and would cause double-scaling
+            // Only set InternalScale for mouse interactions
+            SetInternalScale(scale);
+
+            if (scale != 1.0)
+                _hasBeenScaled = true;
+
+            return this;
+        }
+
+        /// <summary>
+        /// Apply scale to all children recursively
+        /// </summary>
+        /// <param name="scale">The scale factor to apply</param>
+        /// <param name="scalePosition">Whether to scale X/Y position (default: true)</param>
+        /// <param name="scaleSize">Whether to scale Width/Height (default: true)</param>
+        protected void ScaleChildren(double scale, bool scalePosition = true, bool scaleSize = true)
+        {
+            foreach (Control child in Children)
+            {
+                child.ApplyScale(scale, scalePosition, scaleSize);
+            }
         }
 
         public void ForceSizeUpdate(bool onlyIfLarger = true)
@@ -997,6 +1043,7 @@ namespace ClassicUO.Game.UI.Controls
                 Children.Clear();
             }
 
+            _hasBeenScaled = false;
             IsDisposed = true;
             AfterDispose();
             Disposed?.Invoke(null, null);
