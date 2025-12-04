@@ -469,14 +469,6 @@ See more -> <https://tazuo.org/wiki/tazuostatus-gump>
 
 """
 ```ini
-[ Tooltip overrides ]
-```
-> TUO added the ability to customize tooltips in almost any way you desire, make them easy to read specific to you!\n
-See more -> <https://tazuo.org/wiki/tazuotooltip-override>
-""",
-
-"""
-```ini
 [ Treasure map locator ]
 ```
 > TUO made it easier than ever to locate treasure via treasure maps, see how on the wiki.\n
@@ -521,6 +513,7 @@ See more -> <{link}>
 
 entry("Pet Scaling", "Did you know you can scale your pets down to not block so much of your screen?", "https://tazuo.org/wiki/pet-scaling")
 entry("Auto Sell Agent", "Did you know you can setup items to automatically sell to vendors?", "https://tazuo.org/wiki/auto-sell-agent")
+entry("Tooltip Overrides", "TUO added the ability to customize tooltips in almost any way you desire, make them easy to read specific to you!", "https://tazuo.org/wiki/tooltip-override")
 
 url = os.getenv("DISCORD_WEBHOOK")
 if not url:
