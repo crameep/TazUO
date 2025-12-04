@@ -11,6 +11,9 @@ public class DiscordChannelListItem : Control
     private readonly DiscordGump gump;
     private LobbyHandle lobby;
     private ChannelHandle dMessage;
+    // For DM users, store ID and name instead of handle to avoid lifetime issues
+    private ulong userId;
+    private string userName;
     private ulong ID;
     private AlphaBlendControl selectedBackground;
 
@@ -42,6 +45,21 @@ public class DiscordChannelListItem : Control
         Build();
     }
 
+    public DiscordChannelListItem(DiscordGump gump, UserHandle user, int width = 100, int height = 25)
+    {
+        Width = width;
+        Height = height;
+        CanMove = true;
+        CanCloseWithRightClick = true;
+        this.gump = gump;
+        // Store user ID and name to avoid handle lifetime issues
+        this.userId = user.Id();
+        this.userName = user.DisplayName();
+        ID = userId;
+
+        Build();
+    }
+
     public void SetSelected()
     {
         if (gump.ActiveChannel == ID)
@@ -56,13 +74,13 @@ public class DiscordChannelListItem : Control
 
         if (button == MouseButtonType.Left)
         {
-            gump?.SetActiveChatChannel(ID, dMessage != null);
+            gump?.SetActiveChatChannel(ID, dMessage != null || userId != 0);
         }
     }
 
     private void Build()
     {
-        if (dMessage == null && lobby == null)
+        if (dMessage == null && lobby == null && userId == 0)
         {
             Dispose();
 
@@ -86,6 +104,9 @@ public class DiscordChannelListItem : Control
 
         if (dMessage != null)
             chanName = dMessage.Name();
+
+        if (userId != 0)
+            chanName = userName;
 
         var name = TextBox.GetOne(chanName, TrueTypeLoader.EMBEDDED_FONT, 20, DiscordManager.GetUserhue(ID), TextBox.RTLOptions.Default());
 

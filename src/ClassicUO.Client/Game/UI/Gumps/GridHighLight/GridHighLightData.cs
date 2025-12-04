@@ -291,11 +291,8 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                     if (bestMatch.LootOnMatch)
                     {
                         Item root = World.Items.Get(data.item.RootContainer);
-                        Log.WarnDebug("LOOTING?");
                         if (root != null && root.IsCorpse)
                         {
-                        Log.WarnDebug("LOOTING -->> YES");
-
                             AutoLootManager.Instance.LootItem(data.item, bestMatch.GetLootEntry());
                             data.item.ShouldAutoLoot = true;
                         }

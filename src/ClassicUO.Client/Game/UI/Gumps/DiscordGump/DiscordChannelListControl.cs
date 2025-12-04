@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Utility.Logging;
 using Discord.Sdk;
 
 namespace ClassicUO.Game.UI.Controls;
@@ -84,9 +85,26 @@ public class DiscordChannelListControl : Control
                 continue;
 
             ChannelHandle channel = DiscordManager.Instance.GetChannel(chanId);
-            
+
             if(channel != null)
+            {
                 _channelList.Add(new DiscordChannelListItem(_discordGump, channel, Width - 20)); //-20 for scroll bar
+            }
+            else
+            {
+                // If GetChannel returns null, this might be a DM (user ID)
+                UserHandle user = DiscordManager.Instance.GetUser(chanId);
+
+                if(user != null)
+                {
+                    _channelList.Add(new DiscordChannelListItem(_discordGump, user, Width - 20)); //-20 for scroll bar
+                }
+                else
+                {
+                    // Unable to resolve as either channel or user - may be deleted/blocked user
+                    Log.Warn($"Discord: Unable to resolve channel or user for ID {chanId} in message history");
+                }
+            }
         }
 
         _channelList.ReArrangeChildren();
