@@ -46,6 +46,8 @@ namespace ClassicUO
         private Texture2D _background;
         private bool _pluginsInitialized;
         private Rectangle bufferRect = Rectangle.Empty;
+        private RenderTarget2D _screenRenderTarget;
+        private bool _useScreenRenderTarget = true; // Re-enabling to debug rendering issues
 
         private static Vector3 bgHueShader = new(0, 0, 0.3f);
         private bool drawScene;
@@ -77,6 +79,7 @@ namespace ClassicUO
             SDL.SDL_StartTextInput(Window.Handle);
         }
 
+        public float RenderScale { get; set; } = 1f;
         public Scene Scene { get; private set; }
         public AudioManager Audio { get; private set; }
         public UltimaOnline UO { get; } = new UltimaOnline();
@@ -217,6 +220,9 @@ namespace ClassicUO
             if (_pluginsInitialized)
                 Plugin.OnClosing();
 
+            _screenRenderTarget?.Dispose();
+            _screenRenderTarget = null;
+
             UO.Unload();
             DiscordManager.Instance?.FinalizeDisconnect();
             base.UnloadContent();
@@ -297,22 +303,22 @@ namespace ClassicUO
 
         private void SetWindowPosition(int x, int y) => SDL_SetWindowPosition(Window.Handle, x, y);
 
-        public void SetWindowSize(int width, int height)
-        {
-            //width = (int) ((double) width * Client.Game.GraphicManager.PreferredBackBufferWidth / Client.Game.Window.ClientBounds.Width);
-            //height = (int) ((double) height * Client.Game.GraphicManager.PreferredBackBufferHeight / Client.Game.Window.ClientBounds.Height);
+        public void SetScale(float scale) => RenderScale = scale;
 
-            /*if (CUOEnviroment.IsHighDPI)
-            {
-                width *= 2;
-                height *= 2;
-            }
-            */
+        public void SetWindowSize(int width, int height, bool bufferOnly = false)
+        {
+            bufferRect = new Rectangle(0, 0, width, height);
+
+            if (bufferOnly)
+                return;
+
+
+            // width = (int)(width * RenderScale);
+            // height = (int)(height * RenderScale);
 
             GraphicManager.PreferredBackBufferWidth = width;
             GraphicManager.PreferredBackBufferHeight = height;
             GraphicManager.ApplyChanges();
-            bufferRect = new Rectangle(0, 0, width, height);
         }
 
         public void SetWindowBorderless(bool borderless)
@@ -481,6 +487,48 @@ namespace ClassicUO
                 bgHueShader = ShaderHueTranslator.GetHueVector(ProfileManager.CurrentProfile.MainWindowBackgroundHue, false, bgHueShader.Z);
         }
 
+        private void EnsureScreenRenderTarget()
+        {
+            int width = GraphicManager.PreferredBackBufferWidth;
+            int height = GraphicManager.PreferredBackBufferHeight;
+
+            // Sanity check dimensions
+            if (width <= 0 || height <= 0)
+            {
+                Log.Warn($"Invalid render target dimensions: {width}x{height}");
+                return;
+            }
+
+            if (_screenRenderTarget == null ||
+                _screenRenderTarget.IsDisposed ||
+                _screenRenderTarget.Width != width ||
+                _screenRenderTarget.Height != height)
+            {
+                _screenRenderTarget?.Dispose();
+
+                try
+                {
+                    PresentationParameters pp = GraphicsDevice.PresentationParameters;
+                    _screenRenderTarget = new RenderTarget2D(
+                        GraphicsDevice,
+                        width,
+                        height,
+                        false,
+                        pp.BackBufferFormat,
+                        pp.DepthStencilFormat,
+                        pp.MultiSampleCount,
+                        RenderTargetUsage.DiscardContents
+                    );
+                    Log.Trace($"Created render target: {width}x{height}");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Failed to create render target ({width}x{height}): {ex.Message}");
+                    throw;
+                }
+            }
+        }
+
         protected override void Draw(GameTime gameTime)
         {
             Profiler.EndFrame();
@@ -490,7 +538,34 @@ namespace ClassicUO
             Profiler.BeginFrame();
 
             _totalFrames++;
-            GraphicsDevice.Clear(Color.Black);
+
+            bool useRenderTarget = false;
+
+            if (_useScreenRenderTarget)
+            {
+                // Ensure render target is created and properly sized
+                EnsureScreenRenderTarget();
+
+                // Check if we should use render target or render directly
+                useRenderTarget = _screenRenderTarget != null && !_screenRenderTarget.IsDisposed;
+
+                if (!useRenderTarget)
+                {
+                    Log.Warn($"Render target invalid: null={_screenRenderTarget == null}, disposed={_screenRenderTarget?.IsDisposed ?? false}, bufferSize={GraphicManager.PreferredBackBufferWidth}x{GraphicManager.PreferredBackBufferHeight}");
+                }
+            }
+
+            if (useRenderTarget)
+            {
+                // Render everything to the render target
+                GraphicsDevice.SetRenderTarget(_screenRenderTarget);
+                GraphicsDevice.Clear(Color.Black);
+            }
+            else
+            {
+                // Render directly to back buffer (original behavior)
+                GraphicsDevice.Clear(Color.Black);
+            }
 
             _uoSpriteBatch.Begin();
             _uoSpriteBatch.DrawTiled(_background, bufferRect, _background.Bounds, bgHueShader);
@@ -515,15 +590,46 @@ namespace ClassicUO
             _uoSpriteBatch.End();
             Profiler.ExitContext("Game Cursor");
 
-            Profiler.EnterContext("ImGui");
-            ImGuiManager.Update(gameTime);
-            Profiler.ExitContext("ImGui");
+            // Render ImGui and plugins to the render target (for consistent scaling)
+            if (useRenderTarget)
+            {
+                Profiler.EnterContext("ImGui");
+                ImGuiManager.Update(gameTime);
+                Profiler.ExitContext("ImGui");
+
+                if(_pluginsInitialized)
+                {
+                    Profiler.EnterContext("Plugins");
+                    Plugin.ProcessDrawCmdList(GraphicsDevice);
+                    Profiler.ExitContext("Plugins");
+                }
+
+                // Set back to back buffer and composite the render target
+                GraphicsDevice.SetRenderTarget(null);
+                GraphicsDevice.Clear(Color.Black);
+
+                // Source and destination rectangles (full render target to full back buffer)
+                var srcRect = new Rectangle(0, 0, _screenRenderTarget.Width, _screenRenderTarget.Height);
+                var destRect = new Rectangle(0, 0, (int)(_screenRenderTarget.Width * RenderScale), (int)(_screenRenderTarget.Height * RenderScale));
+
+                _uoSpriteBatch.Begin();
+                // Match GameScene's composite pattern - use source rectangle overload
+                _uoSpriteBatch.Draw(_screenRenderTarget, destRect, srcRect, new Vector3(0, 0, 1f));
+                _uoSpriteBatch.End();
+            }
+            else
+            {
+                // Fallback: render ImGui and plugins directly if render target is not available
+                Profiler.EnterContext("ImGui");
+                ImGuiManager.Update(gameTime);
+                Profiler.ExitContext("ImGui");
+
+                if(_pluginsInitialized)
+                    Plugin.ProcessDrawCmdList(GraphicsDevice);
+            }
 
             Profiler.EnterContext("OutOfContext");
             base.Draw(gameTime);
-
-            if(_pluginsInitialized)
-                Plugin.ProcessDrawCmdList(GraphicsDevice);
         }
 
         protected override bool BeginDraw() => !_suppressedDraw && base.BeginDraw();
@@ -539,7 +645,7 @@ namespace ClassicUO
                     ProfileManager.CurrentProfile.WindowClientBounds = new Point(width, height);
             }
 
-            SetWindowSize(width, height);
+            SetWindowSize(width, height, true);
 
             WorldViewportGump viewport = UIManager.GetGump<WorldViewportGump>();
 
@@ -997,17 +1103,30 @@ namespace ClassicUO
                 $"screenshot_{DateTime.Now:yyyy-MM-dd_hh-mm-ss}.png"
             );
 
-            var colors = new Color[
-                GraphicManager.PreferredBackBufferWidth * GraphicManager.PreferredBackBufferHeight
-            ];
+            Color[] colors;
+            int width, height;
 
-            GraphicsDevice.GetBackBufferData(colors);
+            // Use render target if available and in use, otherwise use back buffer
+            if (_useScreenRenderTarget && _screenRenderTarget != null && !_screenRenderTarget.IsDisposed)
+            {
+                width = _screenRenderTarget.Width;
+                height = _screenRenderTarget.Height;
+                colors = new Color[width * height];
+                _screenRenderTarget.GetData(colors);
+            }
+            else
+            {
+                width = GraphicManager.PreferredBackBufferWidth;
+                height = GraphicManager.PreferredBackBufferHeight;
+                colors = new Color[width * height];
+                GraphicsDevice.GetBackBufferData(colors);
+            }
 
             using (
                 var texture = new Texture2D(
                     GraphicsDevice,
-                    GraphicManager.PreferredBackBufferWidth,
-                    GraphicManager.PreferredBackBufferHeight,
+                    width,
+                    height,
                     false,
                     SurfaceFormat.Color
                 )
@@ -1036,7 +1155,15 @@ namespace ClassicUO
         {
             var colors = new Color[position.Width * position.Height];
 
-            graphicDevice.GetBackBufferData(position, colors, 0, colors.Length);
+            // Use render target if available and in use, otherwise use back buffer
+            if (_useScreenRenderTarget && _screenRenderTarget != null && !_screenRenderTarget.IsDisposed)
+            {
+                _screenRenderTarget.GetData(0, position, colors, 0, colors.Length);
+            }
+            else
+            {
+                graphicDevice.GetBackBufferData(position, colors, 0, colors.Length);
+            }
 
             using (
                 var texture = new Texture2D(

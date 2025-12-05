@@ -69,7 +69,6 @@ namespace ClassicUO.Game.Scenes
         private long _timePing;
 
         private uint _timeToPlaceMultiInHouseCustomization;
-        private bool _use_render_target = false;
         private int _max_texture_size = 8192;
         private static string _filterMode = "linear"; // "point" | "linear" | "anisotropic" | "xbr"
         private string _currentFilter;
@@ -127,7 +126,7 @@ namespace ClassicUO.Game.Scenes
 
         public void SetPostProcessingSettings()
         {
-            _use_render_target = ProfileManager.CurrentProfile.EnablePostProcessingEffects;
+            // Always use render targets for consistent scaling
             switch (ProfileManager.CurrentProfile.PostProcessingType)
             {
                 case 1:
@@ -1084,14 +1083,7 @@ namespace ClassicUO.Game.Scenes
             }
         }
 
-        private float GetActiveScale()
-        {
-            float factor = ProfileManager.CurrentProfile.GlobalScaling
-                ? ProfileManager.CurrentProfile.GlobalScale
-                : Camera.Zoom;
-
-            return Math.Max(0.0001f, factor);
-        }
+        private float GetActiveScale() => Math.Max(0.0001f, Camera.Zoom);
 
         public override bool Draw(UltimaBatcher2D batcher)
         {
@@ -1116,26 +1108,15 @@ namespace ClassicUO.Game.Scenes
 
             EnsureRenderTargets(gd);
 
-            if (_use_render_target)
-            {
-                Profiler.EnterContext("DrawWorldRenderTarget");
-                can_draw_lights = DrawWorldRenderTarget(batcher, gd, camera_viewport);
-                Profiler.ExitContext("DrawWorldRenderTarget");
-            }
-            else
-            {
-                Profiler.EnterContext("DrawWorldDirect");
-                can_draw_lights = DrawWorldDirect(batcher, gd, camera_viewport);
-                Profiler.ExitContext("DrawWorldDirect");
-            }
+            // Always use render target for consistent scaling
+            Profiler.EnterContext("DrawWorldRenderTarget");
+            can_draw_lights = DrawWorldRenderTarget(batcher, gd, camera_viewport);
+            Profiler.ExitContext("DrawWorldRenderTarget");
 
             // draw lights
             if (can_draw_lights)
             {
-                if (profile.GlobalScaling)
-                    batcher.Begin(null, Matrix.CreateScale(profile.GlobalScale));
-                else
-                    batcher.Begin();
+                batcher.Begin();
 
                 if (UseAltLights)
                 {
@@ -1159,49 +1140,12 @@ namespace ClassicUO.Game.Scenes
                 hue.Z = 1f;
             }
 
-            if (profile.GlobalScaling)
-                batcher.Begin(null, Matrix.CreateScale(profile.GlobalScale));
-            else
-                batcher.Begin();
-
-            DrawOverheads(batcher);
-            DrawSelection(batcher);
-
-            batcher.End();
-
             gd.Viewport = r_viewport;
 
-            if (can_draw_lights || _use_render_target)
-            {
-                gd.Clear(ClearOptions.Stencil, Color.Transparent, 0f, 0);
-            }
+            // Always clear stencil buffer to prevent dirty state affecting UI rendering
+            gd.Clear(ClearOptions.Stencil, Color.Transparent, 0f, 0);
+
             return base.Draw(batcher);
-        }
-
-        private bool DrawWorldDirect(UltimaBatcher2D batcher, GraphicsDevice gd, Viewport camera_viewport)
-        {
-            Profile profile = ProfileManager.CurrentProfile;
-            Matrix  matrix = Camera.ViewTransformMatrix;
-
-            if (profile.GlobalScaling)
-            {
-                Camera.Zoom = 1f; // oScale + profile.GlobalScale;
-                float scale = profile.GlobalScale;
-                matrix = Matrix.CreateScale(scale);
-                camera_viewport.Bounds = new Rectangle(
-                    (int)(camera_viewport.Bounds.X * scale),
-                    (int)(camera_viewport.Bounds.Y * scale),
-                    (int)(camera_viewport.Bounds.Width * scale),
-                    (int)(camera_viewport.Bounds.Height * scale)
-                );
-            }
-
-            bool can_draw_lights = PrepareLightsRendering(batcher, ref matrix);
-            gd.Viewport = camera_viewport;
-
-            DrawWorld(batcher, ref matrix, false);
-
-            return can_draw_lights;
         }
 
         private bool DrawWorldRenderTarget(UltimaBatcher2D batcher, GraphicsDevice gd, Viewport camera_viewport)
@@ -1227,39 +1171,17 @@ namespace ClassicUO.Game.Scenes
             Matrix.Multiply(ref matTrans1, ref matTrans2, out Matrix temp1);
             Matrix.Multiply(ref temp1, ref matTrans3, out Matrix worldRTMatrix);
 
-            if (profile.GlobalScaling)
-            {
-                Camera.Zoom = 1f;
+            DrawWorld(batcher, ref worldRTMatrix, true);
 
-                camera_viewport.Bounds = new Rectangle(
-                    (int)(camera_viewport.Bounds.X * profile.GlobalScale),
-                    (int)(camera_viewport.Bounds.Y * profile.GlobalScale),
-                    (int)(camera_viewport.Bounds.Width * profile.GlobalScale),
-                    (int)(camera_viewport.Bounds.Height * profile.GlobalScale)
-                );
+            can_draw_lights = PrepareLightsRendering(batcher, ref worldRTMatrix);
+            gd.Viewport = camera_viewport;
 
-                DrawWorld(batcher, ref worldRTMatrix, true);
-
-                can_draw_lights = PrepareLightsRendering(batcher, ref worldRTMatrix);
-                gd.Viewport = camera_viewport;
-
-                srcRect = new Rectangle(0, 0, rtW, rtH);
-                destRect = new Rectangle(0, 0, (int)Math.Floor(vpW * scale), (int)Math.Floor(vpH * scale));
-            }
-            else
-            {
-                DrawWorld(batcher, ref worldRTMatrix, true);
-
-                can_draw_lights = PrepareLightsRendering(batcher, ref worldRTMatrix);
-                gd.Viewport = camera_viewport;
-
-                int srcW = (int)Math.Floor(vpW * scale);
-                int srcH = (int)Math.Floor(vpH * scale);
-                int srcX = (rtW - srcW) / 2;
-                int srcY = (rtH - srcH) / 2;
-                srcRect = new Rectangle(srcX, srcY, srcW, srcH);
-                destRect = new Rectangle(0, 0, vpW, vpH);
-            }
+            int srcW = (int)Math.Floor(vpW * scale);
+            int srcH = (int)Math.Floor(vpH * scale);
+            int srcX = (rtW - srcW) / 2;
+            int srcY = (rtH - srcH) / 2;
+            srcRect = new Rectangle(srcX, srcY, srcW, srcH);
+            destRect = new Rectangle(0, 0, vpW, vpH);
 
             UpdatePostProcessState(gd);
 
@@ -1284,8 +1206,10 @@ namespace ClassicUO.Game.Scenes
             FillGameObjectList();
             Profiler.ExitContext("FillObjectList");
 
+            RenderTargetBinding[] previousRenderTargets = null;
             if (use_render_target)
             {
+                previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
                 batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
                 batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
             }
@@ -1355,9 +1279,25 @@ namespace ClassicUO.Game.Scenes
 
             batcher.End();
 
+            // Draw overheads and selection into the render target (for consistent scaling)
             if (use_render_target)
             {
-                batcher.GraphicsDevice.SetRenderTarget(null);
+                batcher.Begin();
+
+                DrawOverheads(batcher);
+                DrawSelection(batcher);
+
+                batcher.End();
+
+                // Restore previous render target
+                if (previousRenderTargets != null && previousRenderTargets.Length > 0)
+                {
+                    batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
+                }
+                else
+                {
+                    batcher.GraphicsDevice.SetRenderTarget(null);
+                }
             }
 
             //batcher.Begin();
@@ -1402,6 +1342,8 @@ namespace ClassicUO.Game.Scenes
             if (!UseLights && !UseAltLights) return false;
             if (_world.Player.IsDead && ProfileManager.CurrentProfile.EnableBlackWhiteEffect) return false;
             if (_light_render_target == null) return false;
+
+            RenderTargetBinding[] previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
 
             batcher.GraphicsDevice.SetRenderTarget(_light_render_target);
             batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 0f, 0);
@@ -1464,7 +1406,15 @@ namespace ClassicUO.Game.Scenes
             batcher.SetBlendState(null);
             batcher.End();
 
-            batcher.GraphicsDevice.SetRenderTarget(null);
+            // Restore previous render target
+            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
+            {
+                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
+            }
+            else
+            {
+                batcher.GraphicsDevice.SetRenderTarget(null);
+            }
             return true;
         }
 
@@ -1525,41 +1475,40 @@ namespace ClassicUO.Game.Scenes
 
         private void EnsureRenderTargets(GraphicsDevice gd)
         {
-            Viewport vp = Camera.GetViewport();
+            // Cache Camera.Bounds to avoid repeated property access
+            Rectangle cameraBounds = Camera.GetViewport().Bounds;
+            int vw = Math.Max(1, cameraBounds.Width);
+            int vh = Math.Max(1, cameraBounds.Height);
+
+            // Cache PresentationParameters to avoid struct copying
+            PresentationParameters pp = gd.PresentationParameters;
             Profile profile = ProfileManager.CurrentProfile;
             float scale = GetActiveScale();
 
-            int vw = Math.Max(1, Camera.Bounds.Width);
-            int vh = Math.Max(1, Camera.Bounds.Height);
-            int rtWidth = Math.Min(profile.GlobalScaling ? vw : (int)Math.Floor(vw * scale), _max_texture_size);
-            int rtHeight = Math.Min(profile.GlobalScaling ? vh : (int)Math.Floor(vh * scale), _max_texture_size);
+            int rtWidth = Math.Min((int)Math.Floor(vw * scale), _max_texture_size);
+            int rtHeight = Math.Min((int)Math.Floor(vh * scale), _max_texture_size);
 
-            if (_use_render_target
-                && (_world_render_target == null
-                    || _world_render_target.IsDisposed
-                    || _world_render_target.Width != rtWidth
-                    || _world_render_target.Height != rtHeight
-                 ))
+            // Create/recreate world render target if needed
+            if (_world_render_target == null
+                || _world_render_target.IsDisposed
+                || _world_render_target.Width != rtWidth
+                || _world_render_target.Height != rtHeight)
             {
                 _world_render_target?.Dispose();
-                PresentationParameters pp = gd.PresentationParameters;
                 _world_render_target = new RenderTarget2D(
                     gd, rtWidth, rtHeight, false,
                     pp.BackBufferFormat, pp.DepthStencilFormat, pp.MultiSampleCount, pp.RenderTargetUsage);
             }
 
-            int ltWidth = _use_render_target ? rtWidth : vw;
-            int ltHeight = _use_render_target ? rtHeight : vh;
-
+            // Light render target matches world render target dimensions
             if (_light_render_target == null
                 || _light_render_target.IsDisposed
-                || _light_render_target.Width != ltWidth
-                || _light_render_target.Height != ltHeight)
+                || _light_render_target.Width != rtWidth
+                || _light_render_target.Height != rtHeight)
             {
                 _light_render_target?.Dispose();
-                PresentationParameters pp = gd.PresentationParameters;
                 _light_render_target = new RenderTarget2D(
-                    gd, ltWidth, ltHeight, false,
+                    gd, rtWidth, rtHeight, false,
                     pp.BackBufferFormat, pp.DepthStencilFormat, pp.MultiSampleCount, pp.RenderTargetUsage);
             }
         }
@@ -1571,8 +1520,8 @@ namespace ClassicUO.Game.Scenes
             float scale = GetActiveScale();
 
             if (
-                (mode == "xbr" && scale >= 1.0f && !profile.GlobalScaling) ||
-                (mode == "xbr" && scale <= 1.0f && profile.GlobalScaling))
+                (mode == "xbr" && scale >= 1.0f) ||
+                (mode == "xbr" && scale <= 1.0f))
             {
                 _postFx = null;
                 _postSampler = SamplerState.LinearClamp;

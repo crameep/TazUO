@@ -102,6 +102,8 @@ namespace ClassicUO.Game
         public const int PREDICTABLE_TILE_COUNT = 64 * PREDICTABLE_CHUNKS;
         public const int PREDICTABLE_STATICS = PREDICTABLE_TILE_COUNT * 2;
         public const int PREDICTABLE_MULTIS = PREDICTABLE_TILE_COUNT * 4;
+        public const float MAX_GAME_SCALE = 1.5f;
+        public const float MIN_GAME_SCALE = -0.6f;
 
         public static readonly bool[] BAD_CONTAINER_LAYERS =
         {
@@ -127,6 +129,7 @@ namespace ClassicUO.Game
             public const string WEB_MAP_PORT = "web_map_port";
             public const string WEB_MAP_AUTO_START = "web_map_auto_start";
             public const string MIN_GUMP_MOVE_DIST = "min_gump_move_dist";
+            public const string GAME_SCALE = "game_scale";
         }
     }
 }

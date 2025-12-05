@@ -1077,12 +1077,6 @@ namespace ClassicUO.Game.Scenes
             int winGameWidth = Camera.Bounds.Width;
             int winGameHeight = Camera.Bounds.Height;
 
-            if (ProfileManager.CurrentProfile.GlobalScaling && ProfileManager.CurrentProfile.GameWindowFullSize)
-            {
-                winGameWidth = (int)(winGameWidth / ProfileManager.CurrentProfile.GlobalScale);
-                winGameHeight = (int)(winGameHeight / ProfileManager.CurrentProfile.GlobalScale);
-            }
-
             int winGameCenterX = winGamePosX + (winGameWidth >> 1);
             int winGameCenterY = winGamePosY + (winGameHeight >> 1) + (_world.Player.Z << 2);
             winGameCenterX -= (int)_world.Player.Offset.X - ProfileManager.CurrentProfile.PlayerOffset.X;

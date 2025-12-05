@@ -440,10 +440,7 @@ namespace ClassicUO.Game.Managers
         public static void Draw(UltimaBatcher2D batcher)
         {
             SortControlsByInfo();
-            if (InGame && ProfileManager.CurrentProfile.GlobalScaling)
-                batcher.Begin(null, Matrix.CreateScale(ProfileManager.CurrentProfile.GlobalScale));
-            else
-                batcher.Begin();
+            batcher.Begin();
 
             for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
             {

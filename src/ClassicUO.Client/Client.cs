@@ -218,10 +218,7 @@ namespace ClassicUO
                 // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
                 CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
 
-                if (CUOEnviroment.IsHighDPI)
-                {
-                    Log.Trace("HIGH DPI - ENABLED");
-                }
+                _ = Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, 1f, f => Game.SetScale(f));
 
                 Game.Run();
             }

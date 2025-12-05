@@ -6,6 +6,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Network;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -20,7 +21,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
-        private int _currentThemeIndex, _minGumpMoveDist;
+        private int _currentThemeIndex, _minGumpMoveDist, _gameScale, _minScale, _maxScale;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
         private GeneralWindow() : base("General Tab")
@@ -37,6 +38,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
             _petScaling = _profile.EnablePetScaling;
             _minGumpMoveDist = _profile.MinGumpMoveDistance;
+            _gameScale = (int)(100 * Client.Game.RenderScale);
+            _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
+            _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -189,6 +193,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.MinGumpMoveDistance = _minGumpMoveDist;
             }
             ImGuiComponents.Tooltip("How far you need to drag before a gump will move, this helps prevent accidentally dragging instead of clicking.");
+
+            ImGui.SetNextItemWidth(125);
+            if (ImGui.SliderInt("Game Scale", ref _gameScale, _minScale, _maxScale))
+            {
+                _gameScale = Math.Clamp(_gameScale, _minScale, _maxScale);
+            }
+            ImGuiComponents.Tooltip("Adjust the scale of the entire game.");
+            if (ImGui.Button("Apply scale"))
+            {
+                float scale = _gameScale / 100f;
+                Client.Game.SetScale(scale);
+                _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
+            }
 
             ImGui.EndGroup();
 

@@ -651,8 +651,6 @@ namespace ClassicUO.Configuration
         public int NearbyLootGumpHeight { get; set; } = 550;
         public bool ForceTooltipsOnOldClients { get; set; } = true;
         public bool NearbyLootOpensHumanCorpses { get; set; }
-        public bool GlobalScaling { get; set; } = false;
-        public float GlobalScale { get; set; } = 1.5f;
         public ushort TurnDelay { get; set; } = 100;
         public bool SellAgentEnabled { get; set; }
         public int SellAgentMaxUniques { get; set; } = 50;

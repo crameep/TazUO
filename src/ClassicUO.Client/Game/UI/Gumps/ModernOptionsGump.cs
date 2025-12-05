@@ -4034,11 +4034,8 @@ namespace ClassicUO.Game.UI.Gumps
                 ), true, page
             );
 
-            content.BlankLine();
-            content.AddToRight(new CheckboxWithLabel(lang.GetTazUO.GlobalScaling, 0, profile.GlobalScaling, b => profile.GlobalScaling = b), true, page);
-
             SliderWithLabel s;
-            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 50, 175, (int)(profile.GlobalScale * 100), null), true, page);
+            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 50, 175, (int)(Client.Game.RenderScale * 100), null), true, page);
 
             ModernButton b;
             content.AddToRight(b = new ModernButton(s.X + s.Width + 75, s.Y - 20, 75, 40, ButtonAction.Activate, "Apply", ThemeSettings.BUTTON_FONT_COLOR), false, page);
@@ -4047,12 +4044,10 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 if (e.Button == MouseButtonType.Left)
                 {
-                    float v = ((float)s.GetValue() / (float)100);
+                    float scale = ((float)s.GetValue() / (float)100);
 
-                    if (v <= 0 || v == 1f)
-                        profile.GlobalScaling = false;
-
-                    profile.GlobalScale = v > 0 ? v : 1f;
+                    Client.Game.SetScale(scale);
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
                 }
             };
 
