@@ -309,15 +309,12 @@ namespace ClassicUO
         {
             bufferRect = new Rectangle(0, 0, width, height);
 
+            GraphicManager.PreferredBackBufferWidth = width;
+            GraphicManager.PreferredBackBufferHeight = height;
+
             if (bufferOnly)
                 return;
 
-
-            // width = (int)(width * RenderScale);
-            // height = (int)(height * RenderScale);
-
-            GraphicManager.PreferredBackBufferWidth = width;
-            GraphicManager.PreferredBackBufferHeight = height;
             GraphicManager.ApplyChanges();
         }
 
