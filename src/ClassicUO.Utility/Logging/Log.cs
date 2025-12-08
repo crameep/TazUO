@@ -52,6 +52,9 @@ namespace ClassicUO.Utility.Logging
         public static void WarnDebug(string text) => Warn(text);
 
         public static void Error(string text) => _logger?.Message(LogTypes.Error, text);
+        
+        [Conditional("DEBUG")]
+        public static void ErrorDebug(string text) => _logger?.Message(LogTypes.Error, text);
 
         public static void Panic(string text) => _logger?.Message(LogTypes.Error, text);
 

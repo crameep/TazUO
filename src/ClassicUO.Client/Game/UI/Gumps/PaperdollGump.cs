@@ -495,7 +495,14 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseExit(int x, int y) => _paperDollInteractable?.SetFakeItem(false);
+        protected override void OnMouseExit(int x, int y)
+        {
+            if (_paperDollInteractable != null)
+            {
+                _paperDollInteractable.SetFakeItem(false);
+                _paperDollInteractable.RequestUpdate();
+            }
+        }
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
@@ -615,8 +622,6 @@ namespace ClassicUO.Game.UI.Gumps
                 UpdateTitle(mobile.Title);
             }
 
-            _paperDollInteractable.RequestUpdate();
-
             if (mobile != null)
             {
                 for (int i = 0; i < _slots.Length; i++)
@@ -633,6 +638,10 @@ namespace ClassicUO.Game.UI.Gumps
                     _slots_right[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
                 }
             }
+
+            // Clear fake item preview and request a full UI update to ensure items render
+            _paperDollInteractable.SetFakeItem(false);
+            _paperDollInteractable.RequestUpdate();
         }
 
         public override void OnButtonClick(int buttonID)
