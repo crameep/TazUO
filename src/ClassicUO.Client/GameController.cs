@@ -646,11 +646,19 @@ namespace ClassicUO
 
             WorldViewportGump viewport = UIManager.GetGump<WorldViewportGump>();
 
-            if (viewport != null && ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize)
+            if (viewport != null && ProfileManager.CurrentProfile != null)
             {
-                viewport.ResizeGameWindow(new Point(width, height));
-                viewport.X = -5;
-                viewport.Y = -5;
+                if (ProfileManager.CurrentProfile.GameWindowFullSize)
+                {
+                    viewport.ResizeGameWindow(new Point(width, height));
+                    viewport.X = 0;
+                    viewport.Y = 0;
+                }
+                else
+                {
+                    // Ensure regular viewports stay within bounds when window resizes
+                    viewport.OnWindowResized();
+                }
             }
         }
 

@@ -823,17 +823,24 @@ namespace ClassicUO.Game.UI.Gumps
                     {
                         profile.GameWindowFullSize = b;
 
-                        if (b)
+                        var viewport = UIManager.GetGump<WorldViewportGump>();
+                        if (viewport != null)
                         {
-                            UIManager.GetGump<WorldViewportGump>()?.ResizeGameWindow(new Point(Client.Game.Window.ClientBounds.Width, Client.Game.Window.ClientBounds.Height));
-                            UIManager.GetGump<WorldViewportGump>()?.SetGameWindowPosition(new Point(-5, -5));
-                            profile.GameWindowPosition = new Point(-5, -5);
-                        }
-                        else
-                        {
-                            UIManager.GetGump<WorldViewportGump>()?.ResizeGameWindow(new Point(600, 480));
-                            UIManager.GetGump<WorldViewportGump>()?.SetGameWindowPosition(new Point(25, 25));
-                            profile.GameWindowPosition = new Point(25, 25);
+                            if (b)
+                            {
+                                viewport.ResizeGameWindow(new Point(Client.Game.Window.ClientBounds.Width, Client.Game.Window.ClientBounds.Height));
+                                viewport.SetGameWindowPosition(new Point(0, 0));
+                                profile.GameWindowPosition = new Point(0, 0);
+                            }
+                            else
+                            {
+                                viewport.ResizeGameWindow(new Point(600, 480));
+                                viewport.SetGameWindowPosition(new Point(25, 25));
+                                profile.GameWindowPosition = new Point(25, 25);
+                            }
+
+                            // Trigger a full update to ensure borders and positioning are correct
+                            viewport.OnWindowResized();
                         }
                     }
                 ), true, page
