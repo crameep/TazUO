@@ -1171,7 +1171,7 @@ namespace ClassicUO.Game.Scenes
             Matrix.Multiply(ref matTrans1, ref matTrans2, out Matrix temp1);
             Matrix.Multiply(ref temp1, ref matTrans3, out Matrix worldRTMatrix);
 
-            DrawWorld(batcher, ref worldRTMatrix, true);
+            DrawWorld(batcher, ref worldRTMatrix);
 
             can_draw_lights = PrepareLightsRendering(batcher, ref worldRTMatrix);
             gd.Viewport = camera_viewport;
@@ -1199,20 +1199,17 @@ namespace ClassicUO.Game.Scenes
             return can_draw_lights;
         }
 
-        private void DrawWorld(UltimaBatcher2D batcher, ref Matrix matrix, bool use_render_target)
+        private void DrawWorld(UltimaBatcher2D batcher, ref Matrix matrix)
         {
             SelectedObject.Object = null;
             Profiler.EnterContext("FillObjectList");
             FillGameObjectList();
             Profiler.ExitContext("FillObjectList");
 
-            RenderTargetBinding[] previousRenderTargets = null;
-            if (use_render_target)
-            {
-                previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
-                batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
-                batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
-            }
+            // Always use render target for consistent scaling
+            var previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
+            batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
+            batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 
             batcher.SetSampler(SamplerState.PointClamp);
 
@@ -1280,24 +1277,21 @@ namespace ClassicUO.Game.Scenes
             batcher.End();
 
             // Draw overheads and selection into the render target (for consistent scaling)
-            if (use_render_target)
+            batcher.Begin();
+
+            DrawOverheads(batcher);
+            DrawSelection(batcher);
+
+            batcher.End();
+
+            // Restore previous render target
+            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
             {
-                batcher.Begin();
-
-                DrawOverheads(batcher, useRenderTarget: true);
-                DrawSelection(batcher);
-
-                batcher.End();
-
-                // Restore previous render target
-                if (previousRenderTargets != null && previousRenderTargets.Length > 0)
-                {
-                    batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
-                }
-                else
-                {
-                    batcher.GraphicsDevice.SetRenderTarget(null);
-                }
+                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
+            }
+            else
+            {
+                batcher.GraphicsDevice.SetRenderTarget(null);
             }
 
             //batcher.Begin();
@@ -1418,7 +1412,7 @@ namespace ClassicUO.Game.Scenes
             return true;
         }
 
-        public void DrawOverheads(UltimaBatcher2D batcher, bool useRenderTarget = false)
+        public void DrawOverheads(UltimaBatcher2D batcher)
         {
             _healthLinesManager.Draw(batcher);
 
@@ -1428,11 +1422,8 @@ namespace ClassicUO.Game.Scenes
             }
 
             _world.WorldTextManager.ProcessWorldText(true);
-            // When drawing to render target, use 0,0 offset since render target has no offset
-            // When drawing directly to screen, use Camera.Bounds offset
-            int offsetX = useRenderTarget ? 0 : Camera.Bounds.X;
-            int offsetY = useRenderTarget ? 0 : Camera.Bounds.Y;
-            _world.WorldTextManager.Draw(batcher, offsetX, offsetY);
+            // Always drawing to render target, use 0,0 offset since render target has no offset
+            _world.WorldTextManager.Draw(batcher, 0, 0);
         }
 
         public void DrawSelection(UltimaBatcher2D batcher)
