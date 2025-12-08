@@ -1277,7 +1277,8 @@ namespace ClassicUO.Game.Scenes
             batcher.End();
 
             // Draw overheads and selection into the render target (for consistent scaling)
-            batcher.Begin();
+            // Use the same matrix transform as game objects to ensure coordinate system consistency
+            batcher.Begin(null, matrix);
 
             DrawOverheads(batcher);
             DrawSelection(batcher);

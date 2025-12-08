@@ -959,7 +959,7 @@ namespace ClassicUO.Game.GameObjects
 
             p.X += (int)Offset.X + 22;
             p.Y += (int)(Offset.Y - Offset.Z - (height + centerY + 8));
-            p = Client.Game.Scene.Camera.WorldToScreen(p);
+            // Removed Camera.WorldToScreen() - text is now transformed by worldRTMatrix during rendering
 
             if (ObjectHandlesStatus == ObjectHandlesStatus.DISPLAYING)
             {
