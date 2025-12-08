@@ -254,6 +254,7 @@ namespace ClassicUO.Game.UI.Gumps
             switch (e.Type)
             {
                 case MessageType.Regular when e.Parent == null || !SerialHelper.IsValid(e.Parent.Serial):
+                case MessageType.Discord:
                 case MessageType.System:
                     if (!string.IsNullOrEmpty(e.Name) && !e.Name.Equals("system", StringComparison.InvariantCultureIgnoreCase))
                     {

@@ -336,6 +336,21 @@ namespace ClassicUO.Game.Managers
 
                 GameActions.Print("No active Discord conversation or message to reply to.", 32);
             });
+
+#if DEBUG
+
+            Register("testdiscord", (s) =>
+            {
+                string msg = "Test Discord Message";
+                if (s.Length > 1)
+                {
+                    msg = string.Join(" ", s, 1, s.Length - 1);
+                }
+
+                _world.MessageManager.HandleMessage(null, msg, "[Discord Test] TestUser", 88, MessageType.Discord, 255, TextType.GUILD_ALLY);
+            });
+
+#endif
         }
 
 

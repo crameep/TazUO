@@ -535,7 +535,7 @@ public class DiscordManager
             chan = channel != null ? channel.Name() : ((lobby != null) ? GetLobbyName(lobby) : "Discord");
 
         if ((isdm && DiscordSettings.ShowDMInGame) || (!isdm && DiscordSettings.ShowChatInGame))
-            _world.MessageManager.HandleMessage(null, $"{msg.Content()}", $"[{chan}] {author.DisplayName()}", GetHueFromId(author.Id()), MessageType.ChatSystem, 255, TextType.SYSTEM);
+            _world.MessageManager.HandleMessage(null, $"{msg.Content()}", $"[{chan}] {author.DisplayName()}", GetHueFromId(author.Id()), MessageType.Discord, 255, TextType.GUILD_ALLY);
     }
 
     private static void OnLog(string message, LoggingSeverity severity) => Log.Debug($"Log: {severity} - {message}");
