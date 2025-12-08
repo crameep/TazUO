@@ -1284,7 +1284,7 @@ namespace ClassicUO.Game.Scenes
             {
                 batcher.Begin();
 
-                DrawOverheads(batcher);
+                DrawOverheads(batcher, useRenderTarget: true);
                 DrawSelection(batcher);
 
                 batcher.End();
@@ -1418,7 +1418,7 @@ namespace ClassicUO.Game.Scenes
             return true;
         }
 
-        public void DrawOverheads(UltimaBatcher2D batcher)
+        public void DrawOverheads(UltimaBatcher2D batcher, bool useRenderTarget = false)
         {
             _healthLinesManager.Draw(batcher);
 
@@ -1428,7 +1428,11 @@ namespace ClassicUO.Game.Scenes
             }
 
             _world.WorldTextManager.ProcessWorldText(true);
-            _world.WorldTextManager.Draw(batcher, Camera.Bounds.X, Camera.Bounds.Y);
+            // When drawing to render target, use 0,0 offset since render target has no offset
+            // When drawing directly to screen, use Camera.Bounds offset
+            int offsetX = useRenderTarget ? 0 : Camera.Bounds.X;
+            int offsetY = useRenderTarget ? 0 : Camera.Bounds.Y;
+            _world.WorldTextManager.Draw(batcher, offsetX, offsetY);
         }
 
         public void DrawSelection(UltimaBatcher2D batcher)
