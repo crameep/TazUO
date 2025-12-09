@@ -840,6 +840,28 @@ namespace ClassicUO.LegionScripting
                 DressAgentManager.Instance.DressFromConfig(config);
             }
         });
+        
+        /// <summary>
+        /// Undress from a saved dress configuration.
+        /// Example:
+        /// ```py
+        /// API.Undress("PvP Gear")
+        /// ```
+        /// </summary>
+        /// <param name="name">The name of the dress configuration</param>
+        public void Undress(string name) => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            if (string.IsNullOrEmpty(name))
+                return;
+
+            DressConfig config = DressAgentManager.Instance.CurrentPlayerConfigs
+                .FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+            if (config != null)
+            {
+                DressAgentManager.Instance.UndressFromConfig(config);
+            }
+        });
 
         /// <summary>
         /// Undress all your equipment

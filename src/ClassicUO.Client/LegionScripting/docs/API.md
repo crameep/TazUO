@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `12/5/25`.*
+*This was generated on `12/9/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -687,6 +687,25 @@ You can now type `-updateapi` in game to download the latest API.py file.
  Example:
  ```py
  API.Dress("PvP Gear")
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | ❌ No | The name of the dress configuration |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### Undress
+`(name)`
+ Undress from a saved dress configuration.
+ Example:
+ ```py
+ API.Undress("PvP Gear")
  ```
 
 

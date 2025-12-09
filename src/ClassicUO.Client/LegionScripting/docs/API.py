@@ -1415,6 +1415,17 @@ def Dress(name: "str") -> None:
     """
     pass
 
+def Undress(name: "str") -> None:
+    """
+     Undress from a saved dress configuration.
+     Example:
+     ```py
+     API.Undress("PvP Gear")
+     ```
+    
+    """
+    pass
+
 def UndressAll(kr: "bool" = False) -> None:
     """
      Undress all your equipment
