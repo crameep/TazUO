@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `12/9/25`.*
+*This was generated on `12/11/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -1230,6 +1230,25 @@ You can now type `-updateapi` in game to download the latest API.py file.
  for item in ItemsInContainer(API.Backpack):
    if item.Name == "Dagger":
    API.IgnoreObject(item)
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `serial` | `uint` | ❌ No | The item/mobile serial |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### UnIgnoreObject
+`(serial)`
+ Removes an item or mobile from your ignore list.
+ Example:
+ ```py
+ API.UnIgnoreObject(item)
  ```
 
 

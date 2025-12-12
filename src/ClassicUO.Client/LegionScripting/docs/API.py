@@ -1733,6 +1733,17 @@ def IgnoreObject(serial: "int") -> None:
     """
     pass
 
+def UnIgnoreObject(serial: "int") -> None:
+    """
+     Removes an item or mobile from your ignore list.
+     Example:
+     ```py
+     API.UnIgnoreObject(item)
+     ```
+    
+    """
+    pass
+
 def ClearIgnoreList() -> None:
     """
      Clears the ignore list. Allowing functions to see those items again.

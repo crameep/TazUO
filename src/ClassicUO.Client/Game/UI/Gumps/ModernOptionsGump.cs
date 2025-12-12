@@ -823,7 +823,7 @@ namespace ClassicUO.Game.UI.Gumps
                     {
                         profile.GameWindowFullSize = b;
 
-                        var viewport = UIManager.GetGump<WorldViewportGump>();
+                        WorldViewportGump viewport = UIManager.GetGump<WorldViewportGump>();
                         if (viewport != null)
                         {
                             if (b)

@@ -1207,7 +1207,7 @@ namespace ClassicUO.Game.Scenes
             Profiler.ExitContext("FillObjectList");
 
             // Always use render target for consistent scaling
-            var previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
+            RenderTargetBinding[] previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
             batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
             batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 

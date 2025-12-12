@@ -1441,6 +1441,16 @@ namespace ClassicUO.LegionScripting
         public void IgnoreObject(uint serial) => ignoreList.Add(serial);
 
         /// <summary>
+        /// Removes an item or mobile from your ignore list.
+        /// Example:
+        /// ```py
+        /// API.UnIgnoreObject(item)
+        /// ```
+        /// </summary>
+        /// <param name="serial">The item/mobile serial</param>
+        public void UnIgnoreObject(uint serial) => ignoreList = new ConcurrentBag<uint>(ignoreList.Where(s => s != serial));
+
+        /// <summary>
         /// Clears the ignore list. Allowing functions to see those items again.
         /// Example:
         /// ```py
