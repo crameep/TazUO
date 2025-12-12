@@ -22,7 +22,7 @@ public class PyMenuItem
     /// Returns a readable string representation of the menu item.
     /// Used when printing or converting the object to a string in Python scripts.
     /// </summary>
-    public override string ToString() => $"<{__class__} Index={Index:X8} Graphic=0x{Graphic:X4} Hue=0x{Hue:X4} Name=\"{Name}\">";
+    public override string ToString() => $"<{__class__} Index={Index:D} Graphic=0x{Graphic:X4} Hue=0x{Hue:X4} Name=\"{Name}\">";
     
     /// <summary>
     /// The Python-visible class name of this object.

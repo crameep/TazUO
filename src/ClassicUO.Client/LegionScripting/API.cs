@@ -598,6 +598,7 @@ namespace ClassicUO.LegionScripting
         /// Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
         /// Useful when menu IDs change every time (e.g., Tracking skill).
         /// </summary>
+        /// <returns>List of <see cref="PyMenuItem"/> containing Index, Name, Graphic and Hue values for each menu item</returns>
         public PythonList MenuItemsCurrent() => MainThreadQueue.InvokeOnMainThread<PythonList>
         (() =>
             {
