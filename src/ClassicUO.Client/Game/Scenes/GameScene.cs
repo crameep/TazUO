@@ -77,6 +77,7 @@ namespace ClassicUO.Game.Scenes
         private int _rtWCache = -1, _rtHCache = -1;
         private UseItemQueue _useItemQueue;
         private MoveItemQueue _moveItemQueue;
+        private AutoUnequipActionManager _autoUnequipActionManager;
         private bool _useObjectHandles;
         private RenderTarget2D _world_render_target,
             _light_render_target;
@@ -89,6 +90,7 @@ namespace ClassicUO.Game.Scenes
             _world = world;
             _useItemQueue = new UseItemQueue(world);
             _moveItemQueue = new MoveItemQueue(_world);
+            _autoUnequipActionManager = new AutoUnequipActionManager(_world);
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
 
@@ -393,6 +395,7 @@ namespace ClassicUO.Game.Scenes
 
             SpellBarManager.Unload();
             _moveItemQueue.Clear();
+            _autoUnequipActionManager?.Clear();
             GlobalPriorityQueue.Instance.Clear();
 
             GraphicsReplacement.Save();

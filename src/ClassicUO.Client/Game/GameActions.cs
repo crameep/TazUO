@@ -995,6 +995,20 @@ internal static class GameActions
     {
         if (index >= 0)
         {
+            // Check if auto unequip manager wants to intercept
+            if (AutoUnequipActionManager.Instance?.TryInterceptSpellCast(index) ?? false)
+            {
+                return; // Manager will handle the cast via queue
+            }
+
+            CastSpellDirect(index);
+        }
+    }
+
+    internal static void CastSpellDirect(int index)
+    {
+        if (index >= 0)
+        {
             LastSpellIndex = index;
             SpellVisualRangeManager.Instance.ClearCasting();
             Socket.Send_CastSpell(index);

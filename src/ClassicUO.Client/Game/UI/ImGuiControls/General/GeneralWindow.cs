@@ -17,6 +17,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _highlightObjects, _petScaling;
         private bool _showNames;
         private bool _autoOpenOwnCorpse;
+        private bool _autoUnequipForActions;
         private bool _useLongDistancePathing;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
@@ -31,6 +32,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _highlightObjects = _profile.HighlightGameObjects;
             _showNames = _profile.NameOverheadToggled;
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
+            _autoUnequipForActions = _profile.AutoUnequipForActions;
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
             _cameraSmoothingFactor = _profile.CameraSmoothingFactor;
@@ -168,12 +170,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Toggle the display of names above characters and NPCs in the game world.");
 
-            if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
-            {
-                _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
-            }
-            ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
-
             if (ImGui.Checkbox("Enable pet scaling", ref _petScaling))
             {
                 _profile.EnablePetScaling = _petScaling;
@@ -234,6 +230,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
+
+            ImGui.Spacing();
+            ImGui.Spacing();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc");
+
+            if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
+            {
+                _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
+            }
+            ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
+
+            if (ImGui.Checkbox("Auto unequip for spells", ref _autoUnequipForActions))
+            {
+                _profile.AutoUnequipForActions = _autoUnequipForActions;
+            }
+            ImGuiComponents.Tooltip("Automatically unequip weapons when casting spells, then reequip them after.");
+
             ImGui.EndGroup();
         }
 

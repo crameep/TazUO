@@ -688,6 +688,19 @@ namespace ClassicUO.Configuration
         }
 
         [JsonIgnore]
+        public bool AutoUnequipForActions
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, value);
+
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
         public int MinGumpMoveDistance
         {
             get => field;
@@ -709,8 +722,7 @@ namespace ClassicUO.Configuration
                 Log.Error("Warning, SQL settings failed to load!");
                 return;
             }
-            //These are fine if we continue without loading them yet
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            //These are fine if we continue without loading them yet (non-Char scoped)
             Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
 
 
@@ -721,6 +733,19 @@ namespace ClassicUO.Configuration
             ];
 
             Task.WaitAll(mustWait, 5000);
+        }
+
+        internal void LoadCharScopedSettings()
+        {
+            if (Client.Settings == null)
+            {
+                Log.Error("Warning, SQL settings failed to load!");
+                return;
+            }
+
+            // Load Char-scoped settings after player is created (when serial is available)
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, false, (b) => { AutoUnequipForActions = b; });
         }
 
         internal void Save(World world, string path, bool saveGumps = true)
