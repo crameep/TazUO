@@ -751,6 +751,30 @@ class PyLand(PyGameObject):
     ""
     __class__: str = None
 
+class PyMenuItem:
+    ""
+    Index: int = None
+    Name: str = None
+    Graphic: int = None
+    Hue: int = None
+    __class__: str = None
+
+    def ToString(self) -> "str":
+        """
+         Returns a readable string representation of the menu item.
+         Used when printing or converting the object to a string in Python scripts.
+        
+        """
+        pass
+
+    def __repr__(self) -> "str":
+        """
+         Returns a detailed string representation of the object.
+         This string is used by Python’s built-in <c>repr()</c> function.
+        
+        """
+        pass
+
 class PyMobile(PyEntity):
     ""
     X: int = None
@@ -1275,6 +1299,14 @@ def MenuResponseCurrent(index: "int", itemGraphic: "int" = 0, itemHue: "int" = 0
      Send a response to the currently open menu (uses the latest MenuGump).
      Useful when menu IDs change every time (e.g., Tracking skill).
      Returns true if a menu was found and a response was sent.
+    
+    """
+    pass
+
+def MenuItemsCurrent() -> "list":
+    """
+     Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
+     Useful when menu IDs change every time (e.g., Tracking skill).
     
     """
     pass

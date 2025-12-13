@@ -18,6 +18,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _showNames;
         private bool _autoOpenOwnCorpse;
         private bool _autoUnequipForActions;
+        private bool _disableWeather;
         private bool _useLongDistancePathing;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
@@ -33,6 +34,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _showNames = _profile.NameOverheadToggled;
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
             _autoUnequipForActions = _profile.AutoUnequipForActions;
+            _disableWeather = _profile.DisableWeather;
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
             _cameraSmoothingFactor = _profile.CameraSmoothingFactor;
@@ -247,6 +249,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.AutoUnequipForActions = _autoUnequipForActions;
             }
             ImGuiComponents.Tooltip("Automatically unequip weapons when casting spells, then reequip them after.");
+
+            if (ImGui.Checkbox("Disable weather", ref _disableWeather))
+            {
+                _profile.DisableWeather = _disableWeather;
+                if (_disableWeather)
+                {
+                    World.Instance?.Weather.Reset();
+                }
+            }
+            ImGuiComponents.Tooltip("Disable weather effects (rain, snow, storms).");
 
             ImGui.EndGroup();
         }

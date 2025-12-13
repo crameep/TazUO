@@ -472,6 +472,16 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### MenuItemsCurrent
+
+ Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
+ Useful when menu IDs change every time (e.g., Tracking skill).
+
+
+**Return Type:** `PythonList`
+
+---
+
 ### GrayMenuResponseCurrent
 `(index)`
  Send a response to the currently open gray menu (text list menu).

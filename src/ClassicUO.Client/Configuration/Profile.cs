@@ -676,6 +676,19 @@ namespace ClassicUO.Configuration
         public bool EnableASyncMapLoading { get; set; } = true;
 
         [JsonIgnore]
+        public bool DisableWeather
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, value);
+
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
         public bool EnablePetScaling
         {
             get => field;
@@ -724,6 +737,7 @@ namespace ClassicUO.Configuration
             }
             //These are fine if we continue without loading them yet (non-Char scoped)
             Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, false, (b) => { DisableWeather = b; });
 
 
             //These must be waited before continue for various purposes elsewhere

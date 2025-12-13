@@ -1275,7 +1275,10 @@ namespace ClassicUO.Game.Scenes
             batcher.SetStencil(null);
 
             // draw weather
-            _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
+            if (!ProfileManager.CurrentProfile.DisableWeather)
+            {
+                _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
+            }
 
             batcher.End();
 
