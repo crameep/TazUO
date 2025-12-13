@@ -27,6 +27,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.EndTabItem();
                 }
 
+                if (ImGui.BeginTabItem("Sound Filter"))
+                {
+                    SoundFilterWindow.GetInstance()?.DrawContent();
+                    ImGui.EndTabItem();
+                }
+
                 ImGui.EndTabBar();
             }
         }
