@@ -79,7 +79,12 @@ namespace ClassicUO
             SDL.SDL_StartTextInput(Window.Handle);
         }
 
-        public float RenderScale { get; set; } = 1f;
+        private float _renderScale = 1f;
+        public float RenderScale
+        {
+            get => _renderScale;
+            set => _renderScale = Math.Max(value, 0.1f);
+        }
         public Scene Scene { get; private set; }
         public AudioManager Audio { get; private set; }
         public UltimaOnline UO { get; } = new UltimaOnline();
@@ -303,7 +308,7 @@ namespace ClassicUO
 
         private void SetWindowPosition(int x, int y) => SDL_SetWindowPosition(Window.Handle, x, y);
 
-        public void SetScale(float scale) => RenderScale = scale;
+        public void SetScale(float scale) => RenderScale = Math.Max(scale, 0.1f);
 
         public void SetWindowSize(int width, int height, bool bufferOnly = false)
         {

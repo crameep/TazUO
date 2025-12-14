@@ -16,7 +16,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool showAddFilter = false;
         private List<int> filterList;
         private Dictionary<int, int> filterInputs = new Dictionary<int, int>();
-        private uint _lastCopyTime = 0;
 
         private SoundFilterWindow() : base("Sound Filter")
         {
@@ -31,12 +30,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             // Initialize input dictionaries for existing filters
             foreach (int soundId in filterList)
-            {
                 if (!filterInputs.ContainsKey(soundId))
-                {
                     filterInputs[soundId] = soundId;
-                }
-            }
         }
 
         public override void DrawContent()
@@ -68,23 +63,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGuiComponents.Tooltip("Add this sound to the filter list");
 
                 ImGui.SameLine();
-                if (ImGui.Button($"Play Again##PlayLastSound"))
-                {
-                    Client.Game.Audio.PlaySound(lastSoundId);
-                }
+                if (ImGui.Button($"Play Again##PlayLastSound")) Client.Game.Audio.PlaySound(lastSoundId, true);
                 ImGuiComponents.Tooltip("Play this sound again");
-
-                // Show "Copied!" feedback for 2 seconds
-                if (Time.Ticks - _lastCopyTime < 2000)
-                {
-                    ImGui.SameLine();
-                    ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), "Copied!");
-                }
             }
             else
-            {
                 ImGui.TextDisabled("No sound played yet");
-            }
 
             ImGui.Spacing();
             ImGui.TextColored(new Vector4(1.0f, 0.8f, 0.2f, 1.0f), "Tip:");
@@ -94,10 +77,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // Add filter section
             ImGui.SeparatorText("Add Sound Filter:");
 
-            if (ImGui.Button("Add Filter Entry"))
-            {
-                showAddFilter = !showAddFilter;
-            }
+            if (ImGui.Button("Add Filter Entry")) showAddFilter = !showAddFilter;
 
             if (showAddFilter)
             {
@@ -115,7 +95,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.Spacing();
 
                 if (ImGui.Button("Add##AddFilter"))
-                {
                     if (newSoundIdInput >= 0)
                     {
                         SoundFilterManager.Instance.AddFilter(newSoundIdInput);
@@ -123,7 +102,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         showAddFilter = false;
                         RefreshFilterList();
                     }
-                }
+
                 ImGui.SameLine();
                 if (ImGui.Button("Cancel##AddFilter"))
                 {
@@ -131,18 +110,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     newSoundIdInput = 0;
                 }
                 ImGui.SameLine();
-                if (ImGui.Button("Test Play##TestPlay"))
-                {
-                    Client.Game.Audio.PlaySound(newSoundIdInput);
-                }
+                if (ImGui.Button("Test Play##TestPlay")) Client.Game.Audio.PlaySound(newSoundIdInput, true);
             }
 
             ImGui.SeparatorText("Filtered Sounds:");
 
             if (filterList.Count == 0)
-            {
                 ImGui.Text("No sounds filtered");
-            }
             else
             {
                 ImGui.Text($"Total: {filterList.Count} sound(s) filtered");
@@ -173,10 +147,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         ImGui.TableNextColumn();
 
                         // Display sound ID with input for editing
-                        if (!filterInputs.ContainsKey(soundId))
-                        {
-                            filterInputs[soundId] = soundId;
-                        }
+                        if (!filterInputs.ContainsKey(soundId)) filterInputs[soundId] = soundId;
 
                         int inputValue = filterInputs[soundId];
                         ImGui.SetNextItemWidth(80);
@@ -205,13 +176,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                         ImGui.TableNextColumn();
 
-                        if (ImGui.Button($"Play##Play{i}"))
-                        {
-                            // Temporarily remove filter, play, then re-add
-                            SoundFilterManager.Instance.RemoveFilter(soundId);
-                            Client.Game.Audio.PlaySound(soundId);
-                            SoundFilterManager.Instance.AddFilter(soundId);
-                        }
+                        if (ImGui.Button($"Play##Play{i}")) Client.Game.Audio.PlaySound(soundId, true);
+
                         ImGuiComponents.Tooltip("Test play this sound (bypasses filter)");
 
                         ImGui.TableNextColumn();

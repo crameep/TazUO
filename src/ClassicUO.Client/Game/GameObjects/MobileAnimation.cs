@@ -58,12 +58,6 @@ namespace ClassicUO.Game.GameObjects
             {
                 case 0x0192:
                 case 0x0193:
-                    {
-                        g -= 2;
-
-                        break;
-                    }
-
                 case 0x025F:
                 case 0x0260:
                     {

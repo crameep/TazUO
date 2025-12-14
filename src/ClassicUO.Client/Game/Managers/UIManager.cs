@@ -39,6 +39,15 @@ namespace ClassicUO.Game.Managers
         private const int AXIS_LOCK_THRESHOLD_PIXELS = 10;
         private const float CTRL_DRAG_SPEED_MULTIPLIER = 0.5f;
 
+        private static void ResetCtrlDragState()
+        {
+            _ctrlDragAxisDetermined = false;
+            _ctrlDragLockHorizontal = false;
+            _ctrlDragRemainderX = 0f;
+            _ctrlDragRemainderY = 0f;
+            _wasCtrlHeldLastFrame = false;
+        }
+
 
         public static World World { get; set; }
 
@@ -701,11 +710,7 @@ namespace ClassicUO.Game.Managers
                     _dragOrigin = Mouse.LClickPosition;
 
                     // Reset Ctrl drag state for new drag operation
-                    _ctrlDragAxisDetermined = false;
-                    _ctrlDragLockHorizontal = false;
-                    _ctrlDragRemainderX = 0f;
-                    _ctrlDragRemainderY = 0f;
-                    _wasCtrlHeldLastFrame = false;
+                    ResetCtrlDragState();
 
                     for (int i = 0; i < (int)MouseButtonType.Size; i++)
                     {
@@ -736,9 +741,8 @@ namespace ClassicUO.Game.Managers
 
             if (ctrlJustPressed)
             {
-                // Reset axis determination when Ctrl is newly pressed mid-drag
-                _ctrlDragAxisDetermined = false;
-                _ctrlDragLockHorizontal = false;
+                // Reset Ctrl drag state when Ctrl is newly pressed mid-drag
+                ResetCtrlDragState();
             }
 
             if (ctrlCurrentlyHeld)
@@ -806,11 +810,7 @@ namespace ClassicUO.Game.Managers
             _isDraggingControl = false;
 
             // Reset Ctrl drag state when drag ends
-            _ctrlDragAxisDetermined = false;
-            _ctrlDragLockHorizontal = false;
-            _ctrlDragRemainderX = 0f;
-            _ctrlDragRemainderY = 0f;
-            _wasCtrlHeldLastFrame = false;
+            ResetCtrlDragState();
         }
     }
 }

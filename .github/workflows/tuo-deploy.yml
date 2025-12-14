@@ -15,7 +15,7 @@ env:
   RELEASE_LINK: "https://github.com/bittiez/TazUO/releases/latest"
   UPLOAD_BODY: |
     These are built automatically on the main branch.
-    These are net9 builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
+    These are modern dotnet builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
   UPLOAD_MAKELATEST: true
   UPLOAD_PRERELEASE: false
 

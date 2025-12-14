@@ -16,7 +16,7 @@ env:
   UPLOAD_BODY: |
     These are built automatically on the dev branch.
     These may include features that are still being worked on/not complete.
-    These are net9 builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
+    These are modern dotnet builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
   UPLOAD_MAKELATEST: false
   UPLOAD_PRERELEASE: true
 

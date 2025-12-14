@@ -489,6 +489,7 @@ namespace ClassicUO.Game.UI.Controls
             {
                 // inverse
                 offset = isFemale ? Constants.MALE_GUMP_OFFSET : Constants.FEMALE_GUMP_OFFSET;
+                requested = animID + offset;
             }
 
             if (Client.Game.UO.Gumps.GetGump((ushort)(requested)).Texture == null)

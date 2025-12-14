@@ -96,7 +96,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public void PlaySound(int index)
+        public void PlaySound(int index, bool skipFilter = false)
         {
             Profile currentProfile = ProfileManager.CurrentProfile;
 
@@ -106,7 +106,7 @@ namespace ClassicUO.Game.Managers
             }
 
             // Check if sound is filtered
-            if (SoundFilterManager.Instance.IsSoundFiltered(index))
+            if (!skipFilter && SoundFilterManager.Instance.IsSoundFiltered(index))
             {
                 return;
             }

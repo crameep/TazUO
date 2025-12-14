@@ -499,7 +499,8 @@ namespace ClassicUO.Game.UI.Controls
         /// <returns>This control for method chaining</returns>
         public virtual Control ApplyScale(double scale, bool scalePosition = true, bool scaleSize = true, bool force = false)
         {
-            if (_hasBeenScaled && !force && scale != 1.0)
+            const double epsilon = 0.0001;
+            if (!force && Math.Abs(scale - InternalScale) < epsilon)
             {
                 return this;
             }
@@ -512,8 +513,7 @@ namespace ClassicUO.Game.UI.Controls
             // Only set InternalScale for mouse interactions
             SetInternalScale(scale);
 
-            if (scale != 1.0)
-                _hasBeenScaled = true;
+            _hasBeenScaled = (scale != 1.0);
 
             return this;
         }

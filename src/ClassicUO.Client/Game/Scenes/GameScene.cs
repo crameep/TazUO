@@ -1521,9 +1521,7 @@ namespace ClassicUO.Game.Scenes
             Profile profile = ProfileManager.CurrentProfile;
             float scale = GetActiveScale();
 
-            if (
-                (mode == "xbr" && scale >= 1.0f) ||
-                (mode == "xbr" && scale <= 1.0f))
+            if (mode == "xbr" && scale == 1.0f)
             {
                 _postFx = null;
                 _postSampler = SamplerState.LinearClamp;

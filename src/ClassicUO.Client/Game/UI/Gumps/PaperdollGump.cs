@@ -471,6 +471,7 @@ namespace ClassicUO.Game.UI.Gumps
                 )
                 {
                     _paperDollInteractable.SetFakeItem(false);
+                    _paperDollInteractable.RequestUpdate();
                 }
                 else if (
                     !_paperDollInteractable.HasFakeItem

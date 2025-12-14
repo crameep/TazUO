@@ -425,7 +425,7 @@ namespace ClassicUO.Game
 
             if (ItemHold.Enabled && !ItemHold.Dropped)
             {
-                float scale = Client.Game.RenderScale, gscale = 1;
+                float scale = Client.Game.RenderScale;
 
                 if (
                     ProfileManager.CurrentProfile != null
@@ -455,10 +455,10 @@ namespace ClassicUO.Game
                     );
 
                     var rect = new Rectangle(
-                        (int)(x * gscale),
-                        (int)(y * gscale),
-                        (int)(artInfo.UV.Width * scale * gscale),
-                        (int)(artInfo.UV.Height * scale * gscale)
+                        x,
+                        y,
+                        (int)(artInfo.UV.Width * scale),
+                        (int)(artInfo.UV.Height * scale)
                     );
 
                     sb.Draw(artInfo.Texture, rect, artInfo.UV, hue);
