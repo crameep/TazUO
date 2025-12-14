@@ -1,4 +1,4 @@
-﻿using ClassicUO.Configuration;
+using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
@@ -144,6 +144,9 @@ namespace ClassicUO.Game.Managers
         /// <summary>
         /// Search through a corpse and check items that need to be looted.
         /// Only call this after checking that autoloot IsEnabled
+        /// Note: This method doesn't gurantee to process all itmes in the corpse,
+        /// because `corpse.Items` is populated via `AddItemToContainer` packet, thus
+        /// it may not have all items yet when the method is called.
         /// </summary>
         /// <param name="corpse"></param>
         private void HandleCorpse(Item corpse)
@@ -190,6 +193,9 @@ namespace ClassicUO.Game.Managers
             Item root = _world.Items.Get(i.RootContainer);
             if (root != null && root.IsCorpse)
             {
+                // Check the item that triggered this call directly
+                CheckAndLoot(i);
+                // A defensive safety net to ensure all items in the corpse are processed
                 HandleCorpse(root);
                 return;
             }
