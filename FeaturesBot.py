@@ -514,6 +514,10 @@ See more -> <{link}>
 entry("Pet Scaling", "Did you know you can scale your pets down to not block so much of your screen?", "https://tazuo.org/wiki/pet-scaling")
 entry("Auto Sell Agent", "Did you know you can setup items to automatically sell to vendors?", "https://tazuo.org/wiki/auto-sell-agent")
 entry("Tooltip Overrides", "TUO added the ability to customize tooltips in almost any way you desire, make them easy to read specific to you!", "https://tazuo.org/wiki/tooltip-override")
+entry("Fine tuned positioning", "You can hold Ctrl and drag a gump to get more precise positioning!", "https://tazuo.org/")
+entry("Sound filters", "Don't like a sound? You can filter it out!", "https://tazuo.org/")
+entry("Discord", "Did you know TazUO has discord features built directly into the client?", "https://tazuo.org/")
+entry("Game scaling", "Monitor too big? Eyes too old? Scale your entire game with a simple slider!", "https://tazuo.org/")
 
 url = os.getenv("DISCORD_WEBHOOK")
 if not url:
