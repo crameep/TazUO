@@ -30,6 +30,9 @@ namespace ClassicUO.Game.Managers
 
         public bool TryInterceptSpellCast(int spellIndex)
         {
+            if (spellIndex is >= 100 and <= 678 or >= 700)
+                return false;
+
             // Check if feature is enabled
             if (!(ProfileManager.CurrentProfile?.AutoUnequipForActions ?? false))
                 return false;
