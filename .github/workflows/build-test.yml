@@ -40,10 +40,10 @@ jobs:
         git config --global url."https://".insteadOf git://
         git submodule update --init --recursive
 
-    - name: Setup .NET 9
-      uses: actions/setup-dotnet@v4
+    - name: Setup .NET 10
+      uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 9
+        dotnet-version: 10
 
     - name: Restore
       run: dotnet restore
