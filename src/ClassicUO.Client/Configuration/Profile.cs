@@ -651,8 +651,6 @@ namespace ClassicUO.Configuration
         public int NearbyLootGumpHeight { get; set; } = 550;
         public bool ForceTooltipsOnOldClients { get; set; } = true;
         public bool NearbyLootOpensHumanCorpses { get; set; }
-        public bool GlobalScaling { get; set; } = false;
-        public float GlobalScale { get; set; } = 1.5f;
         public ushort TurnDelay { get; set; } = 100;
         public bool SellAgentEnabled { get; set; }
         public int SellAgentMaxUniques { get; set; } = 50;
@@ -675,7 +673,20 @@ namespace ClassicUO.Configuration
         public ushort PostProcessingType { get; set; }
         public bool DisableHotkeys { get; set; }
         public bool DisableDismountInWarMode { get; set; }
-        public bool EnableASyncMapLoading { get; set; }
+        public bool EnableASyncMapLoading { get; set; } = true;
+
+        [JsonIgnore]
+        public bool DisableWeather
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, value);
+
+                field = value;
+            }
+        }
 
         [JsonIgnore]
         public bool EnablePetScaling
@@ -684,6 +695,19 @@ namespace ClassicUO.Configuration
             set {
                 if (field != value)
                     Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
+
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
+        public bool AutoUnequipForActions
+        {
+            get => field;
+            set
+            {
+                if (field != value)
+                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, value);
 
                 field = value;
             }
@@ -711,9 +735,9 @@ namespace ClassicUO.Configuration
                 Log.Error("Warning, SQL settings failed to load!");
                 return;
             }
-            //These are fine if we continue without loading them yet
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            //These are fine if we continue without loading them yet (non-Char scoped)
             Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, false, (b) => { DisableWeather = b; });
 
 
             //These must be waited before continue for various purposes elsewhere
@@ -723,6 +747,19 @@ namespace ClassicUO.Configuration
             ];
 
             Task.WaitAll(mustWait, 5000);
+        }
+
+        internal void LoadCharScopedSettings()
+        {
+            if (Client.Settings == null)
+            {
+                Log.Error("Warning, SQL settings failed to load!");
+                return;
+            }
+
+            // Load Char-scoped settings after player is created (when serial is available)
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
+            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, false, (b) => { AutoUnequipForActions = b; });
         }
 
         internal void Save(World world, string path, bool saveGumps = true)

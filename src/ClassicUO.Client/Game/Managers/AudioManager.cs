@@ -24,6 +24,8 @@ namespace ClassicUO.Game.Managers
         private readonly int[] _currentMusicIndices = { 0, 0 };
         public int LoginMusicIndex { get; private set; }
         public int DeathMusicIndex { get; } = 42;
+        private int _lastPlayedSoundId = -1;
+        public int LastPlayedSoundId => _lastPlayedSoundId;
 
         public void Initialize()
         {
@@ -94,7 +96,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public void PlaySound(int index)
+        public void PlaySound(int index, bool skipFilter = false)
         {
             Profile currentProfile = ProfileManager.CurrentProfile;
 
@@ -102,6 +104,15 @@ namespace ClassicUO.Game.Managers
             {
                 return;
             }
+
+            // Check if sound is filtered
+            if (!skipFilter && SoundFilterManager.Instance.IsSoundFiltered(index))
+            {
+                return;
+            }
+
+            // Track last played sound
+            _lastPlayedSoundId = index;
 
             float volume = currentProfile.SoundVolume / SOUND_DELTA;
 
@@ -156,6 +167,15 @@ namespace ClassicUO.Game.Managers
             {
                 return;
             }
+
+            // Check if sound is filtered
+            if (SoundFilterManager.Instance.IsSoundFiltered(index))
+            {
+                return;
+            }
+
+            // Track last played sound
+            _lastPlayedSoundId = index;
 
             int distX = Math.Abs(x - world.Player.X);
             int distY = Math.Abs(y - world.Player.Y);

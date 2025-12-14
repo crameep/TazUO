@@ -6,6 +6,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Network;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -16,11 +17,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _highlightObjects, _petScaling;
         private bool _showNames;
         private bool _autoOpenOwnCorpse;
+        private bool _autoUnequipForActions;
+        private bool _disableWeather;
         private bool _useLongDistancePathing;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
-        private int _currentThemeIndex, _minGumpMoveDist;
+        private int _currentThemeIndex, _minGumpMoveDist, _gameScale, _minScale, _maxScale;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
         private GeneralWindow() : base("General Tab")
@@ -30,6 +33,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _highlightObjects = _profile.HighlightGameObjects;
             _showNames = _profile.NameOverheadToggled;
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
+            _autoUnequipForActions = _profile.AutoUnequipForActions;
+            _disableWeather = _profile.DisableWeather;
             _turnDelay = _profile.TurnDelay;
             _imguiWindowAlpha = _lastImguiWindowAlpha = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_ALPHA, 1.0f);
             _cameraSmoothingFactor = _profile.CameraSmoothingFactor;
@@ -37,6 +42,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
             _petScaling = _profile.EnablePetScaling;
             _minGumpMoveDist = _profile.MinGumpMoveDistance;
+            _gameScale = (int)(100 * Client.Game.RenderScale);
+            _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
+            _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -164,12 +172,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Toggle the display of names above characters and NPCs in the game world.");
 
-            if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
-            {
-                _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
-            }
-            ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
-
             if (ImGui.Checkbox("Enable pet scaling", ref _petScaling))
             {
                 _profile.EnablePetScaling = _petScaling;
@@ -189,6 +191,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.MinGumpMoveDistance = _minGumpMoveDist;
             }
             ImGuiComponents.Tooltip("How far you need to drag before a gump will move, this helps prevent accidentally dragging instead of clicking.");
+
+            ImGui.SetNextItemWidth(125);
+            if (ImGui.SliderInt("Game Scale", ref _gameScale, _minScale, _maxScale))
+            {
+                _gameScale = Math.Clamp(_gameScale, _minScale, _maxScale);
+            }
+            ImGuiComponents.Tooltip("Adjust the scale of the entire game.");
+            if (ImGui.Button("Apply scale"))
+            {
+                float scale = _gameScale / 100f;
+                Client.Game.SetScale(scale);
+                _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
+            }
 
             ImGui.EndGroup();
 
@@ -217,6 +232,34 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
+
+            ImGui.Spacing();
+            ImGui.Spacing();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc");
+
+            if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
+            {
+                _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
+            }
+            ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
+
+            if (ImGui.Checkbox("Auto unequip for spells", ref _autoUnequipForActions))
+            {
+                _profile.AutoUnequipForActions = _autoUnequipForActions;
+            }
+            ImGuiComponents.Tooltip("Automatically unequip weapons when casting spells, then reequip them after.");
+
+            if (ImGui.Checkbox("Disable weather", ref _disableWeather))
+            {
+                _profile.DisableWeather = _disableWeather;
+                if (_disableWeather)
+                {
+                    World.Instance?.Weather.Reset();
+                }
+            }
+            ImGuiComponents.Tooltip("Disable weather effects (rain, snow, storms).");
+
             ImGui.EndGroup();
         }
 

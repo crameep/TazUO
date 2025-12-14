@@ -212,7 +212,7 @@ namespace ClassicUO.Game.UI
 
             MouseState mouse = Mouse.GetState();
             KeyboardState keyboard = Keyboard.GetState();
-            io.AddMousePosEvent(mouse.X, mouse.Y);
+            io.AddMousePosEvent(mouse.X / Client.Game.RenderScale, mouse.Y / Client.Game.RenderScale);
             io.AddMouseButtonEvent(0, mouse.LeftButton == ButtonState.Pressed);
             io.AddMouseButtonEvent(1, mouse.RightButton == ButtonState.Pressed);
             io.AddMouseButtonEvent(2, mouse.MiddleButton == ButtonState.Pressed);

@@ -204,7 +204,7 @@ namespace ClassicUO.Game.GameObjects
         public ushort ManaMax;
         public int StepSoundOffset;
         public string Title = string.Empty;
-        public float Scale = 1f; //Functional, but not ready for deployment yet
+        public float Scale = 1f;
 
         public static Mobile Create(World world, uint serial)
         {
@@ -959,7 +959,7 @@ namespace ClassicUO.Game.GameObjects
 
             p.X += (int)Offset.X + 22;
             p.Y += (int)(Offset.Y - Offset.Z - (height + centerY + 8));
-            p = Client.Game.Scene.Camera.WorldToScreen(p);
+            // Removed Camera.WorldToScreen() - text is now transformed by worldRTMatrix during rendering
 
             if (ObjectHandlesStatus == ObjectHandlesStatus.DISPLAYING)
             {

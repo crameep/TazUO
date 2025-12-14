@@ -23,6 +23,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<int, string> spellCastTimeInputs = new Dictionary<int, string>();
         private Dictionary<int, string> spellMaxDurationInputs = new Dictionary<int, string>();
         private SpellRangeInfo selectedSpell = null;
+        private bool showAddNewSpell = false;
+        private string newSpellIdInput = "";
+        private string newSpellNameInput = "";
 
         private SpellIndicatorWindow() : base("Spell Indicators")
         {
@@ -78,7 +81,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Type a spell name to search and edit its spell indicator settings.");
 
-            if (selectedSpell != null)
+            ImGui.SameLine();
+            if (ImGui.Button("Add New Spell"))
+            {
+                showAddNewSpell = !showAddNewSpell;
+                if (showAddNewSpell)
+                {
+                    selectedSpell = null;
+                    spellSearchInput = "";
+                }
+            }
+            ImGuiComponents.Tooltip("Create a new spell indicator configuration.");
+
+            if (showAddNewSpell)
+            {
+                ImGui.SeparatorText("Add New Spell:");
+                DrawAddNewSpell();
+            }
+            else if (selectedSpell != null)
             {
                 ImGui.SeparatorText("Spell Configuration:");
                 DrawSpellEditor(selectedSpell);
@@ -346,6 +366,131 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
 
                 ImGui.EndTable();
+            }
+        }
+
+        private void DrawAddNewSpell()
+        {
+            ImGui.Text("Create a new spell indicator configuration:");
+            ImGui.Spacing();
+
+            if (ImGui.BeginTable("AddNewSpellTable", 2, ImGuiTableFlags.SizingFixedFit))
+            {
+                ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 200);
+                ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+
+                // Spell ID
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.Text("Spell ID:");
+                ImGui.TableNextColumn();
+                ImGui.SetNextItemWidth(200);
+                ImGui.InputText("##NewSpellId", ref newSpellIdInput, 10);
+                ImGuiComponents.Tooltip("Enter a unique spell ID. Must be a number.");
+
+                // Spell Name
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.Text("Spell Name:");
+                ImGui.TableNextColumn();
+                ImGui.SetNextItemWidth(200);
+                ImGui.InputText("##NewSpellName", ref newSpellNameInput, 100);
+                ImGuiComponents.Tooltip("Enter the spell name.");
+
+                ImGui.EndTable();
+            }
+
+            ImGui.Spacing();
+
+            if (ImGui.Button("Create Spell"))
+            {
+                if (!string.IsNullOrWhiteSpace(newSpellIdInput) && !string.IsNullOrWhiteSpace(newSpellNameInput))
+                {
+                    if (int.TryParse(newSpellIdInput, out int spellId))
+                    {
+                        if (SpellVisualRangeManager.Instance.SpellRangeCache.ContainsKey(spellId))
+                        {
+                            ImGui.OpenPopup("Error##DuplicateSpellId");
+                        }
+                        else
+                        {
+                            var newSpell = new SpellRangeInfo
+                            {
+                                ID = spellId,
+                                Name = newSpellNameInput.Trim(),
+                                PowerWords = "",
+                                CursorSize = 0,
+                                CastRange = 1,
+                                Hue = 32,
+                                CursorHue = 10,
+                                MaxDuration = 10,
+                                IsLinear = false,
+                                CastTime = 0.0,
+                                ShowCastRangeDuringCasting = false,
+                                FreezeCharacterWhileCasting = false,
+                                ExpectTargetCursor = false
+                            };
+
+                            SpellVisualRangeManager.Instance.SpellRangeCache.Add(spellId, newSpell);
+                            SaveSpell();
+
+                            // Switch to editing the new spell
+                            selectedSpell = newSpell;
+                            spellSearchInput = newSpell.Name;
+                            showAddNewSpell = false;
+                            newSpellIdInput = "";
+                            newSpellNameInput = "";
+                            InitializeInputs(newSpell);
+                        }
+                    }
+                    else
+                    {
+                        ImGui.OpenPopup("Error##InvalidSpellId");
+                    }
+                }
+                else
+                {
+                    ImGui.OpenPopup("Error##EmptyFields");
+                }
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Cancel"))
+            {
+                showAddNewSpell = false;
+                newSpellIdInput = "";
+                newSpellNameInput = "";
+            }
+
+            // Error popups
+            if (ImGui.BeginPopup("Error##DuplicateSpellId"))
+            {
+                ImGui.Text("A spell with this ID already exists.");
+                if (ImGui.Button("OK"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
+
+            if (ImGui.BeginPopup("Error##InvalidSpellId"))
+            {
+                ImGui.Text("Spell ID must be a valid number.");
+                if (ImGui.Button("OK"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
+
+            if (ImGui.BeginPopup("Error##EmptyFields"))
+            {
+                ImGui.Text("Please fill in both Spell ID and Name.");
+                if (ImGui.Button("OK"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
             }
         }
 

@@ -30,7 +30,7 @@ namespace ClassicUO.Game.UI.Gumps
         public string PacketGumpText { get; set; } = string.Empty;
 
         public World World { get; }
-        
+
         public virtual bool ShouldBeSaved => true;
 
         public bool CanBeSaved => ShouldBeSaved && (GumpType != Gumps.GumpType.None || ServerSerial != 0);
@@ -142,65 +142,25 @@ namespace ClassicUO.Game.UI.Gumps
         public void CenterXInScreen()
         {
             Rectangle windowBounds = Client.Game.Window.ClientBounds;
-            if (ProfileManager.CurrentProfile.GlobalScaling)
-            {
-                float scale = ProfileManager.CurrentProfile.GlobalScale;
-                // Convert physical width to unscaled (logical) width
-                float logicalWidth = windowBounds.Width / scale;
-                // Center in logical coordinates
-                X = (int)((logicalWidth - Width) / 2);
-            }
-            else
-            {
-                X = (windowBounds.Width - Width) / 2;
-            }
+            X = (windowBounds.Width - Width) / 2;
         }
 
         public void CenterYInScreen()
         {
             Rectangle windowBounds = Client.Game.Window.ClientBounds;
-            if (ProfileManager.CurrentProfile.GlobalScaling)
-            {
-                float scale = ProfileManager.CurrentProfile.GlobalScale;
-                float logicalHeight = windowBounds.Height / scale;
-                Y = (int)((logicalHeight - Height) / 2);
-            }
-            else
-            {
-                Y = (windowBounds.Height - Height) / 2;
-            }
+            Y = (windowBounds.Height - Height) / 2;
         }
 
         public void CenterXInViewPort()
         {
             Camera camera = Client.Game.Scene.Camera;
-            if (ProfileManager.CurrentProfile.GlobalScaling)
-            {
-                float scale = ProfileManager.CurrentProfile.GlobalScale;
-                // Compute the camera's physical center, then convert to logical coordinates.
-                float logicalCenterX = (camera.Bounds.X + camera.Bounds.Width / 2f);
-                // Set element X so that its center aligns with the camera's logical center.
-                X = (int)(logicalCenterX - ((Width / scale) / 2f));
-            }
-            else
-            {
-                X = camera.Bounds.X + ((camera.Bounds.Width - Width) / 2);
-            }
+            X = camera.Bounds.X + ((camera.Bounds.Width - Width) / 2);
         }
 
         public void CenterYInViewPort()
         {
             Camera camera = Client.Game.Scene.Camera;
-            if (ProfileManager.CurrentProfile.GlobalScaling)
-            {
-                float scale = ProfileManager.CurrentProfile.GlobalScale;
-                float logicalCenterY = (camera.Bounds.Y + camera.Bounds.Height / 2f);
-                Y = (int)(logicalCenterY - ((Height / scale) / 2f));
-            }
-            else
-            {
-                Y = camera.Bounds.Y + ((camera.Bounds.Height - Height) / 2);
-            }
+            Y = camera.Bounds.Y + ((camera.Bounds.Height - Height) / 2);
         }
 
         public void SetInScreen()

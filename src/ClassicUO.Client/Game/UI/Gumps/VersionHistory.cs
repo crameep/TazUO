@@ -11,6 +11,45 @@ internal class VersionHistory : NineSliceGump
     private static readonly string[] _updateTexts =
     [
         """
+        /c[white][4.15.0]/cd
+        # Misc
+        - Change grid highlight to use min/max weight instead of a set 50 stone limit
+        - Add support for <color> tags in UOX3 emu
+        - Add ability to create new spell configs in spell indicator window
+        - Add optional per-item loot container to grid highlight settings for autoloot
+        - Hold Ctrl while moving a gump to position it with more fine-tuned precision
+        - Better game scaling
+        - Add discord message type to separate them in the journal
+        - Viewport can no longer be moved/resized outside the game window
+        - Auto unequip/reequip for casting
+        - Add sound filter
+        - Add disable weather option
+
+        # Legion Py
+        - Improve script recorder: current menu replies and Script Manager refresh - @echokk11
+        - Add missing LayerOrder on py gump wrapper
+        - Added API DropDown.OnDropDownOptionSelected() callback option
+        - Add API.CloseContextMenus()
+        - Add Undress to LegionScripting - @dirkackerman
+        - Add API.UnIgnoreObject()
+        - Add python API endpoint to get items in the current menu gump - @dirkackerman
+
+        # Bugs
+        - When using API.GetSkill a rare crash where the skill was null
+        - A crash when saving settings.json but access is denied
+        - Fix elf animation while dead
+        - Fix spell.icon dragging after accidentally breaking it in the last update
+        - No longer has extra spaces when using ctrl q/w
+        - Ctrl q/w restarts from "0" after pressing enter
+        - Crash fix for spell indicator system
+        - DM's now properly appear in the top section of the gump(Discord)
+        - The `-reply` command now works properly to reply to the last person to DM you
+        - Crash fix when calling API.RemoveMarkedTile and world or map is null
+        - Fix auto avoid obstacle
+        - Fix items not re-rendering bug in paperdoll
+        """,
+
+        """
         /c[white][4.14.0]/cd
         # Misc
         - Testing out long-distance pathfinding
@@ -425,33 +464,6 @@ internal class VersionHistory : NineSliceGump
         "- Better item stacking in original containers while using grid containers \n" +
         "- Added a hotkeys page in options\n" +
         "- Improved autolooting\n",
-        "/c[white][3.27.0]/cd\n" +
-        "- Added forced tooltip option for pre-tooltip servers\n" +
-        "- Added global scaling\n" +
-        "- Add regex matching for autoloot\n" +
-        "- Improved modern shop gump asthetics\n" +
-        "- Counter bars can now be assigned spells\n" +
-        "- Removed unused scripting system\n" +
-        "- Added adjustable turn delay\n",
-        "/c[white][3.26.1]/cd\n" +
-        "- Fix for replygump command in legion scripting\n" +
-        "/c[white][3.26.0]/cd\n" +
-        "- Added optional regex to tooltip overrides\n" +
-        "- Minor improvements in tooltip overrides\n" +
-        "- Fix whitespace error during character creation\n" +
-        "- Nearby item gump will close if moved, or 30 seconds has passed\n" +
-        "/c[white][3.25.2]/cd\n" +
-        "- Nearby item gump moved to macros\n" +
-        "/c[white][3.25.1]/cd\n" +
-        "- Added DPS meter\n" +
-        "- Legion Scripting bug fix\n" +
-        "/c[white][3.25.0]/cd\n" +
-        "- Added the Legion scripting engine, see wiki for details\n" +
-        "- Updated some common default settings that are usually used\n" +
-        "- More controller QOL improvements\n" +
-        "- Added tooltips for counterbar items\n" +
-        "- Added a nearby items feature(See wiki for details)\n" +
-        "- Various bug fixes\n",
 
         "\n\n/c[white]For further history please visit our discord."
     ];

@@ -383,9 +383,7 @@ namespace ClassicUO.Game
                             break;
                     }
 
-                    float scale = 1;
-                    if (ProfileManager.CurrentProfile.GlobalScaling)
-                        scale = ProfileManager.CurrentProfile.GlobalScale;
+                    float scale = Client.Game.RenderScale;
 
                     _aura.Draw(sb, (int)(Mouse.Position.X * scale), (int)(Mouse.Position.Y * scale), hue, 0f);
                 }
@@ -427,7 +425,7 @@ namespace ClassicUO.Game
 
             if (ItemHold.Enabled && !ItemHold.Dropped)
             {
-                float scale = 1, gscale = 1;
+                float scale = Client.Game.RenderScale;
 
                 if (
                     ProfileManager.CurrentProfile != null
@@ -435,14 +433,6 @@ namespace ClassicUO.Game
                 )
                 {
                     scale = UIManager.ContainerScale;
-                }
-
-                if (
-                    ProfileManager.CurrentProfile != null
-                    && ProfileManager.CurrentProfile.GlobalScaling
-                )
-                {
-                    gscale = ProfileManager.CurrentProfile.GlobalScale;
                 }
 
                 ushort draggingGraphic = GetDraggingItemGraphic();
@@ -465,10 +455,10 @@ namespace ClassicUO.Game
                     );
 
                     var rect = new Rectangle(
-                        (int)(x * gscale),
-                        (int)(y * gscale),
-                        (int)(artInfo.UV.Width * scale * gscale),
-                        (int)(artInfo.UV.Height * scale * gscale)
+                        x,
+                        y,
+                        (int)(artInfo.UV.Width * scale),
+                        (int)(artInfo.UV.Height * scale)
                     );
 
                     sb.Draw(artInfo.Texture, rect, artInfo.UV, hue);
@@ -541,11 +531,6 @@ namespace ClassicUO.Game
         {
             if (Client.Game.Scene is GameScene gs)
             {
-                if (ProfileManager.CurrentProfile.GlobalScaling)
-                {
-                    position.X = (int)(position.X * ProfileManager.CurrentProfile.GlobalScale);
-                    position.Y = (int)(position.Y * ProfileManager.CurrentProfile.GlobalScale);
-                }
                 if (
                     (!_world.ClientFeatures.TooltipsEnabled && ProfileManager.CurrentProfile != null && !ProfileManager.CurrentProfile.ForceTooltipsOnOldClients)
                     || (

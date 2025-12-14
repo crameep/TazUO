@@ -28,6 +28,27 @@ namespace ClassicUO.Game.Managers
         private static Control _keyboardFocusControl, _lastFocus;
         private static bool _needSort;
 
+        // Ctrl-modified drag state for axis-locking and speed reduction
+        private static bool _ctrlDragAxisDetermined;
+        private static bool _ctrlDragLockHorizontal;
+        private static float _ctrlDragRemainderX;
+        private static float _ctrlDragRemainderY;
+        private static bool _wasCtrlHeldLastFrame;
+
+        // Ctrl-modified drag constants
+        private const int AXIS_LOCK_THRESHOLD_PIXELS = 10;
+        private const float CTRL_DRAG_SPEED_MULTIPLIER = 0.5f;
+
+        private static void ResetCtrlDragState()
+        {
+            _ctrlDragAxisDetermined = false;
+            _ctrlDragLockHorizontal = false;
+            _ctrlDragRemainderX = 0f;
+            _ctrlDragRemainderY = 0f;
+            _wasCtrlHeldLastFrame = false;
+        }
+
+
         public static World World { get; set; }
 
         public static float ContainerScale { get; set; } = 1f;
@@ -428,10 +449,7 @@ namespace ClassicUO.Game.Managers
         public static void Draw(UltimaBatcher2D batcher)
         {
             SortControlsByInfo();
-            if (InGame && ProfileManager.CurrentProfile.GlobalScaling)
-                batcher.Begin(null, Matrix.CreateScale(ProfileManager.CurrentProfile.GlobalScale));
-            else
-                batcher.Begin();
+            batcher.Begin();
 
             for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
             {
@@ -686,10 +704,13 @@ namespace ClassicUO.Game.Managers
                 Point delta = Mouse.LDragOffset;
 
                 bool doDrag = (ProfileManager.CurrentProfile == null || Math.Abs(delta.X) >= ProfileManager.CurrentProfile.MinGumpMoveDistance || Math.Abs(delta.Y) >= ProfileManager.CurrentProfile.MinGumpMoveDistance) || attemptAlwaysSuccessful;
-                if (doDrag && !_isDraggingControl)
+                if (doDrag && (!_isDraggingControl || attemptAlwaysSuccessful))
                 {
                     DraggingControl = dragTarget;
                     _dragOrigin = Mouse.LClickPosition;
+
+                    // Reset Ctrl drag state for new drag operation
+                    ResetCtrlDragState();
 
                     for (int i = 0; i < (int)MouseButtonType.Size; i++)
                     {
@@ -714,6 +735,63 @@ namespace ClassicUO.Game.Managers
 
             Point delta = Mouse.Position - _dragOrigin;
 
+            // Apply Ctrl modifier: axis-locking and speed reduction
+            bool ctrlCurrentlyHeld = Keyboard.Ctrl;
+            bool ctrlJustPressed = ctrlCurrentlyHeld && !_wasCtrlHeldLastFrame;
+
+            if (ctrlJustPressed)
+            {
+                // Reset Ctrl drag state when Ctrl is newly pressed mid-drag
+                ResetCtrlDragState();
+            }
+
+            if (ctrlCurrentlyHeld)
+            {
+                // Determine axis lock direction on first significant movement
+                if (!_ctrlDragAxisDetermined)
+                {
+                    // Require threshold movement to determine direction
+                    if (Math.Abs(delta.X) >= AXIS_LOCK_THRESHOLD_PIXELS ||
+                        Math.Abs(delta.Y) >= AXIS_LOCK_THRESHOLD_PIXELS)
+                    {
+                        _ctrlDragLockHorizontal = Math.Abs(delta.X) >= Math.Abs(delta.Y);
+                        _ctrlDragAxisDetermined = true;
+                    }
+                }
+
+                // Apply axis lock if determined
+                if (_ctrlDragAxisDetermined)
+                {
+                    if (_ctrlDragLockHorizontal)
+                    {
+                        delta.Y = 0;
+                    }
+                    else
+                    {
+                        delta.X = 0;
+                    }
+                }
+
+                // Apply speed reduction with fractional tracking to prevent cumulative truncation error
+                float scaledX = delta.X * CTRL_DRAG_SPEED_MULTIPLIER + _ctrlDragRemainderX;
+                float scaledY = delta.Y * CTRL_DRAG_SPEED_MULTIPLIER + _ctrlDragRemainderY;
+
+                delta.X = (int)scaledX;
+                delta.Y = (int)scaledY;
+
+                // Track fractional remainders for next frame
+                _ctrlDragRemainderX = scaledX - delta.X;
+                _ctrlDragRemainderY = scaledY - delta.Y;
+            }
+            else
+            {
+                // Clear remainders when not in Ctrl mode
+                _ctrlDragRemainderX = 0f;
+                _ctrlDragRemainderY = 0f;
+            }
+
+            _wasCtrlHeldLastFrame = ctrlCurrentlyHeld;
+
             DraggingControl.X += delta.X;
             DraggingControl.Y += delta.Y;
             DraggingControl.InvokeMove(delta.X, delta.Y);
@@ -730,6 +808,9 @@ namespace ClassicUO.Game.Managers
             DraggingControl?.InvokeDragEnd(mousePosition);
             DraggingControl = null;
             _isDraggingControl = false;
+
+            // Reset Ctrl drag state when drag ends
+            ResetCtrlDragState();
         }
     }
 }

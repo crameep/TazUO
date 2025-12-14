@@ -575,6 +575,66 @@ namespace ClassicUO.LegionScripting
         );
 
         /// <summary>
+        /// Send a response to the currently open menu (uses the latest MenuGump).
+        /// Useful when menu IDs change every time (e.g., Tracking skill).
+        /// Returns true if a menu was found and a response was sent.
+        /// </summary>
+        public bool MenuResponseCurrent(int index, ushort itemGraphic = 0, ushort itemHue = 0) => MainThreadQueue.InvokeOnMainThread<bool>
+        (() =>
+            {
+                MenuGump menu = UIManager.Gumps.OfType<MenuGump>()
+                    .LastOrDefault(g => !g.IsDisposed && g.IsVisible);
+
+                if (menu == null)
+                    return false;
+
+                AsyncNetClient.Socket.Send_MenuResponse(menu.LocalSerial, (ushort)menu.ServerSerial, index, itemGraphic, itemHue);
+                menu.Dispose();
+                return true;
+            }
+        );
+        
+        /// <summary>
+        /// Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
+        /// Useful when menu IDs change every time (e.g., Tracking skill).
+        /// </summary>
+        /// <returns>List of <see cref="PyMenuItem"/> containing Index, Name, Graphic and Hue values for each menu item</returns>
+        public PythonList MenuItemsCurrent() => MainThreadQueue.InvokeOnMainThread<PythonList>
+        (() =>
+            {
+                MenuGump menu = UIManager.Gumps
+                    .OfType<MenuGump>()
+                    .LastOrDefault(g => !g.IsDisposed && g.IsVisible);
+
+                if (menu is null)
+                    return [];
+
+                PythonList items = [];
+                items.AddRange(menu.MenuItemsMetadata.Select(mim => new PyMenuItem(mim.Index, mim.Name, mim.Graphic, mim.Hue)));
+                return items;
+            }
+        );
+
+        /// <summary>
+        /// Send a response to the currently open gray menu (text list menu).
+        /// Returns true if a gray menu was found and a response was sent.
+        /// </summary>
+        public bool GrayMenuResponseCurrent(ushort index) => MainThreadQueue.InvokeOnMainThread<bool>
+        (() =>
+            {
+                GrayMenuGump menu = UIManager.Gumps.OfType<GrayMenuGump>()
+                    .LastOrDefault(g => !g.IsDisposed && g.IsVisible);
+
+                if (menu == null)
+                    return false;
+
+                AsyncNetClient.Socket.Send_GrayMenuResponse(menu.LocalSerial, (ushort)menu.ServerSerial, index);
+                menu.Dispose();
+                return true;
+            }
+        );
+
+        /// <summary>
         /// Attempt to equip an item. Layer is automatically detected.
         /// Example:
         /// ```py
@@ -799,6 +859,28 @@ namespace ClassicUO.LegionScripting
             if (config != null)
             {
                 DressAgentManager.Instance.DressFromConfig(config);
+            }
+        });
+        
+        /// <summary>
+        /// Undress from a saved dress configuration.
+        /// Example:
+        /// ```py
+        /// API.Undress("PvP Gear")
+        /// ```
+        /// </summary>
+        /// <param name="name">The name of the dress configuration</param>
+        public void Undress(string name) => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            if (string.IsNullOrEmpty(name))
+                return;
+
+            DressConfig config = DressAgentManager.Instance.CurrentPlayerConfigs
+                .FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+            if (config != null)
+            {
+                DressAgentManager.Instance.UndressFromConfig(config);
             }
         });
 
@@ -1378,6 +1460,16 @@ namespace ClassicUO.LegionScripting
         /// </summary>
         /// <param name="serial">The item/mobile serial</param>
         public void IgnoreObject(uint serial) => ignoreList.Add(serial);
+
+        /// <summary>
+        /// Removes an item or mobile from your ignore list.
+        /// Example:
+        /// ```py
+        /// API.UnIgnoreObject(item)
+        /// ```
+        /// </summary>
+        /// <param name="serial">The item/mobile serial</param>
+        public void UnIgnoreObject(uint serial) => ignoreList = new ConcurrentBag<uint>(ignoreList.Where(s => s != serial));
 
         /// <summary>
         /// Clears the ignore list. Allowing functions to see those items again.
@@ -2538,6 +2630,21 @@ namespace ClassicUO.LegionScripting
         }
 
         /// <summary>
+        /// Close all menu and context menus open.
+        /// </summary>
+        public void CloseContextMenus() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            UIManager.ContextMenu?.Dispose();
+
+            MenuGump mg = UIManager.GetGump<MenuGump>();
+            while (mg != null)
+            {
+                mg.Dispose();
+                mg = UIManager.GetGump<MenuGump>();
+            }
+        });
+
+        /// <summary>
         /// Toggle flying if you are a gargoyle.
         /// Example:
         /// ```py
@@ -3355,7 +3462,7 @@ namespace ClassicUO.LegionScripting
         /// <summary>
         /// Use API.Gumps.CreateDropDown instead.
         /// </summary>
-        public PyControlDropDown CreateDropDown(int width, string[] items, int selectedIndex = 0) => Gumps.CreateDropDown(width, items, selectedIndex);
+        public PyControlDropDown CreateDropDown(int width, IList<string> items, int selectedIndex = 0) => Gumps.CreateDropDown(width, items, selectedIndex);
         /// <summary>
         /// Use API.Gumps.CreateModernGump instead.
         /// </summary>
@@ -3393,7 +3500,7 @@ namespace ClassicUO.LegionScripting
 
                 foreach (Skill s in World.Player.Skills)
                 {
-                    if (s.Name.Contains(skill))
+                    if (s?.Name?.Contains(skill) == true)
                         return s;
                 }
 
@@ -3672,6 +3779,9 @@ namespace ClassicUO.LegionScripting
         /// <param name="map"></param>
         public void RemoveMarkedTile(int x, int y, int map = -1) => MainThreadQueue.InvokeOnMainThread(() =>
         {
+            if (World?.Map == null)
+                return;
+
             if (map < 0)
                 map = World.Map.Index;
 

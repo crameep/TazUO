@@ -5861,6 +5861,8 @@ sealed class PacketHandlers
         uint cliloc = p.ReadUInt32BE();
         string name = p.ReadUnicodeLE();
 
+        Log.Info($"Waypoint received: {type} - {name}");
+
         switch (type)
         {
             case WaypointsType.Corpse:
@@ -6329,6 +6331,9 @@ sealed class PacketHandlers
             world.RemoveItem(item, true);
         }
 
+        // Track if item is newly created
+        bool itemWasCreated = item == null || item.IsDestroyed;
+
         item = world.GetOrCreateItem(serial);
         item.Graphic = graphic;
         item.CheckGraphicChange();
@@ -6347,6 +6352,12 @@ sealed class PacketHandlers
         }
 
         container.PushToBack(item);
+
+        // Fire event after item is fully configured
+        if (itemWasCreated)
+            EventSink.InvokeOnItemCreated(item);
+        else
+            EventSink.InvokeOnItemUpdated(item);
 
         if (SerialHelper.IsMobile(containerSerial))
         {

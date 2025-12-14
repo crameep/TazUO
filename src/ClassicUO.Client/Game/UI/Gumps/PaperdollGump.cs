@@ -17,7 +17,7 @@ using System.Xml;
 
 namespace ClassicUO.Game.UI.Gumps
 {
-    public class PaperDollGump : TextContainerGump
+    public class PaperDollGump : ScalableTextContainerGump
     {
         private static readonly ushort[] PeaceModeBtnGumps = { 0x07e5, 0x07e6, 0x07e7 };
         private static readonly ushort[] WarModeBtnGumps = { 0x07e8, 0x07e9, 0x07ea };
@@ -55,7 +55,7 @@ namespace ClassicUO.Game.UI.Gumps
             LocalSerial = serial;
             CanLift = canLift;
             if (ProfileManager.CurrentProfile != null)
-                Scale = InternalScale = ProfileManager.CurrentProfile.PaperdollScale;
+                GumpScale = ProfileManager.CurrentProfile.PaperdollScale;
             BuildGump();
         }
 
@@ -72,7 +72,6 @@ namespace ClassicUO.Game.UI.Gumps
 
                     _picBase.Dispose();
                     _picBase = new GumpPic(0, 0, value ? Settings.Graphic_Button_Minimized : (LocalSerial == World.Player ? Settings.Graphic_Background_Player : Settings.Graphic_Background_Other), 0);
-                    _picBase.ScaleWidthAndHeight(Scale).SetInternalScale(Scale);
                     _picBase.MouseDoubleClick += _picBase_MouseDoubleClick;
                     Insert(0, _picBase);
 
@@ -133,7 +132,6 @@ namespace ClassicUO.Game.UI.Gumps
             if (LocalSerial == World.Player)
             {
                 Add(_picBase = new GumpPic(0, 0, Settings.Graphic_Background_Player, Settings.Hue_Background_Player));
-                _picBase.ScaleWidthAndHeight(Scale).SetInternalScale(Scale);
                 _picBase.MouseDoubleClick += _picBase_MouseDoubleClick;
 
                 //HELP BUTTON
@@ -143,7 +141,7 @@ namespace ClassicUO.Game.UI.Gumps
                         X = Settings.Position_X_Help,
                         Y = Settings.Position_Y_Help,
                         ButtonAction = ButtonAction.Activate
-                    }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                    }
                 );
 
                 //OPTIONS BUTTON
@@ -153,7 +151,7 @@ namespace ClassicUO.Game.UI.Gumps
                         X = Settings.Position_X_Options,
                         Y = Settings.Position_Y_Options,
                         ButtonAction = ButtonAction.Activate
-                    }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                    }
                 );
 
                 // LOG OUT BUTTON
@@ -163,7 +161,7 @@ namespace ClassicUO.Game.UI.Gumps
                         X = Settings.Position_X_Logout,
                         Y = Settings.Position_Y_Logout,
                         ButtonAction = ButtonAction.Activate
-                    }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                    }
                 );
 
                 if (Client.Game.UO.Version < ClientVersion.CV_500A)
@@ -175,7 +173,7 @@ namespace ClassicUO.Game.UI.Gumps
                             X = Settings.Position_X_Journal,
                             Y = Settings.Position_Y_Journal,
                             ButtonAction = ButtonAction.Activate
-                        }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                        }
                     );
                 }
                 else
@@ -187,7 +185,7 @@ namespace ClassicUO.Game.UI.Gumps
                             X = Settings.Position_X_Quest,
                             Y = Settings.Position_Y_Quest,
                             ButtonAction = ButtonAction.Activate
-                        }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                        }
                     );
                 }
 
@@ -198,7 +196,7 @@ namespace ClassicUO.Game.UI.Gumps
                         X = Settings.Position_X_Skills,
                         Y = Settings.Position_Y_Skills,
                         ButtonAction = ButtonAction.Activate
-                    }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                    }
                 );
 
                 // GUILD BUTTON
@@ -208,7 +206,7 @@ namespace ClassicUO.Game.UI.Gumps
                         X = Settings.Position_X_Guild,
                         Y = Settings.Position_Y_Guild,
                         ButtonAction = ButtonAction.Activate
-                    }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                    }
                 );
 
                 // TOGGLE PEACE/WAR BUTTON
@@ -248,7 +246,6 @@ namespace ClassicUO.Game.UI.Gumps
                         }
                     );
                 }
-                _warModeBtn.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
 
                 int profileX = Settings.Position_X_Profile;
 
@@ -259,15 +256,12 @@ namespace ClassicUO.Game.UI.Gumps
 
                 Add(_profilePic = new GumpPic(profileX, Settings.Position_Y_Profile, Settings.Graphic_Button_Profile, 0));
                 profileX += _profilePic.Width;
-                _profilePic.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
                 _profilePic.MouseDoubleClick += Profile_MouseDoubleClickEvent;
 
                 Add(_partyManifestPic = new GumpPic(profileX, Settings.Position_Y_Profile, Settings.Graphic_Button_Party, 0));
-                _partyManifestPic.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
                 _partyManifestPic.MouseDoubleClick += PartyManifest_MouseDoubleClickEvent;
 
                 _hitBox = new HitBox(Settings.Position_X_MinimizeButton, Settings.Position_Y_MinimizeButton, Settings.Size_Width_MinimizeButton, Settings.Size_Height_MinimizeButton, alpha: 0f);
-                _hitBox.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
                 _hitBox.MouseUp += _hitBox_MouseUp;
 
                 Add(_hitBox);
@@ -275,9 +269,7 @@ namespace ClassicUO.Game.UI.Gumps
             else
             {
                 Add(_picBase = new GumpPic(0, 0, Settings.Graphic_Background_Other, Settings.Hue_Background_Other));
-                _picBase.ScaleWidthAndHeight(Scale).SetInternalScale(Scale);
                 Add(_profilePic = new GumpPic(Settings.Position_X_Profile, Settings.Position_Y_Profile, Settings.Graphic_Button_Profile, 0));
-                _profilePic.ScaleWidthAndHeight(Scale).SetInternalScale(Scale);
                 _profilePic.MouseDoubleClick += Profile_MouseDoubleClickEvent;
             }
 
@@ -288,12 +280,11 @@ namespace ClassicUO.Game.UI.Gumps
                     X = Settings.Position_X_Status,
                     Y = Settings.Position_Y_Status,
                     ButtonAction = ButtonAction.Activate
-                }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale)
+                }
             );
 
             // Virtue menu
             Add(_virtueMenuPic = new GumpPic(Settings.Position_X_Virtue, Settings.Position_Y_Virtue, Settings.Graphic_Button_Virtue, 0));
-            _virtueMenuPic.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
             _virtueMenuPic.MouseDoubleClick += VirtueMenu_MouseDoubleClickEvent;
 
             if (LocalSerial == World.Player.Serial)
@@ -302,7 +293,7 @@ namespace ClassicUO.Game.UI.Gumps
                     X = Settings.Position_X_Durability,
                     Y = Settings.Position_Y_Durability,
                     Graphic = Settings.Graphic_Button_Durability
-                }.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale));
+                });
 
             Mobile mobiles = World.Mobiles.Get(LocalSerial);
             Item twoHandedItem = mobiles.FindItemByLayer(Layer.TwoHanded);
@@ -326,12 +317,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             Add(_slots[8] = new EquipmentSlot(0, Settings.Position_X_LeftSlots, Settings.Position_Y_LeftSlots + Settings.Size_Height_LeftSlots * 8, Layer.Talisman, this));
 
-
-            foreach (EquipmentSlot slot in _slots)
-            {
-                slot.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
-            }
-
             // Right side equip slots
 
             Add(_slots_right[0] = new EquipmentSlot(0, Settings.Position_X_RightSlots, Settings.Position_Y_RightSlots, Layer.Robe, this));
@@ -350,26 +335,18 @@ namespace ClassicUO.Game.UI.Gumps
 
             Add(_slots_right[7] = new EquipmentSlot(0, Settings.Position_X_RightSlots, Settings.Position_Y_RightSlots + Settings.Size_Height_RightSlots * 7, Layer.Shoes, this));
 
-            foreach (EquipmentSlot slot in _slots_right)
-            {
-                slot.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
-            }
-
             // Paperdoll control!
-            _paperDollInteractable = new PaperDollInteractable(Settings.Position_X_Avatar, Settings.Position_Y_Avatar, LocalSerial, this, Scale);
-            _paperDollInteractable.ScaleXAndY(Scale);
+            _paperDollInteractable = new PaperDollInteractable(Settings.Position_X_Avatar, Settings.Position_Y_Avatar, LocalSerial, this, GumpScale);
             Add(_paperDollInteractable);
 
             if (showPaperdollBooks)
             {
                 Add(_combatBook = new GumpPic(Settings.Position_X_CombatBook, Settings.Position_Y_CombatBook, Settings.Graphic_Button_Combat, 0));
-                _combatBook.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
                 _combatBook.MouseDoubleClick += (sender, e) => GameActions.OpenAbilitiesBook(World);
 
                 if (showRacialAbilitiesBook)
                 {
                     Add(_racialAbilitiesBook = new GumpPic(Settings.Position_X_RacialAbilities, Settings.Position_Y_RacialAbilities, Settings.Graphic_Button_RacialAbilties, 0));
-                    _racialAbilitiesBook.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
                     _racialAbilitiesBook.MouseDoubleClick += (sender, e) =>
                     {
                         if (UIManager.GetGump<RacialAbilitiesBookGump>() == null)
@@ -382,7 +359,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Name and title
             _titleLabel = new Label("", false, Settings.Hue_Title, Settings.Size_Width_Hue, font: 1) { X = Settings.Position_X_Title, Y = Settings.Position_Y_Title };
-            _titleLabel.ScaleWidthAndHeight(Scale).ScaleXAndY(Scale).SetInternalScale(Scale);
 
             Add(_titleLabel);
 
@@ -472,7 +448,8 @@ namespace ClassicUO.Game.UI.Gumps
                     _warModeBtn.ButtonGraphicNormal = btngumps[0];
                     _warModeBtn.ButtonGraphicPressed = btngumps[1];
                     _warModeBtn.ButtonGraphicOver = btngumps[2];
-                    _warModeBtn.ScaleWidthAndHeight(Scale).SetInternalScale(Scale);
+                    // Rescale button size after graphics change (don't rescale position - it stays the same)
+                    _warModeBtn.ApplyScale(GumpScale, scalePosition: false, scaleSize: true, force: true);
                 }
 
                 if(ProfileManager.CurrentProfile != null)
@@ -494,6 +471,7 @@ namespace ClassicUO.Game.UI.Gumps
                 )
                 {
                     _paperDollInteractable.SetFakeItem(false);
+                    _paperDollInteractable.RequestUpdate();
                 }
                 else if (
                     !_paperDollInteractable.HasFakeItem
@@ -518,7 +496,14 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseExit(int x, int y) => _paperDollInteractable?.SetFakeItem(false);
+        protected override void OnMouseExit(int x, int y)
+        {
+            if (_paperDollInteractable != null)
+            {
+                _paperDollInteractable.SetFakeItem(false);
+                _paperDollInteractable.RequestUpdate();
+            }
+        }
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
@@ -638,8 +623,6 @@ namespace ClassicUO.Game.UI.Gumps
                 UpdateTitle(mobile.Title);
             }
 
-            _paperDollInteractable.RequestUpdate();
-
             if (mobile != null)
             {
                 for (int i = 0; i < _slots.Length; i++)
@@ -656,6 +639,10 @@ namespace ClassicUO.Game.UI.Gumps
                     _slots_right[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
                 }
             }
+
+            // Clear fake item preview and request a full UI update to ensure items render
+            _paperDollInteractable.SetFakeItem(false);
+            _paperDollInteractable.RequestUpdate();
         }
 
         public override void OnButtonClick(int buttonID)
@@ -817,20 +804,12 @@ namespace ClassicUO.Game.UI.Gumps
                 WantUpdateSize = false;
             }
 
-            public override Control ScaleWidthAndHeight(double scale)
+            public override Control ApplyScale(double scale, bool scalePosition = true, bool scaleSize = true, bool force = false)
             {
                 forcedScale = scale;
-                bg?.ScaleWidthAndHeight(scale);
-                border?.ScaleWidthAndHeight(scale);
-                return base.ScaleWidthAndHeight(scale);
-            }
-
-            public override Control ScaleXAndY(double scale)
-            {
-                forcedScale = scale;
-                bg?.ScaleXAndY(scale);
-                border?.ScaleXAndY(scale);
-                return base.ScaleXAndY(scale);
+                bg?.ApplyScale(scale, scalePosition, scaleSize, force);
+                border?.ApplyScale(scale, scalePosition, scaleSize, force);
+                return base.ApplyScale(scale, scalePosition, scaleSize, force);
             }
 
             public Layer Layer { get; }
@@ -881,7 +860,7 @@ namespace ClassicUO.Game.UI.Gumps
                                         )
                                 }
                             );
-                            _itemGump.ScaleWidthAndHeight(forcedScale).ScaleXAndY(forcedScale);
+                            _itemGump.ApplyScale(forcedScale);
                         }
                     }
                 }
@@ -922,23 +901,26 @@ namespace ClassicUO.Game.UI.Gumps
                     }
                 }
 
-                public override Control ScaleWidthAndHeight(double scale)
+                public override Control ApplyScale(double scale, bool scalePosition = true, bool scaleSize = true, bool force = false)
                 {
-                    base.ScaleWidthAndHeight(scale);
+                    base.ApplyScale(scale, scalePosition, scaleSize, force);
 
-                    originalSize.X = Width;
-                    originalSize.Y = Height;
-
-                    if (graphicSize.Width < Width)
+                    if (scaleSize)
                     {
-                        originalSize.X = graphicSize.Width;
-                        point.X = (Width >> 1) - (originalSize.X >> 1);
-                    }
+                        originalSize.X = Width;
+                        originalSize.Y = Height;
 
-                    if (graphicSize.Height < Height)
-                    {
-                        originalSize.Y = graphicSize.Height;
-                        point.Y = (Height >> 1) - (originalSize.Y >> 1);
+                        if (graphicSize.Width < Width)
+                        {
+                            originalSize.X = graphicSize.Width;
+                            point.X = (Width >> 1) - (originalSize.X >> 1);
+                        }
+
+                        if (graphicSize.Height < Height)
+                        {
+                            originalSize.Y = graphicSize.Height;
+                            point.Y = (Height >> 1) - (originalSize.Y >> 1);
+                        }
                     }
 
                     return this;

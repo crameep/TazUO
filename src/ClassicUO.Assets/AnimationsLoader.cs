@@ -966,25 +966,8 @@ namespace ClassicUO.Assets
                         {
                             direction = (byte)data.Direction1;
                         }
-                        {
-                            if (data.Direction1 == -1)
-                            {
-                                if (direction == 7)
-                                {
-                                    direction = (byte)data.Direction4;
-                                }
-                                else
-                                {
-                                    direction = (byte)data.Direction2;
-                                }
-                            }
-                            else
-                            {
-                                direction = (byte)data.Direction1;
-                            }
 
-                            break;
-                        }
+                        break;
                     }
 
                 case 1:
@@ -1005,25 +988,8 @@ namespace ClassicUO.Assets
                         {
                             direction = (byte)data.Direction2;
                         }
-                        {
-                            if (data.Direction2 == -1)
-                            {
-                                if (direction == 1)
-                                {
-                                    direction = (byte)data.Direction1;
-                                }
-                                else
-                                {
-                                    direction = (byte)data.Direction3;
-                                }
-                            }
-                            else
-                            {
-                                direction = (byte)data.Direction2;
-                            }
 
-                            break;
-                        }
+                        break;
                     }
 
                 case 3:
@@ -1044,25 +1010,8 @@ namespace ClassicUO.Assets
                         {
                             direction = (byte)data.Direction3;
                         }
-                        {
-                            if (data.Direction3 == -1)
-                            {
-                                if (direction == 3)
-                                {
-                                    direction = (byte)data.Direction2;
-                                }
-                                else
-                                {
-                                    direction = (byte)data.Direction4;
-                                }
-                            }
-                            else
-                            {
-                                direction = (byte)data.Direction3;
-                            }
 
-                            break;
-                        }
+                        break;
                     }
 
                 case 5:
@@ -1083,25 +1032,8 @@ namespace ClassicUO.Assets
                         {
                             direction = (byte)data.Direction4;
                         }
-                        {
-                            if (data.Direction4 == -1)
-                            {
-                                if (direction == 5)
-                                {
-                                    direction = (byte)data.Direction3;
-                                }
-                                else
-                                {
-                                    direction = (byte)data.Direction1;
-                                }
-                            }
-                            else
-                            {
-                                direction = (byte)data.Direction4;
-                            }
 
-                            break;
-                        }
+                        break;
                     }
             }
 

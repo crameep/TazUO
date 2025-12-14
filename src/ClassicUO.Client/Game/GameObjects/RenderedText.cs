@@ -169,10 +169,16 @@ namespace ClassicUO.Game
             bool saveHitmap = false
         )
         {
-            RenderedText r = _pool.GetOne();
+            text ??= string.Empty;
 
-            if (r == null)
+            RenderedText r;
+
+            if(_pool == null)
                 r = new RenderedText();
+            else
+                r = _pool.GetOne();
+
+            r ??= new RenderedText();
 
             r.Hue = hue;
             r.Font = font;

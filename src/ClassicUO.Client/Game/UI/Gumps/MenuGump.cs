@@ -1,8 +1,9 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System.Linq;
-using ClassicUO.Game.UI.Controls;
 using ClassicUO.Assets;
+using ClassicUO.Game.UI.Controls;
+using ClassicUO.LegionScripting;
 using ClassicUO.Network;
 using ClassicUO.Renderer;
 using ClassicUO.Utility.Logging;
@@ -13,11 +14,21 @@ namespace ClassicUO.Game.UI.Gumps
     public class MenuGump : Gump
     {
         private readonly ContainerHorizontal _container;
-        private bool _isDown,
-            _isLeft;
+        private bool _isDown, _isLeft;
         private readonly HSliderBar _slider;
         public override bool ShouldBeSaved => false;
         public override GumpType GumpType => GumpType.MenuGump;
+
+        public MenuGumpItemViewMetadata[] MenuItemsMetadata => _container.Children
+            .OfType<ItemView>()
+            .Select(iv => new MenuGumpItemViewMetadata
+            {
+                Graphic = iv.Graphic,
+                Hue     = iv.Hue,
+                Index   = iv.Index,
+                Name    = iv.Name
+            })
+            .ToArray();
 
         public MenuGump(World world, uint serial, uint serv, string name) : base(world, serial, serv)
         {
@@ -107,7 +118,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         public void AddItem(ushort graphic, ushort hue, string name, int x, int y, int index)
         {
-            var view = new ItemView(graphic, hue)
+            var view = new ItemView(graphic, hue, index, name)
             {
                 X = x,
                 Y = y
@@ -122,6 +133,8 @@ namespace ClassicUO.Game.UI.Gumps
                     graphic,
                     hue
                 );
+                ScriptRecorder.Instance.RecordMenuResponse(LocalSerial, (ushort)ServerSerial, index, graphic, hue);
+                ScriptingInfoGump.AddOrUpdateInfo("Last Menu Response", $"{name} ({index})");
                 Dispose();
                 e.Result = true;
             };
@@ -146,8 +159,15 @@ namespace ClassicUO.Game.UI.Gumps
             private readonly ushort _graphic;
             private readonly ushort _hue;
             private readonly bool _isPartial;
+            private readonly int _index;
+            private readonly string _name;
+            
+            internal int Index => _index;
+            internal string Name => _name;
+            internal ushort Graphic => _graphic;
+            internal ushort Hue => _hue;
 
-            public ItemView(ushort graphic, ushort hue)
+            public ItemView(ushort graphic, ushort hue, int index, string name)
             {
                 AcceptMouseInput = true;
                 WantUpdateSize = true;
@@ -156,9 +176,11 @@ namespace ClassicUO.Game.UI.Gumps
 
                 ref readonly SpriteInfo artInfo = ref Client.Game.UO.Arts.GetArt(_graphic);
 
-                Width = artInfo.UV.Width;
-                Height = artInfo.UV.Height;
-                _hue = hue;
+                Width      = artInfo.UV.Width;
+                Height     = artInfo.UV.Height;
+                _hue       = hue;
+                _index     = index;
+                _name      = name;
                 _isPartial = Client.Game.UO.FileManager.TileData.StaticData[graphic].IsPartialHue;
             }
 
@@ -318,6 +340,8 @@ namespace ClassicUO.Game.UI.Gumps
                                 (ushort)ServerSerial,
                                 index
                             );
+                            ScriptRecorder.Instance.RecordGrayMenuResponse(LocalSerial, (ushort)ServerSerial, index);
+                            ScriptingInfoGump.AddOrUpdateInfo("Last Menu Response", $"{radioButton.Text} ({index})");
 
                             Dispose();
                             break;

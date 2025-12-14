@@ -158,6 +158,7 @@ class PyBaseGump(PyBaseControl, IPyGump):
     IsDisposed: bool = None
     PacketGumpText: str = None
     CanCloseWithRightClick: bool = None
+    LayerOrder = None
     Gump: PyBaseGump = None
 
     def SetInScreen(self) -> None:
@@ -238,6 +239,25 @@ class PyControlDropDown(PyBaseControl):
     def GetSelectedIndex(self) -> "int":
         """
          Get the selected index of the dropdown. The first entry is 0.
+        
+        """
+        pass
+
+    def OnDropDownOptionSelected(self, onSelectionChanged: "Any") -> "PyControlDropDown":
+        """
+         Add an onSelectionChanged callback to this dropdown control.
+         The callback function will receive the selected index as a parameter.
+         Example:
+         ```py
+         def on_select(index):
+           API.SysMsg(f"Selected index: {index}")
+        
+         dropdown = API.Gumps.CreateDropDown(100, ["first", "second", "third"], 0)
+         dropdown.OnDropDownOptionSelected(on_select)
+        
+         while True:
+           API.ProcessCallbacks()
+         ```
         
         """
         pass
@@ -730,6 +750,30 @@ class PyLabel(PyBaseControl):
 class PyLand(PyGameObject):
     ""
     __class__: str = None
+
+class PyMenuItem:
+    ""
+    Index: int = None
+    Name: str = None
+    Graphic: int = None
+    Hue: int = None
+    __class__: str = None
+
+    def ToString(self) -> "str":
+        """
+         Returns a readable string representation of the menu item.
+         Used when printing or converting the object to a string in Python scripts.
+        
+        """
+        pass
+
+    def __repr__(self) -> "str":
+        """
+         Returns a detailed string representation of the object.
+         This string is used by Python’s built-in <c>repr()</c> function.
+        
+        """
+        pass
 
 class PyMobile(PyEntity):
     ""
@@ -1250,6 +1294,31 @@ def ContextMenu(serial: "int", entry: "int") -> None:
     """
     pass
 
+def MenuResponseCurrent(index: "int", itemGraphic: "int" = 0, itemHue: "int" = 0) -> "bool":
+    """
+     Send a response to the currently open menu (uses the latest MenuGump).
+     Useful when menu IDs change every time (e.g., Tracking skill).
+     Returns true if a menu was found and a response was sent.
+    
+    """
+    pass
+
+def MenuItemsCurrent() -> "list":
+    """
+     Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
+     Useful when menu IDs change every time (e.g., Tracking skill).
+    
+    """
+    pass
+
+def GrayMenuResponseCurrent(index: "int") -> "bool":
+    """
+     Send a response to the currently open gray menu (text list menu).
+     Returns true if a gray menu was found and a response was sent.
+    
+    """
+    pass
+
 def EquipItem(serial: "int") -> None:
     """
      Attempt to equip an item. Layer is automatically detected.
@@ -1373,6 +1442,17 @@ def Dress(name: "str") -> None:
      Example:
      ```py
      API.Dress("PvP Gear")
+     ```
+    
+    """
+    pass
+
+def Undress(name: "str") -> None:
+    """
+     Undress from a saved dress configuration.
+     Example:
+     ```py
+     API.Undress("PvP Gear")
      ```
     
     """
@@ -1680,6 +1760,17 @@ def IgnoreObject(serial: "int") -> None:
      for item in ItemsInContainer(API.Backpack):
        if item.Name == "Dagger":
        API.IgnoreObject(item)
+     ```
+    
+    """
+    pass
+
+def UnIgnoreObject(serial: "int") -> None:
+    """
+     Removes an item or mobile from your ignore list.
+     Example:
+     ```py
+     API.UnIgnoreObject(item)
      ```
     
     """
@@ -2216,6 +2307,13 @@ def WaitForGump(ID: "int" = 1337, delay: "float" = 5) -> "bool":
      else:
       API.HeadMsg("FAILURE", API.Player, 32)
      ```
+    
+    """
+    pass
+
+def CloseContextMenus() -> None:
+    """
+     Close all menu and context menus open.
     
     """
     pass

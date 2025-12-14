@@ -823,17 +823,24 @@ namespace ClassicUO.Game.UI.Gumps
                     {
                         profile.GameWindowFullSize = b;
 
-                        if (b)
+                        WorldViewportGump viewport = UIManager.GetGump<WorldViewportGump>();
+                        if (viewport != null)
                         {
-                            UIManager.GetGump<WorldViewportGump>()?.ResizeGameWindow(new Point(Client.Game.Window.ClientBounds.Width, Client.Game.Window.ClientBounds.Height));
-                            UIManager.GetGump<WorldViewportGump>()?.SetGameWindowPosition(new Point(-5, -5));
-                            profile.GameWindowPosition = new Point(-5, -5);
-                        }
-                        else
-                        {
-                            UIManager.GetGump<WorldViewportGump>()?.ResizeGameWindow(new Point(600, 480));
-                            UIManager.GetGump<WorldViewportGump>()?.SetGameWindowPosition(new Point(25, 25));
-                            profile.GameWindowPosition = new Point(25, 25);
+                            if (b)
+                            {
+                                viewport.ResizeGameWindow(new Point(Client.Game.Window.ClientBounds.Width, Client.Game.Window.ClientBounds.Height));
+                                viewport.SetGameWindowPosition(new Point(0, 0));
+                                profile.GameWindowPosition = new Point(0, 0);
+                            }
+                            else
+                            {
+                                viewport.ResizeGameWindow(new Point(600, 480));
+                                viewport.SetGameWindowPosition(new Point(25, 25));
+                                profile.GameWindowPosition = new Point(25, 25);
+                            }
+
+                            // Trigger a full update to ensure borders and positioning are correct
+                            viewport.OnWindowResized();
                         }
                     }
                 ), true, page
@@ -4034,11 +4041,8 @@ namespace ClassicUO.Game.UI.Gumps
                 ), true, page
             );
 
-            content.BlankLine();
-            content.AddToRight(new CheckboxWithLabel(lang.GetTazUO.GlobalScaling, 0, profile.GlobalScaling, b => profile.GlobalScaling = b), true, page);
-
             SliderWithLabel s;
-            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 50, 175, (int)(profile.GlobalScale * 100), null), true, page);
+            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 50, 175, (int)(Client.Game.RenderScale * 100), null), true, page);
 
             ModernButton b;
             content.AddToRight(b = new ModernButton(s.X + s.Width + 75, s.Y - 20, 75, 40, ButtonAction.Activate, "Apply", ThemeSettings.BUTTON_FONT_COLOR), false, page);
@@ -4047,12 +4051,10 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 if (e.Button == MouseButtonType.Left)
                 {
-                    float v = ((float)s.GetValue() / (float)100);
+                    float scale = ((float)s.GetValue() / (float)100);
 
-                    if (v <= 0 || v == 1f)
-                        profile.GlobalScaling = false;
-
-                    profile.GlobalScale = v > 0 ? v : 1f;
+                    Client.Game.SetScale(scale);
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
                 }
             };
 

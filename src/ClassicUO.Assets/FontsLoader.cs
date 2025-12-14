@@ -2771,7 +2771,7 @@ namespace ClassicUO.Assets
                     break;
                 }
 
-                if (str[i] == ' ' || str[i] == '>')
+                if (str[i] == ' ' || str[i] == '>' || str[i] == '=')
                 {
                     break;
                 }
@@ -2880,6 +2880,10 @@ namespace ClassicUO.Assets
                 {
                     tag = HTML_TAG_TYPE.HTT_DIV;
                 }
+                else if (span.Equals("color".AsSpan(), StringComparison.InvariantCultureIgnoreCase))
+                {
+                    tag = HTML_TAG_TYPE.HTT_COLOR;
+                }
                 else
                 {
                     if (
@@ -2944,6 +2948,7 @@ namespace ClassicUO.Assets
                             case HTML_TAG_TYPE.HTT_A:
                             case HTML_TAG_TYPE.HTT_DIV:
                             case HTML_TAG_TYPE.HTT_P:
+                            case HTML_TAG_TYPE.HTT_COLOR:
                                 cmdLen = i - j;
 
                                 if (str.Length != 0 && cmdLen >= 0 && str.Length > j && str.Length >= cmdLen)
@@ -3129,6 +3134,17 @@ namespace ClassicUO.Assets
                             info.Flags = UOFONT_UNDERLINE;
                             info.Color = _htmlStatus.WebLinkColor;
                             info.Link = GetWebLinkID(value, ref info.Color);
+                        }
+
+                        break;
+
+                    case HTML_TAG_TYPE.HTT_COLOR:
+                        if (command.IsEmpty || MemoryExtensions.Equals(command, "color", StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            if (!value.IsEmpty)
+                            {
+                                ReadColorFromTextBuffer(value, ref info.Color);
+                            }
                         }
 
                         break;
@@ -3719,6 +3735,7 @@ namespace ClassicUO.Assets
         HTT_CENTER,
         HTT_RIGHT,
         HTT_DIV,
+        HTT_COLOR,
 
         HTT_BODYBGCOLOR
     }

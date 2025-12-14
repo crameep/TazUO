@@ -36,18 +36,14 @@ ClassicUO.sln
 
 ## Core Features
 
-### Custom Scripting System
-TazUO includes two powerful scripting systems:
+### Python Scripting System
+TazUO includes a powerful Python scripting system:
 
-1. **Legion Scripting** (`src/ClassicUO.Client/LegionScripting/`)
-   - Custom scripting language designed for UO automation
-   - Documentation: `src/ClassicUO.Client/LegionScripting/LScript.md`
-   - Commands for movement, combat, item manipulation, etc.
-
-2. **Python Integration** (`external/iplib/`)
-   - Full IronPython runtime included
-   - Python API classes in `src/ClassicUO.Client/LegionScripting/PyClasses/`
-   - Auto-generated documentation via `src/APIToMarkdown/`
+- **Python Integration** (`external/iplib/`)
+  - Full IronPython runtime included
+  - Python API classes in `src/ClassicUO.Client/LegionScripting/PyClasses/`
+  - Auto-generated documentation via `src/APIToMarkdown/`
+  - Commands for movement, combat, item manipulation, UI interaction, and more
 
 ### Enhanced UI Features
 - **Grid Containers**: Visual inventory management with customizable layouts
@@ -112,12 +108,6 @@ The build system automatically copies platform-specific native libraries:
 - **Coverage**: Primarily utility and I/O functions
 
 ## Scripting System Details
-
-### Legion Script
-- **Location**: `src/ClassicUO.Client/LegionScripting/`
-- **Language Files**: `Lexer.cs`, `Interpreter.cs`, `TextParser.cs`
-- **Commands**: Movement, combat, item manipulation, UI interaction
-- **Documentation**: Comprehensive command reference in `LScript.md`
 
 ### Python Integration
 - **Runtime**: IronPython 3.4.2
@@ -185,7 +175,7 @@ TazUO reads original Ultima Online data files:
 - Maintain cross-platform compatibility
 
 ### Feature Development
-- Scripting features should have both Legion Script and Python APIs
+- Scripting features should expose Python APIs for automation
 - Test on multiple platforms when possible
 
 ### Testing

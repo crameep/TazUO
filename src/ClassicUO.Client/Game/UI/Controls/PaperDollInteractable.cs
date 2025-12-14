@@ -109,6 +109,9 @@ namespace ClassicUO.Game.UI.Controls
             AcceptMouseInput = false;
             LocalSerial = serial;
             _updateUI = true;
+
+            // Only set Scale/InternalScale for non-ScalableGump parents
+            // ScalableGump.Add() will handle scaling automatically
             Scale = InternalScale = scale;
         }
 
@@ -128,7 +131,9 @@ namespace ClassicUO.Game.UI.Controls
 
         public void SetFakeItem(bool value)
         {
-            _updateUI = HasFakeItem && !value || !HasFakeItem && value;
+            // Only trigger update when ENABLING fake item, not when disabling
+            // Disabling should be followed by an explicit RequestUpdate() call
+            _updateUI = !HasFakeItem && value;
             HasFakeItem = value;
         }
 
@@ -476,22 +481,19 @@ namespace ClassicUO.Game.UI.Controls
 
         private static bool IsAnimExistsInGump(ushort animID, ref int offset, bool isFemale)
         {
+            int requested = animID + offset;
             if (
-                    animID + offset > GumpsLoader.MAX_GUMP_DATA_INDEX_COUNT
-                    || Client.Game.UO.Gumps.GetGump((ushort)(animID + offset)).Texture == null
+                    requested > GumpsLoader.MAX_GUMP_DATA_INDEX_COUNT
+                    || Client.Game.UO.Gumps.GetGump((ushort)(requested)).Texture == null
                 )
             {
                 // inverse
                 offset = isFemale ? Constants.MALE_GUMP_OFFSET : Constants.FEMALE_GUMP_OFFSET;
+                requested = animID + offset;
             }
 
-            if (Client.Game.UO.Gumps.GetGump((ushort)(animID + offset)).Texture == null)
+            if (Client.Game.UO.Gumps.GetGump((ushort)(requested)).Texture == null)
             {
-                if(animID + offset != 61000) //Not sure why the paperdoll is always trying to create this animation, I think it's a bug on the server side
-                    Log.Error(
-                        $"Texture not found in paperdoll: gump_graphic: {(ushort)(animID + offset)}"
-                    );
-
                 return false;
             }
 

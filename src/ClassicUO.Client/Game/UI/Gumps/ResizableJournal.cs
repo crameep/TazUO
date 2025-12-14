@@ -746,6 +746,9 @@ namespace ClassicUO.Game.UI.Gumps
                             case MessageType.Damage:
                                 entryName = "Damage";
                                 break;
+                            case MessageType.Discord:
+                                entryName = "Discord";
+                                break;
                         }
 
                         Add(entryName,

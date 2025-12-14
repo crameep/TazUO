@@ -44,8 +44,14 @@ namespace ClassicUO.Game.UI.Gumps
             CanCloseWithEsc = false;
             CanCloseWithRightClick = false;
             LayerOrder = UILayer.Under;
-            X = scene.Camera.Bounds.X - BORDER_WIDTH;
-            Y = scene.Camera.Bounds.Y - BORDER_WIDTH;
+
+            // Check if we're in full-size mode for initial positioning
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+            int borderOffset = isFullSize ? 0 : BORDER_WIDTH * 2;
+
+            X = scene.Camera.Bounds.X - borderSize;
+            Y = scene.Camera.Bounds.Y - borderSize;
             _savedSize = _lastSize = new Point(
                 scene.Camera.Bounds.Width,
                 scene.Camera.Bounds.Height
@@ -77,15 +83,15 @@ namespace ClassicUO.Game.UI.Gumps
             };
 
             _button.SetTooltip(ResGumps.ResizeGameWindow);
-            Width = scene.Camera.Bounds.Width + BORDER_WIDTH * 2;
-            Height = scene.Camera.Bounds.Height + BORDER_WIDTH * 2;
+            Width = scene.Camera.Bounds.Width + borderOffset;
+            Height = scene.Camera.Bounds.Height + borderOffset;
 
             _borderControl = new BorderControl(0, 0, Width, Height, 4);
 
             UIManager.SystemChat = _systemChatControl = new SystemChatControl(
                 this,
-                BORDER_WIDTH,
-                BORDER_WIDTH,
+                borderSize,
+                borderSize,
                 scene.Camera.Bounds.Width,
                 scene.Camera.Bounds.Height
             );
@@ -94,6 +100,9 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_button);
             Add(_systemChatControl);
             Resize();
+
+            // Clamp viewport to window bounds after initialization
+            ClampViewportToWindowBounds();
 
             if (ProfileManager.CurrentProfile.LastVersionHistoryShown != CUOEnviroment.Version.ToString())
             {
@@ -136,6 +145,7 @@ namespace ClassicUO.Game.UI.Gumps
                     int w = _lastSize.X + offset.X;
                     int h = _lastSize.Y + offset.Y;
 
+                    // Enforce minimum size
                     if (w < 640)
                     {
                         w = 640;
@@ -146,14 +156,18 @@ namespace ClassicUO.Game.UI.Gumps
                         h = 480;
                     }
 
-                    if (w > Client.Game.Window.ClientBounds.Width - BORDER_WIDTH)
+                    // Enforce maximum size based on current position
+                    int maxW = Client.Game.Window.ClientBounds.Width - _scene.Camera.Bounds.X - BORDER_WIDTH;
+                    int maxH = Client.Game.Window.ClientBounds.Height - _scene.Camera.Bounds.Y - BORDER_WIDTH;
+
+                    if (w > maxW)
                     {
-                        w = Client.Game.Window.ClientBounds.Width - BORDER_WIDTH;
+                        w = maxW;
                     }
 
-                    if (h > Client.Game.Window.ClientBounds.Height - BORDER_WIDTH)
+                    if (h > maxH)
                     {
-                        h = Client.Game.Window.ClientBounds.Height - BORDER_WIDTH;
+                        h = maxH;
                     }
 
                     _lastSize.X = w;
@@ -179,31 +193,8 @@ namespace ClassicUO.Game.UI.Gumps
         {
             base.OnDragEnd(x, y);
 
-            Point position = Location;
-
-            if (position.X + Width - BORDER_WIDTH > Client.Game.Window.ClientBounds.Width)
-            {
-                position.X = Client.Game.Window.ClientBounds.Width - (Width - BORDER_WIDTH);
-            }
-
-            if (position.X < -BORDER_WIDTH)
-            {
-                position.X = -BORDER_WIDTH;
-            }
-
-            if (position.Y + Height - BORDER_WIDTH > Client.Game.Window.ClientBounds.Height)
-            {
-                position.Y = Client.Game.Window.ClientBounds.Height - (Height - BORDER_WIDTH);
-            }
-
-            if (position.Y < -BORDER_WIDTH)
-            {
-                position.Y = -BORDER_WIDTH;
-            }
-
-            Location = position;
-            _scene.Camera.Bounds.X = position.X + BORDER_WIDTH;
-            _scene.Camera.Bounds.Y = position.Y + BORDER_WIDTH;
+            // Clamp to keep entire viewport inside window bounds
+            ClampViewportToWindowBounds();
 
             UpdateGameWindowPos();
         }
@@ -212,8 +203,15 @@ namespace ClassicUO.Game.UI.Gumps
         {
             base.OnMove(x, y);
 
-            _scene.Camera.Bounds.X = ScreenCoordinateX + BORDER_WIDTH;
-            _scene.Camera.Bounds.Y = ScreenCoordinateY + BORDER_WIDTH;
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+
+            _scene.Camera.Bounds.X = ScreenCoordinateX + borderSize;
+            _scene.Camera.Bounds.Y = ScreenCoordinateY + borderSize;
+
+            // Clamp during move to prevent going outside
+            ClampViewportToWindowBounds();
 
             UpdateGameWindowPos();
         }
@@ -226,14 +224,84 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
+        private void ClampViewportToWindowBounds()
+        {
+            int windowWidth = Client.Game.Window.ClientBounds.Width;
+            int windowHeight = Client.Game.Window.ClientBounds.Height;
+
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+            int borderOffset = isFullSize ? 0 : BORDER_WIDTH * 2;
+
+            // Calculate available space for viewport (accounting for borders)
+            int maxWidth = windowWidth - borderOffset;
+            int maxHeight = windowHeight - borderOffset;
+
+            // Ensure viewport size fits within window
+            if (_scene.Camera.Bounds.Width > maxWidth)
+            {
+                _scene.Camera.Bounds.Width = Math.Max(640, maxWidth);
+            }
+            if (_scene.Camera.Bounds.Height > maxHeight)
+            {
+                _scene.Camera.Bounds.Height = Math.Max(480, maxHeight);
+            }
+
+            // Ensure viewport position keeps it fully inside window
+            int maxX = windowWidth - _scene.Camera.Bounds.Width - borderSize;
+            int maxY = windowHeight - _scene.Camera.Bounds.Height - borderSize;
+
+            if (_scene.Camera.Bounds.X < borderSize)
+            {
+                _scene.Camera.Bounds.X = borderSize;
+            }
+            else if (_scene.Camera.Bounds.X > maxX)
+            {
+                _scene.Camera.Bounds.X = Math.Max(borderSize, maxX);
+            }
+
+            if (_scene.Camera.Bounds.Y < borderSize)
+            {
+                _scene.Camera.Bounds.Y = borderSize;
+            }
+            else if (_scene.Camera.Bounds.Y > maxY)
+            {
+                _scene.Camera.Bounds.Y = Math.Max(borderSize, maxY);
+            }
+
+            // Update gump position to match clamped camera bounds
+            X = _scene.Camera.Bounds.X - borderSize;
+            Y = _scene.Camera.Bounds.Y - borderSize;
+            Width = _scene.Camera.Bounds.Width + borderOffset;
+            Height = _scene.Camera.Bounds.Height + borderOffset;
+
+            // Update border and button visibility
+            _borderControl.IsVisible = !isFullSize;
+            _button.IsVisible = !isFullSize;
+        }
+
         private void Resize()
         {
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+            int borderOffset = isFullSize ? 0 : BORDER_WIDTH * 2;
+
             _borderControl.Width = Width;
             _borderControl.Height = Height;
+            _borderControl.IsVisible = !isFullSize;  // Hide border in full-size mode
+
             _button.X = Width - (_button.Width >> 1);
             _button.Y = Height - (_button.Height >> 1);
-            _scene.Camera.Bounds.Width = _systemChatControl.Width = Width - BORDER_WIDTH * 2;
-            _scene.Camera.Bounds.Height = _systemChatControl.Height = Height - BORDER_WIDTH * 2;
+            _button.IsVisible = !isFullSize;  // Hide resize button in full-size mode
+
+            // Update system chat control position and size
+            // Note: Width/Height already includes borderOffset from ClampViewportToWindowBounds
+            _systemChatControl.X = borderSize;
+            _systemChatControl.Y = borderSize;
+            _systemChatControl.Width = _scene.Camera.Bounds.Width;
+            _systemChatControl.Height = _scene.Camera.Bounds.Height;
             _systemChatControl.Resize();
             WantUpdateSize = true;
 
@@ -244,14 +312,22 @@ namespace ClassicUO.Game.UI.Gumps
         {
             Location = pos;
 
-            _scene.Camera.Bounds.X = ScreenCoordinateX + BORDER_WIDTH;
-            _scene.Camera.Bounds.Y = ScreenCoordinateY + BORDER_WIDTH;
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+
+            _scene.Camera.Bounds.X = ScreenCoordinateX + borderSize;
+            _scene.Camera.Bounds.Y = ScreenCoordinateY + borderSize;
 
             UpdateGameWindowPos();
         }
 
         public Point ResizeGameWindow(Point newSize)
         {
+            int windowWidth = Client.Game.Window.ClientBounds.Width;
+            int windowHeight = Client.Game.Window.ClientBounds.Height;
+
+            // Enforce minimum size
             if (newSize.X < 640)
             {
                 newSize.X = 640;
@@ -262,7 +338,24 @@ namespace ClassicUO.Game.UI.Gumps
                 newSize.Y = 480;
             }
 
-            //Resize();
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderOffset = isFullSize ? 0 : BORDER_WIDTH * 2;
+
+            // Enforce maximum size (window bounds minus borders if not full-size)
+            int maxWidth = windowWidth - borderOffset;
+            int maxHeight = windowHeight - borderOffset;
+
+            if (newSize.X > maxWidth)
+            {
+                newSize.X = maxWidth;
+            }
+
+            if (newSize.Y > maxHeight)
+            {
+                newSize.Y = maxHeight;
+            }
+
             _lastSize = _savedSize = newSize;
 
             if (
@@ -272,24 +365,45 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 _scene.Camera.Bounds.Width = _lastSize.X;
                 _scene.Camera.Bounds.Height = _lastSize.Y;
-                Width = _scene.Camera.Bounds.Width + BORDER_WIDTH * 2;
-                Height = _scene.Camera.Bounds.Height + BORDER_WIDTH * 2;
+                Width = _scene.Camera.Bounds.Width + borderOffset;
+                Height = _scene.Camera.Bounds.Height + borderOffset;
 
                 Resize();
+
+                // Ensure viewport stays in bounds after resize
+                ClampViewportToWindowBounds();
             }
 
             return newSize;
         }
 
+        public void OnWindowResized()
+        {
+            // Clamp viewport to new window bounds
+            ClampViewportToWindowBounds();
+
+            // Update internal state
+            _lastSize.X = _scene.Camera.Bounds.Width;
+            _lastSize.Y = _scene.Camera.Bounds.Height;
+            _savedSize = _lastSize;
+
+            Resize();
+        }
+
         public override bool Contains(int x, int y)
         {
+            // Check if we're in full-size mode
+            bool isFullSize = ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.GameWindowFullSize;
+            int borderSize = isFullSize ? 0 : BORDER_WIDTH;
+            int borderOffset = isFullSize ? 0 : BORDER_WIDTH * 2;
+
             if (
-                x >= BORDER_WIDTH
-                && x < Width - BORDER_WIDTH * 2
-                && y >= BORDER_WIDTH
+                x >= borderSize
+                && x < Width - borderOffset
+                && y >= borderSize
                 && y
                     < Height
-                        - BORDER_WIDTH * 2
+                        - borderOffset
                         - (
                             _systemChatControl?.TextBoxControl != null
                             && _systemChatControl.IsActive

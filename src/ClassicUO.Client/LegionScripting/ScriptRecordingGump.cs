@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using ClassicUO.Assets;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Game.UI.ImGuiControls;
 using ClassicUO.Input;
+using System.Threading.Tasks;
 
 namespace ClassicUO.LegionScripting
 {
@@ -435,6 +438,12 @@ namespace ClassicUO.LegionScripting
                     object contextSerial = action.Parameters.ContainsKey("serial") ? action.Parameters["serial"] : "?";
                     object contextIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
                     return $"Context Menu 0x{contextSerial:X8} [{contextIndex}]";
+                case "menuresponse":
+                    object menuIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
+                    return $"Menu Response [{menuIndex}]";
+                case "graymenuresponse":
+                    object grayMenuIndex = action.Parameters.ContainsKey("index") ? action.Parameters["index"] : "?";
+                    return $"Gray Menu Response [{grayMenuIndex}]";
                 case "useskill":
                     object skillName = action.Parameters.ContainsKey("skill") ? action.Parameters["skill"] : "?";
                     return $"Use Skill \"{skillName}\"";
@@ -511,12 +520,20 @@ namespace ClassicUO.LegionScripting
         {
             try
             {
+                if (ScriptRecorder.Instance.IsRecording)
+                {
+                    ScriptRecorder.Instance.StopRecording();
+                    UpdateUI();
+                }
+
                 string script = ScriptRecorder.Instance.GenerateScript(_recordPausesCheckbox.IsChecked);
                 string fileName = $"recorded_script_{DateTime.Now:yyyyMMdd_HHmmss}.py";
                 string filePath = System.IO.Path.Combine(LegionScripting.ScriptPath, fileName);
 
                 System.IO.File.WriteAllText(filePath, script);
                 GameActions.Print($"Script saved as {fileName}");
+
+                MainThreadQueue.EnqueueAction(() => ScriptManagerWindow.Instance?.Refresh());
             }
             catch (Exception ex)
             {

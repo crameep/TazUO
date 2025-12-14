@@ -1,9 +1,10 @@
+using System;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 
 namespace ClassicUO.LegionScripting.PyClasses;
 
-public class PyControlDropDown(Combobox combobox) : PyBaseControl(combobox)
+public class PyControlDropDown(Combobox combobox, API api) : PyBaseControl(combobox)
 {
     /// <summary>
     /// Get the selected index of the dropdown. The first entry is 0.
@@ -20,5 +21,47 @@ public class PyControlDropDown(Combobox combobox) : PyBaseControl(combobox)
 
             return 0;
         });
+    }
+
+    /// <summary>
+    /// Add an onSelectionChanged callback to this dropdown control.
+    /// The callback function will receive the selected index as a parameter.
+    /// Example:
+    /// ```py
+    /// def on_select(index):
+    ///   API.SysMsg(f"Selected index: {index}")
+    ///
+    /// dropdown = API.Gumps.CreateDropDown(100, ["first", "second", "third"], 0)
+    /// dropdown.OnDropDownOptionSelected(on_select)
+    ///
+    /// while True:
+    ///   API.ProcessCallbacks()
+    /// ```
+    /// </summary>
+    /// <param name="onSelectionChanged">The callback function that receives the selected index</param>
+    /// <returns>Returns this control so methods can be chained.</returns>
+    public PyControlDropDown OnDropDownOptionSelected(object onSelectionChanged)
+    {
+        if (!VerifyIntegrity() || onSelectionChanged == null || api == null) return this;
+
+        if (!api.engine.Operations.IsCallable(onSelectionChanged))
+            return this;
+
+        combobox.OnOptionSelected += (_, selectedIndex) =>
+        {
+            api?.ScheduleCallback(() =>
+            {
+                try
+                {
+                    api.engine.Operations.Invoke(onSelectionChanged, selectedIndex);
+                }
+                catch (Exception ex)
+                {
+                    Game.GameActions.Print($"Script callback error: {ex}", 32);
+                }
+            });
+        };
+
+        return this;
     }
 }

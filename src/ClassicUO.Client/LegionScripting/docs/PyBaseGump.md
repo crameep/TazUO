@@ -36,6 +36,10 @@ description:  Python API wrapper for Gump (game window) objects in TazUO.  Provi
  Gets or Sets the ability to close the gump with a right click
 
 
+### `LayerOrder`
+
+**Type:** `UILayer`
+
 ### `Gump`
 
 **Type:** `Gump`

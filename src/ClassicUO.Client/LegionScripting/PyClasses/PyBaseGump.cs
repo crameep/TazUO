@@ -1,4 +1,6 @@
+using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 
 namespace ClassicUO.LegionScripting.PyClasses;
@@ -60,6 +62,25 @@ public class PyBaseGump(Gump gump) : PyBaseControl(gump), IPyGump
                 return;
 
             MainThreadQueue.InvokeOnMainThread(() => Gump.CanCloseWithRightClick = value);
+        }
+    }
+
+    public UILayer LayerOrder
+    {
+        get
+        {
+            if (!VerifyIntegrity())
+                return UILayer.Default;
+
+            return MainThreadQueue.InvokeOnMainThread(() => Gump.LayerOrder);
+        }
+
+        set
+        {
+            if (!VerifyIntegrity())
+                return;
+
+            MainThreadQueue.InvokeOnMainThread(() => Gump.LayerOrder = value);
         }
     }
 

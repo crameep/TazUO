@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.Gumps.GridHighLight
 {
@@ -115,6 +116,18 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             set => _entry.Overweight = value;
         }
 
+        public int MinimumWeight
+        {
+            get => _entry.MinimumWeight;
+            set => _entry.MinimumWeight = value;
+        }
+
+        public int MaximumWeight
+        {
+            get => _entry.MaximumWeight;
+            set => _entry.MaximumWeight = value;
+        }
+
         public List<string> RequiredRarities
         {
             get => _entry.RequiredRarities;
@@ -135,6 +148,34 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
         {
             get => _entry.LootOnMatch;
             set => _entry.LootOnMatch = value;
+        }
+
+        public uint DestinationContainer
+        {
+            get => _entry.DestinationContainer;
+            set
+            {
+                _entry.DestinationContainer = value;
+                _cachedLootEntry = null; // Invalidate cache when container changes
+            }
+        }
+
+        private AutoLootManager.AutoLootConfigEntry _cachedLootEntry;
+
+        private AutoLootManager.AutoLootConfigEntry GetLootEntry()
+        {
+            if (DestinationContainer == 0)
+                return null;
+
+            if (_cachedLootEntry == null || _cachedLootEntry.DestinationContainer != DestinationContainer)
+            {
+                _cachedLootEntry = new AutoLootManager.AutoLootConfigEntry
+                {
+                    DestinationContainer = DestinationContainer
+                };
+            }
+
+            return _cachedLootEntry;
         }
 
         private List<string> _cachedNormalizedRulesExcludeNegatives;
@@ -252,7 +293,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                         Item root = World.Items.Get(data.item.RootContainer);
                         if (root != null && root.IsCorpse)
                         {
-                            AutoLootManager.Instance.LootItem(data.item);
+                            AutoLootManager.Instance.LootItem(data.item, bestMatch.GetLootEntry());
                             data.item.ShouldAutoLoot = true;
                         }
                     }
@@ -408,8 +449,8 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                 string propertyName = normalizedItemProperty.Key;
                 string original = normalizedItemProperty.Value.Original;
 
-                // overweight
-                if (Overweight && original.Contains("weight: 50 stones"))
+                // weight check
+                if (Overweight && !IsWeightInRange(original, MinimumWeight, MaximumWeight))
                     return false;
 
                 // exclusion check (hash-based lookup)
@@ -504,8 +545,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
             if (!itemProperties.Any() && !itemNegatives.Any() && !itemRarities.Any())
                 return false;
 
-            if (Overweight && normalizedItemLines.Any(prop =>
-                    prop.Value.Original.IndexOf("weight: 50 stones", StringComparison.OrdinalIgnoreCase) >= 0))
+            if (Overweight && normalizedItemLines.Any(prop => !IsWeightInRange(prop.Value.Original, MinimumWeight, MaximumWeight)))
             {
                 return false;
             }
@@ -707,6 +747,34 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
 
             string cleanedUpItemName = CleanItemName(itemName);
             return ItemNames.Any(name => string.Equals(cleanedUpItemName, name.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsWeightInRange(string propertyString, int minWeight, int maxWeight)
+        {
+            // Look for "weight: X stones" pattern
+            int weightIndex = propertyString.IndexOf("weight:", StringComparison.OrdinalIgnoreCase);
+            if (weightIndex < 0)
+                return true; // No weight property found, so it passes the check
+
+            // Extract the weight value
+            int startIndex = weightIndex + 7; // length of "weight:"
+            int endIndex = propertyString.IndexOf("stone", startIndex, StringComparison.OrdinalIgnoreCase);
+            if (endIndex < 0)
+                return true; // Malformed weight string, allow it
+
+            string weightStr = propertyString.Substring(startIndex, endIndex - startIndex).Trim();
+            if (!int.TryParse(weightStr, out int weight))
+            {
+                Log.Debug($"FAILED TO PARSE: {weightStr}");
+                return true; // Couldn't parse weight, allow it
+            }
+
+            // Check if weight is in range
+            // If minWeight is 0, no minimum check; if maxWeight is 0, no maximum check
+            bool passesMin = minWeight == 0 || weight >= minWeight;
+            bool passesMax = maxWeight == 0 || weight <= maxWeight;
+
+            return passesMin && passesMax;
         }
 
         private bool MatchesSlot(byte layer)

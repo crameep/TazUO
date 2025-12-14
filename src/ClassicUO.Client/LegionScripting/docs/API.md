@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `11/19/25`.*
+*This was generated on `12/14/25`.*
 
 ## Properties
 ### `JournalEntries`
@@ -453,6 +453,51 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### MenuResponseCurrent
+`(index, itemGraphic, itemHue)`
+ Send a response to the currently open menu (uses the latest MenuGump).
+ Useful when menu IDs change every time (e.g., Tracking skill).
+ Returns true if a menu was found and a response was sent.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `index` | `int` | ❌ No |  |
+| `itemGraphic` | `ushort` | ✅ Yes |  |
+| `itemHue` | `ushort` | ✅ Yes |  |
+
+**Return Type:** `bool`
+
+---
+
+### MenuItemsCurrent
+
+ Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
+ Useful when menu IDs change every time (e.g., Tracking skill).
+
+
+**Return Type:** `PythonList`
+
+---
+
+### GrayMenuResponseCurrent
+`(index)`
+ Send a response to the currently open gray menu (text list menu).
+ Returns true if a gray menu was found and a response was sent.
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `index` | `ushort` | ❌ No |  |
+
+**Return Type:** `bool`
+
+---
+
 ### EquipItem
 `(serial)`
  Attempt to equip an item. Layer is automatically detected.
@@ -652,6 +697,25 @@ You can now type `-updateapi` in game to download the latest API.py file.
  Example:
  ```py
  API.Dress("PvP Gear")
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | ❌ No | The name of the dress configuration |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### Undress
+`(name)`
+ Undress from a saved dress configuration.
+ Example:
+ ```py
+ API.Undress("PvP Gear")
  ```
 
 
@@ -1176,6 +1240,25 @@ You can now type `-updateapi` in game to download the latest API.py file.
  for item in ItemsInContainer(API.Backpack):
    if item.Name == "Dagger":
    API.IgnoreObject(item)
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `serial` | `uint` | ❌ No | The item/mobile serial |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### UnIgnoreObject
+`(serial)`
+ Removes an item or mobile from your ignore list.
+ Example:
+ ```py
+ API.UnIgnoreObject(item)
  ```
 
 
@@ -2052,6 +2135,15 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 ---
 
+### CloseContextMenus
+
+ Close all menu and context menus open.
+
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### ToggleFly
 
  Toggle flying if you are a gargoyle.
@@ -2888,7 +2980,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `width` | `int` | ❌ No |  |
-| `items` | `string[]` | ❌ No |  |
+| `items` | `IList<string>` | ❌ No |  |
 | `selectedIndex` | `int` | ✅ Yes |  |
 
 **Return Type:** `PyControlDropDown`

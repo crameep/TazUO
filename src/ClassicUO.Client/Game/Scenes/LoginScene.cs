@@ -142,7 +142,7 @@ namespace ClassicUO.Game.Scenes
                 Client.Game.RestoreWindow();
             }
 
-            Client.Game.SetWindowSize(640, 480);
+            Client.Game.SetWindowSize((int)(640 * Client.Game.RenderScale), (int)(480 * Client.Game.RenderScale));
         }
 
 

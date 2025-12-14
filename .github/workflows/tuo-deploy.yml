@@ -15,7 +15,7 @@ env:
   RELEASE_LINK: "https://github.com/bittiez/TazUO/releases/latest"
   UPLOAD_BODY: |
     These are built automatically on the main branch.
-    These are net9 builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
+    These are modern dotnet builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
   UPLOAD_MAKELATEST: true
   UPLOAD_PRERELEASE: false
 
@@ -37,8 +37,6 @@ jobs:
             rid: linux-x64
           - os: macos-latest
             rid: osx-arm64
-          - os: macos-13
-            rid: osx-x64
     outputs:
       rid: ${{ matrix.rid }}
       release_notes: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
@@ -63,18 +61,10 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Setup .NET 9
-        uses: actions/setup-dotnet@v4
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+          dotnet-version: 10
 
       - name: Build executable
         run: dotnet publish ${{ env.CUO_PROJECT_PATH }} -c Release -o ${{ env.CUO_OUTPUT_PATH }} -r ${{ matrix.rid }}

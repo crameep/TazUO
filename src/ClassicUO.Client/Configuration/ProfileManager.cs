@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System.IO;
+using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -9,6 +10,16 @@ namespace ClassicUO.Configuration
 {
     internal static class ProfileManager
     {
+        static ProfileManager()
+        {
+            // Subscribe to player creation event to load Char-scoped settings
+            EventSink.OnPlayerCreated += OnPlayerCreated;
+        }
+
+        private static void OnPlayerCreated(object sender, System.EventArgs e) =>
+            // Load Char-scoped settings after player is created (when serial is available)
+            CurrentProfile?.LoadCharScopedSettings();
+
         public static Profile CurrentProfile { get; private set; }
         public static string ProfilePath { get; private set; }
 
