@@ -1144,13 +1144,10 @@ namespace ClassicUO.Game.Scenes
                 hue.Z = 1f;
             }
 
-            // Draw overheads and selection into the render target (for consistent scaling)
-            // Use the same matrix transform as game objects to ensure coordinate system consistency
-            batcher.Begin(null, worldRTMatrix);
-
+            // Draw overheads and selection after lighting, on the backbuffer
+            batcher.Begin();
             DrawOverheads(batcher);
             DrawSelection(batcher);
-
             batcher.End();
 
             gd.Viewport = r_viewport;
