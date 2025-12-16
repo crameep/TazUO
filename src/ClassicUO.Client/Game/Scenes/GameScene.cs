@@ -174,6 +174,7 @@ namespace ClassicUO.Game.Scenes
         }
 
         private uint _lastResync = Time.Ticks;
+        private Matrix worldRTMatrix;
 
         public GameScene()
         {
@@ -1143,6 +1144,15 @@ namespace ClassicUO.Game.Scenes
                 hue.Z = 1f;
             }
 
+            // Draw overheads and selection into the render target (for consistent scaling)
+            // Use the same matrix transform as game objects to ensure coordinate system consistency
+            batcher.Begin(null, worldRTMatrix);
+
+            DrawOverheads(batcher);
+            DrawSelection(batcher);
+
+            batcher.End();
+
             gd.Viewport = r_viewport;
 
             // Always clear stencil buffer to prevent dirty state affecting UI rendering
@@ -1164,15 +1174,7 @@ namespace ClassicUO.Game.Scenes
             int vpW = Camera.Bounds.Width;
             int vpH = Camera.Bounds.Height;
 
-            var vpCenter = new Vector2(vpW * 0.5f, vpH * 0.5f);
-            Vector2 camOffset = Camera.Offset;
-            var rtCenter = new Vector2(rtW * 0.5f, rtH * 0.5f);
-
-            Matrix.CreateTranslation(-vpCenter.X, -vpCenter.Y, 0f, out Matrix matTrans1);
-            Matrix.CreateTranslation(-camOffset.X, -camOffset.Y, 0f, out Matrix matTrans2);
-            Matrix.CreateTranslation(rtCenter.X, rtCenter.Y, 0f, out Matrix matTrans3);
-            Matrix.Multiply(ref matTrans1, ref matTrans2, out Matrix temp1);
-            Matrix.Multiply(ref temp1, ref matTrans3, out Matrix worldRTMatrix);
+            EnsureWorldMatrix(rtW, rtH, vpW, vpH);
 
             DrawWorld(batcher, ref worldRTMatrix);
 
@@ -1279,15 +1281,6 @@ namespace ClassicUO.Game.Scenes
             {
                 _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
             }
-
-            batcher.End();
-
-            // Draw overheads and selection into the render target (for consistent scaling)
-            // Use the same matrix transform as game objects to ensure coordinate system consistency
-            batcher.Begin(null, matrix);
-
-            DrawOverheads(batcher);
-            DrawSelection(batcher);
 
             batcher.End();
 
@@ -1445,16 +1438,32 @@ namespace ClassicUO.Game.Scenes
 
             var selectionHue = new Vector3 { Z = 0.7f };
 
-            int minX = Math.Min(_selectionStart.X, Mouse.Position.X);
-            int maxX = Math.Max(_selectionStart.X, Mouse.Position.X);
-            int minY = Math.Min(_selectionStart.Y, Mouse.Position.Y);
-            int maxY = Math.Max(_selectionStart.Y, Mouse.Position.Y);
+            Point selStart = new Point(
+                Math.Min(_selectionStart.X, Mouse.Position.X),
+                Math.Min(_selectionStart.Y, Mouse.Position.Y)
+            );
+            Point selEnd = new Point(
+                Math.Max(_selectionStart.X, Mouse.Position.X),
+                Math.Max(_selectionStart.Y, Mouse.Position.Y)
+            );
+
+            // Convert to viewport-relative coordinates
+            selStart.X -= Camera.Bounds.X;
+            selStart.Y -= Camera.Bounds.Y;
+            selEnd.X -= Camera.Bounds.X;
+            selEnd.Y -= Camera.Bounds.Y;
+
+            // Transform through zoom
+            selStart = Camera.ScreenToWorld(selStart);
+            selEnd = Camera.ScreenToWorld(selEnd);
+            selStart = Camera.WorldToScreen(selStart);
+            selEnd = Camera.WorldToScreen(selEnd);
 
             var selectionRect = new Rectangle(
-                minX - Camera.Bounds.X,
-                minY - Camera.Bounds.Y,
-                maxX - minX,
-                maxY - minY
+                selStart.X,
+                selStart.Y,
+                selEnd.X - selStart.X,
+                selEnd.Y - selStart.Y
             );
 
             batcher.Draw(
@@ -1513,6 +1522,19 @@ namespace ClassicUO.Game.Scenes
                     gd, rtWidth, rtHeight, false,
                     pp.BackBufferFormat, pp.DepthStencilFormat, pp.MultiSampleCount, pp.RenderTargetUsage);
             }
+        }
+
+        private void EnsureWorldMatrix(int rtW, int rtH, int vpW, int vpH)
+        {
+            var vpCenter = new Vector2(vpW * 0.5f, vpH * 0.5f);
+            Vector2 camOffset = Camera.Offset;
+            var rtCenter = new Vector2(rtW * 0.5f, rtH * 0.5f);
+
+            Matrix.CreateTranslation(-vpCenter.X, -vpCenter.Y, 0f, out Matrix matTrans1);
+            Matrix.CreateTranslation(-camOffset.X, -camOffset.Y, 0f, out Matrix matTrans2);
+            Matrix.CreateTranslation(rtCenter.X, rtCenter.Y, 0f, out Matrix matTrans3);
+            Matrix.Multiply(ref matTrans1, ref matTrans2, out Matrix temp1);
+            Matrix.Multiply(ref temp1, ref matTrans3, out worldRTMatrix);
         }
 
         private void UpdatePostProcessState(GraphicsDevice gd)
