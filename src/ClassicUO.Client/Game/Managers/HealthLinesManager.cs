@@ -189,7 +189,7 @@ namespace ClassicUO.Game.Managers
                 }
 
                 p.X -= 5;
-                p = Client.Game.Scene.Camera.WorldToScreen(p);
+                //p = Client.Game.Scene.Camera.WorldToScreen(p);
                 p.X -= BAR_WIDTH_HALF;
                 p.Y -= BAR_HEIGHT_HALF;
 

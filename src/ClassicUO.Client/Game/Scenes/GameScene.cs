@@ -1145,7 +1145,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             // Draw overheads and selection after lighting, on the backbuffer
-            batcher.Begin();
+            batcher.Begin(null, Camera.ViewTransformMatrix);
             DrawOverheads(batcher);
             DrawSelection(batcher);
             batcher.End();
@@ -1435,11 +1435,11 @@ namespace ClassicUO.Game.Scenes
 
             var selectionHue = new Vector3 { Z = 0.7f };
 
-            Point selStart = new Point(
+            var selStart = new Point(
                 Math.Min(_selectionStart.X, Mouse.Position.X),
                 Math.Min(_selectionStart.Y, Mouse.Position.Y)
             );
-            Point selEnd = new Point(
+            var selEnd = new Point(
                 Math.Max(_selectionStart.X, Mouse.Position.X),
                 Math.Max(_selectionStart.Y, Mouse.Position.Y)
             );

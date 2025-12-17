@@ -6,6 +6,7 @@ using ClassicUO.Input;
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
+using ClassicUO.Game.Scenes;
 
 namespace ClassicUO.Game.Managers
 {
@@ -54,10 +55,9 @@ namespace ClassicUO.Game.Managers
                     }
                 }
 
-                int x = o.RealScreenPosition.X;
-                int y = o.RealScreenPosition.Y;
+                Point pos = o.RealScreenPosition;
 
-                if (o.TextBox.PixelCheck(mouseX - x - startX, mouseY - y - startY))
+                if (o.TextBox.PixelCheck(mouseX - pos.X - startX, mouseY - pos.Y - startY))
                 {
                     SelectedObject.Object = o;
                 }
@@ -71,24 +71,24 @@ namespace ClassicUO.Game.Managers
                 }
                 else
                 {
-                    x += startX;
-                    y += startY;
+                    pos.X += startX;
+                    pos.Y += startY;
                 }
                 o.TextBox.Alpha = alpha;
                 if (highlight)
                     o.TextBox.Draw
                     (
                         batcher,
-                        x,
-                        y,
+                        pos.X,
+                        pos.Y,
                         Color.Yellow
                     );
                 else
                     o.TextBox.Draw
                     (
                         batcher,
-                        x,
-                        y
+                        pos.X,
+                        pos.Y
                     );
             }
         }
