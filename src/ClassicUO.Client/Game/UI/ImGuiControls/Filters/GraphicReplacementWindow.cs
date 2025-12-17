@@ -12,25 +12,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
 {
     public class GraphicReplacementWindow : SingletonImGuiWindow<GraphicReplacementWindow>
     {
-        private enum GraphicType
-        {
-            Unknown,
-            Mobile,
-            Land,
-            Static
-        }
-
-        private string newOriginalGraphicInput = "";
-        private string newReplacementGraphicInput = "";
-        private string newHueInput = "";
-        private bool showAddEntry = false;
+        private string _newOriginalGraphicInput = "";
+        private string _newReplacementGraphicInput = "";
+        private string _newHueInput = "";
+        private bool _showAddEntry = false;
         private string _validationError = null;
-        private Dictionary<ushort, string> entryOriginalInputs = new Dictionary<ushort, string>();
-        private Dictionary<ushort, string> entryReplacementInputs = new Dictionary<ushort, string>();
-        private Dictionary<ushort, string> entryHueInputs = new Dictionary<ushort, string>();
-        private Dictionary<ushort, ArtPointerStruct> _mobileTextureCache = new Dictionary<ushort, ArtPointerStruct>();
+        private byte _newOriginalTypeSelection = 1; // Default Mobile
+        private Dictionary<(ushort, byte), string> _entryOriginalInputs = new Dictionary<(ushort, byte), string>();
+        private Dictionary<(ushort, byte), string> _entryReplacementInputs = new Dictionary<(ushort, byte), string>();
+        private Dictionary<(ushort, byte), string> _entryHueInputs = new Dictionary<(ushort, byte), string>();
+        private Dictionary<(ushort, byte), byte> _entryOriginalTypeSelections = new Dictionary<(ushort, byte), byte>();
+        private Dictionary<(ushort, byte), ArtPointerStruct> _textureCache = new Dictionary<(ushort, byte), ArtPointerStruct>();
 
-        private GraphicReplacementWindow() : base("Mobile Graphics Replacement")
+        private GraphicReplacementWindow() : base("Graphic Replacement")
         {
             WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
         }
@@ -38,14 +32,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
         public override void DrawContent()
         {
             ImGui.Spacing();
-            ImGuiComponents.Tooltip("This can be used to replace graphics of mobiles with other graphics (For example if dragons are too big, replace them with wyverns).");
+            ImGuiComponents.Tooltip("Replace graphics with other graphics. Mobile = animations (mobiles), Land = terrain tiles, Static = items/statics.");
 
             ImGui.Spacing();
 
             ImGui.SeparatorText("Options:");
 
             // Add entry section
-            if (ImGui.Button("Add Entry")) showAddEntry = !showAddEntry;
+            if (ImGui.Button("Add Entry")) _showAddEntry = !_showAddEntry;
 
             ImGui.SameLine();
             if (ImGui.Button("Target Entity"))
@@ -79,16 +73,34 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         hue = land.Hue;
                         processed = true;
                     }
+                    else if (targetedEntity is GameObject obj)
+                    {
+                        graphic = obj.Graphic;
+                        hue = obj.Hue;
+                        processed = true;
+                    }
 
                     if (!processed) return;
 
-                    GraphicChangeFilter filter = GraphicsReplacement.NewFilter(graphic, graphic, hue);
+                    // Determine type based on entity class
+                    // Mobile class uses Animation system (type 1)
+                    // Land class uses Arts.GetLand() (type 2)
+                    // Item/Static classes use Arts.GetArt() (type 3)
+                    byte entityType = 3; // Default to Static (art files)
+                    if (targetedEntity is Mobile)
+                        entityType = 1; // Mobile (animation files)
+                    else if (targetedEntity is Land)
+                        entityType = 2; // Land tiles
+
+                    GraphicChangeFilter filter = GraphicsReplacement.NewFilter(graphic, entityType, graphic, entityType, hue);
                     if (filter != null)
                     {
+                        (ushort OriginalGraphic, byte OriginalType) key = (filter.OriginalGraphic, filter.OriginalType);
                         // Initialize input strings for the new entry
-                        entryOriginalInputs[filter.OriginalGraphic] = $"0x{filter.OriginalGraphic:X4}";
-                        entryReplacementInputs[filter.OriginalGraphic] = $"0x{filter.ReplacementGraphic:X4}";
-                        entryHueInputs[filter.OriginalGraphic] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
+                        _entryOriginalInputs[key] = $"0x{filter.OriginalGraphic:X4}";
+                        _entryReplacementInputs[key] = $"0x{filter.ReplacementGraphic:X4}";
+                        _entryHueInputs[key] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
+                        _entryOriginalTypeSelections[key] = filter.OriginalType;
                     }
                 });
             }
@@ -97,7 +109,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Button("Apply to All Entities")) ForceRefreshAllEntities();
             ImGuiComponents.Tooltip("Reapply graphic replacements to all entities currently in the world");
 
-            if (showAddEntry)
+            if (_showAddEntry)
             {
                 ImGui.Spacing();
                 ImGui.SeparatorText("New Entry:");
@@ -114,7 +126,15 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.BeginGroup();
                 ImGui.Text("Original Graphic:");
                 ImGui.SetNextItemWidth(150);
-                ImGui.InputText("##NewOriginalGraphic", ref newOriginalGraphicInput, 10);
+                ImGui.InputText("##NewOriginalGraphic", ref _newOriginalGraphicInput, 10);
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(100);
+                // Mobile uses animations, Land uses GetLand(), Static uses GetArt()
+                string[] typeNames = { "Mobile", "Land", "Static" };
+                byte[] typeValues = { 1, 2, 3 }; // Mobile=1 (animations), Land=2 (land tiles), Static=3 (items/statics)
+                int origTypeIdx = Array.IndexOf(typeValues, _newOriginalTypeSelection);
+                if (ImGui.Combo("##OriginalType", ref origTypeIdx, typeNames, typeNames.Length))
+                    _newOriginalTypeSelection = typeValues[origTypeIdx];
                 ImGui.EndGroup();
 
                 ImGui.SameLine();
@@ -122,50 +142,52 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.BeginGroup();
                 ImGui.Text("Replacement Graphic:");
                 ImGui.SetNextItemWidth(150);
-                ImGui.InputText("##NewReplacementGraphic", ref newReplacementGraphicInput, 10);
+                ImGui.InputText("##NewReplacementGraphic", ref _newReplacementGraphicInput, 10);
                 ImGui.EndGroup();
 
                 ImGui.Spacing();
                 ImGui.Text("New Hue (-1 to leave original):");
                 ImGui.SetNextItemWidth(150);
-                ImGui.InputText("##NewHue", ref newHueInput, 10);
+                ImGui.InputText("##NewHue", ref _newHueInput, 10);
 
                 ImGui.Spacing();
                 if (ImGui.Button("Add##AddEntry"))
-                    if (StringHelper.TryParseInt(newOriginalGraphicInput, out int originalGraphic) &&
-                        StringHelper.TryParseInt(newReplacementGraphicInput, out int replacementGraphic))
+                    if (StringHelper.TryParseInt(_newOriginalGraphicInput, out int originalGraphic) &&
+                        StringHelper.TryParseInt(_newReplacementGraphicInput, out int replacementGraphic))
                     {
-                        // Type validation
-                        GraphicType origType = DetermineGraphicType((ushort)originalGraphic);
-                        GraphicType replType = DetermineGraphicType((ushort)replacementGraphic);
+                        // No cross-type validation - users explicitly select types
+                        _validationError = null;
 
-                        if (origType != GraphicType.Unknown &&
-                            replType != GraphicType.Unknown &&
-                            origType != replType)
-                            _validationError = $"Type mismatch: Cannot replace {origType} (0x{originalGraphic:X4}) with {replType} (0x{replacementGraphic:X4})";
-                        // FIX: Don't return early - let UI continue rendering
-                        else
+                        ushort newHue = ushort.MaxValue;
+                        if (!string.IsNullOrEmpty(_newHueInput) && _newHueInput != "-1")
+                            if (!ushort.TryParse(_newHueInput, out newHue))
+                                _validationError = $"Invalid hue value: '{_newHueInput}'. Must be a number between 0-65535 or -1";
+
+                        if (_validationError == null)
                         {
-                            // Only add if validation passed
-                            _validationError = null;
-
-                            ushort newHue = ushort.MaxValue;
-                            if (!string.IsNullOrEmpty(newHueInput) && newHueInput != "-1")
-                                if (!ushort.TryParse(newHueInput, out newHue))
-                                    _validationError = $"Invalid hue value: '{newHueInput}'. Must be a number between 0-65535 or -1";
-
-                            GraphicChangeFilter filter = GraphicsReplacement.NewFilter((ushort)originalGraphic, (ushort)replacementGraphic, newHue);
+                            // Replacement type is always same as original type
+                            GraphicChangeFilter filter = GraphicsReplacement.NewFilter(
+                                (ushort)originalGraphic,
+                                _newOriginalTypeSelection,
+                                (ushort)replacementGraphic,
+                                _newOriginalTypeSelection, // Same type as original
+                                newHue
+                            );
                             if (filter != null)
                             {
+                                (ushort OriginalGraphic, byte OriginalType) key = (filter.OriginalGraphic, filter.OriginalType);
                                 // Initialize input strings for the new entry
-                                entryOriginalInputs[filter.OriginalGraphic] = $"0x{filter.OriginalGraphic:X4}";
-                                entryReplacementInputs[filter.OriginalGraphic] = $"0x{filter.ReplacementGraphic:X4}";
-                                entryHueInputs[filter.OriginalGraphic] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
+                                _entryOriginalInputs[key] = $"0x{filter.OriginalGraphic:X4}";
+                                _entryReplacementInputs[key] = $"0x{filter.ReplacementGraphic:X4}";
+                                _entryHueInputs[key] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
+                                _entryOriginalTypeSelections[key] = filter.OriginalType;
 
-                                newOriginalGraphicInput = "";
-                                newReplacementGraphicInput = "";
-                                newHueInput = "";
-                                showAddEntry = false;
+                                // Reset inputs
+                                _newOriginalGraphicInput = "";
+                                _newReplacementGraphicInput = "";
+                                _newHueInput = "";
+                                _newOriginalTypeSelection = 1;
+                                _showAddEntry = false;
                             }
                         }
                     }
@@ -173,10 +195,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.SameLine();
                 if (ImGui.Button("Cancel##AddEntry"))
                 {
-                    showAddEntry = false;
-                    newOriginalGraphicInput = "";
-                    newReplacementGraphicInput = "";
-                    newHueInput = "";
+                    _showAddEntry = false;
+                    _newOriginalGraphicInput = "";
+                    _newReplacementGraphicInput = "";
+                    _newHueInput = "";
                     _validationError = null; // FIX: Clear validation error on cancel
                 }
             }
@@ -186,16 +208,17 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // List of current filters
             ImGui.Text("Current Graphic Replacements:");
 
-            Dictionary<ushort, GraphicChangeFilter> filters = GraphicsReplacement.GraphicFilters;
+            Dictionary<(ushort, byte), GraphicChangeFilter> filters = GraphicsReplacement.GraphicFilters;
             if (filters.Count == 0)
                 ImGui.Text("No replacements configured");
             else
             {
-                // Table headers
-                if (ImGui.BeginTable("GraphicReplacementTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+                // Table headers - 6 columns (replacement type is always same as original)
+                if (ImGui.BeginTable("GraphicReplacementTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
                 {
-                    ImGui.TableSetupColumn("Original Graphic", ImGuiTableColumnFlags.WidthFixed, 105f);
-                    ImGui.TableSetupColumn("Replacement Graphic", ImGuiTableColumnFlags.WidthFixed, 105f);
+                    ImGui.TableSetupColumn("Original", ImGuiTableColumnFlags.WidthFixed, 105f);
+                    ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 100f);
+                    ImGui.TableSetupColumn("Replacement", ImGuiTableColumnFlags.WidthFixed, 105f);
                     ImGui.TableSetupColumn("Preview", ImGuiTableColumnFlags.WidthFixed, 100f);
                     ImGui.TableSetupColumn("New Hue", ImGuiTableColumnFlags.WidthFixed, 80f);
                     ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 80f);
@@ -205,136 +228,173 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     for (int i = filterList.Count - 1; i >= 0; i--)
                     {
                         GraphicChangeFilter filter = filterList[i];
+                        (ushort OriginalGraphic, byte OriginalType) key = (filter.OriginalGraphic, filter.OriginalType);
                         ImGui.TableNextRow();
 
+                        // Column 1: Original Graphic
                         ImGui.TableNextColumn();
-                        // Initialize input string if not exists
-                        if (!entryOriginalInputs.ContainsKey(filter.OriginalGraphic)) entryOriginalInputs[filter.OriginalGraphic] = $"0x{filter.OriginalGraphic:X4}";
-                        string originalStr = entryOriginalInputs[filter.OriginalGraphic];
+                        if (!_entryOriginalInputs.ContainsKey(key))
+                            _entryOriginalInputs[key] = $"0x{filter.OriginalGraphic:X4}";
+                        string originalStr = _entryOriginalInputs[key];
                         if (ImGui.InputText($"##Original{i}", ref originalStr, 10))
                         {
-                            entryOriginalInputs[filter.OriginalGraphic] = originalStr;
+                            _entryOriginalInputs[key] = originalStr;
                             if (StringHelper.TryParseInt(originalStr, out int newOriginal) && newOriginal != filter.OriginalGraphic)
                             {
-                                // CRITICAL FIX: Must delete and recreate filter when key changes
-                                ushort oldKey = filter.OriginalGraphic;
-                                ushort newKey = (ushort)newOriginal;
-
-                                // Delete old filter
-                                GraphicsReplacement.DeleteFilter(oldKey);
-
-                                // Create new filter with new key
+                                // Delete old, create new with new key
+                                GraphicsReplacement.DeleteFilter(filter.OriginalGraphic, filter.OriginalType);
                                 GraphicChangeFilter newFilter = GraphicsReplacement.NewFilter(
-                                    newKey,
+                                    (ushort)newOriginal,
+                                    filter.OriginalType,
                                     filter.ReplacementGraphic,
+                                    filter.ReplacementType,
                                     filter.NewHue
                                 );
-
-                                // Clean up old input dictionaries
-                                entryOriginalInputs.Remove(oldKey);
-                                entryReplacementInputs.Remove(oldKey);
-                                entryHueInputs.Remove(oldKey);
-
-                                // Initialize new input dictionaries if filter was created
                                 if (newFilter != null)
                                 {
-                                    entryOriginalInputs[newKey] = originalStr;
-                                    entryReplacementInputs[newKey] = $"0x{newFilter.ReplacementGraphic:X4}";
-                                    entryHueInputs[newKey] = newFilter.NewHue == ushort.MaxValue ? "-1" : newFilter.NewHue.ToString();
+                                    // Update dictionaries
+                                    (ushort OriginalGraphic, byte OriginalType) newKey = (newFilter.OriginalGraphic, newFilter.OriginalType);
+                                    _entryOriginalInputs.Remove(key);
+                                    _entryReplacementInputs.Remove(key);
+                                    _entryHueInputs.Remove(key);
+                                    _entryOriginalTypeSelections.Remove(key);
+
+                                    _entryOriginalInputs[newKey] = originalStr;
+                                    _entryReplacementInputs[newKey] = $"0x{newFilter.ReplacementGraphic:X4}";
+                                    _entryHueInputs[newKey] = newFilter.NewHue == ushort.MaxValue ? "-1" : newFilter.NewHue.ToString();
+                                    _entryOriginalTypeSelections[newKey] = newFilter.OriginalType;
                                 }
                             }
                         }
 
+                        // Column 2: Type dropdown (applies to both original and replacement)
                         ImGui.TableNextColumn();
-                        // Initialize input string if not exists
-                        if (!entryReplacementInputs.ContainsKey(filter.OriginalGraphic)) entryReplacementInputs[filter.OriginalGraphic] = $"0x{filter.ReplacementGraphic:X4}";
-                        string replacementStr = entryReplacementInputs[filter.OriginalGraphic];
-                        if (ImGui.InputText($"##Replacement{i}", ref replacementStr, 10))
+                        if (!_entryOriginalTypeSelections.ContainsKey(key))
+                            _entryOriginalTypeSelections[key] = filter.OriginalType;
+                        string[] typeNames = { "Mobile", "Land", "Static" };
+                        byte[] typeValues = { 1, 2, 3 };
+                        int origTypeIdx = Array.IndexOf(typeValues, _entryOriginalTypeSelections[key]);
+                        ImGui.SetNextItemWidth(80);
+                        if (ImGui.Combo($"##Type{i}", ref origTypeIdx, typeNames, typeNames.Length))
                         {
-                            entryReplacementInputs[filter.OriginalGraphic] = replacementStr;
-                            if (StringHelper.TryParseInt(replacementStr, out int newReplacement)) filter.ReplacementGraphic = (ushort)newReplacement;
+                            byte newType = typeValues[origTypeIdx];
+                            if (newType != filter.OriginalType)
+                            {
+                                // Delete and recreate with new type (applies to both original and replacement)
+                                GraphicsReplacement.DeleteFilter(filter.OriginalGraphic, filter.OriginalType);
+                                GraphicChangeFilter newFilter = GraphicsReplacement.NewFilter(
+                                    filter.OriginalGraphic,
+                                    newType,
+                                    filter.ReplacementGraphic,
+                                    newType, // Same type for replacement
+                                    filter.NewHue
+                                );
+                                if (newFilter != null)
+                                {
+                                    // Update dictionaries
+                                    (ushort OriginalGraphic, byte OriginalType) newKey = (newFilter.OriginalGraphic, newFilter.OriginalType);
+                                    _entryOriginalInputs.Remove(key);
+                                    _entryReplacementInputs.Remove(key);
+                                    _entryHueInputs.Remove(key);
+                                    _entryOriginalTypeSelections.Remove(key);
+
+                                    _entryOriginalInputs[newKey] = $"0x{newFilter.OriginalGraphic:X4}";
+                                    _entryReplacementInputs[newKey] = $"0x{newFilter.ReplacementGraphic:X4}";
+                                    _entryHueInputs[newKey] = newFilter.NewHue == ushort.MaxValue ? "-1" : newFilter.NewHue.ToString();
+                                    _entryOriginalTypeSelections[newKey] = newFilter.OriginalType;
+                                }
+                            }
                         }
 
-                        ImGui.TableNextColumn(); // Preview column
+                        // Column 3: Replacement Graphic
+                        ImGui.TableNextColumn();
+                        if (!_entryReplacementInputs.ContainsKey(key))
+                            _entryReplacementInputs[key] = $"0x{filter.ReplacementGraphic:X4}";
+                        string replacementStr = _entryReplacementInputs[key];
+                        if (ImGui.InputText($"##Replacement{i}", ref replacementStr, 10))
+                        {
+                            _entryReplacementInputs[key] = replacementStr;
+                            if (StringHelper.TryParseInt(replacementStr, out int newReplacement))
+                            {
+                                filter.ReplacementGraphic = (ushort)newReplacement;
+                                // Keep replacement type same as original
+                                filter.ReplacementType = filter.OriginalType;
+                            }
+                        }
 
-                        // Determine type based on ORIGINAL graphic - both should use same rendering method
-                        GraphicType origType = DetermineGraphicType(filter.OriginalGraphic);
+                        // Column 4: Preview
+                        ImGui.TableNextColumn();
                         bool drewOriginal = false;
                         bool drewReplacement = false;
 
-                        // Use the same drawing method for both based on original type
-                        if (origType == GraphicType.Mobile)
-                            // Both should be drawn as mobiles
-                            drewOriginal = DrawStaticAnim(filter.OriginalGraphic, new Vector2(32, 32));
-                        else
-                            // Both should be drawn as art (static/item/land)
-                            drewOriginal = DrawArt(filter.OriginalGraphic, new Vector2(32, 32), false);
+                        // Use explicit type from filter (same for both original and replacement)
+                        if (filter.OriginalType == 1) // Mobile - use animations
+                        {
+                            drewOriginal = DrawStaticAnim(filter.OriginalGraphic, filter.OriginalType, 32);
+                            if (!drewOriginal)
+                                ImGui.TextDisabled($"0x{filter.OriginalGraphic:X4}");
 
-                        if (!drewOriginal)
-                            // If drawing fails, show graphic ID as fallback
-                            ImGui.TextDisabled($"0x{filter.OriginalGraphic:X4}");
+                            ImGui.SameLine();
 
-                        ImGui.SameLine();
+                            drewReplacement = DrawStaticAnim(filter.ReplacementGraphic, filter.ReplacementType, 32);
+                            if (!drewReplacement)
+                                ImGui.TextDisabled($"0x{filter.ReplacementGraphic:X4}");
+                        }
+                        else if (filter.OriginalType == 2) // Land - use GetLand()
+                        {
+                            drewOriginal = DrawLand(filter.OriginalGraphic, 32);
+                            if (!drewOriginal)
+                                ImGui.TextDisabled($"0x{filter.OriginalGraphic:X4}");
 
-                        // Draw replacement using SAME method as original
-                        if (origType == GraphicType.Mobile)
-                            drewReplacement = DrawStaticAnim(filter.ReplacementGraphic, new Vector2(32, 32));
-                        else
-                            drewReplacement = DrawArt(filter.ReplacementGraphic, new Vector2(32, 32), false);
+                            ImGui.SameLine();
 
-                        if (!drewReplacement)
-                            // If drawing fails, show graphic ID as fallback
-                            ImGui.TextDisabled($"0x{filter.ReplacementGraphic:X4}");
+                            drewReplacement = DrawLand(filter.ReplacementGraphic, 32);
+                            if (!drewReplacement)
+                                ImGui.TextDisabled($"0x{filter.ReplacementGraphic:X4}");
+                        }
+                        else // Static (type 3) - use GetArt()
+                        {
+                            drewOriginal = DrawArt(filter.OriginalGraphic, 32, false);
+                            if (!drewOriginal)
+                                ImGui.TextDisabled($"0x{filter.OriginalGraphic:X4}");
 
+                            ImGui.SameLine();
+
+                            drewReplacement = DrawArt(filter.ReplacementGraphic, 32, false);
+                            if (!drewReplacement)
+                                ImGui.TextDisabled($"0x{filter.ReplacementGraphic:X4}");
+                        }
+
+                        // Column 5: Hue
                         ImGui.TableNextColumn();
-                        // Initialize input string if not exists
-                        if (!entryHueInputs.ContainsKey(filter.OriginalGraphic)) entryHueInputs[filter.OriginalGraphic] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
-                        string hueStr = entryHueInputs[filter.OriginalGraphic];
+                        if (!_entryHueInputs.ContainsKey(key))
+                            _entryHueInputs[key] = filter.NewHue == ushort.MaxValue ? "-1" : filter.NewHue.ToString();
+                        string hueStr = _entryHueInputs[key];
                         if (ImGui.InputText($"##Hue{i}", ref hueStr, 10))
                         {
-                            entryHueInputs[filter.OriginalGraphic] = hueStr;
+                            _entryHueInputs[key] = hueStr;
                             if (hueStr == "-1")
                                 filter.NewHue = ushort.MaxValue;
-                            else if (ushort.TryParse(hueStr, out ushort newHue)) filter.NewHue = newHue;
+                            else if (ushort.TryParse(hueStr, out ushort newHue))
+                                filter.NewHue = newHue;
                         }
                         ImGuiComponents.Tooltip("-1 will not change the hue");
 
+                        // Column 6: Actions
                         ImGui.TableNextColumn();
                         if (ImGui.Button($"Delete##Delete{i}"))
                         {
-                            GraphicsReplacement.DeleteFilter(filter.OriginalGraphic);
-                            // Clean up input dictionaries
-                            entryOriginalInputs.Remove(filter.OriginalGraphic);
-                            entryReplacementInputs.Remove(filter.OriginalGraphic);
-                            entryHueInputs.Remove(filter.OriginalGraphic);
+                            GraphicsReplacement.DeleteFilter(filter.OriginalGraphic, filter.OriginalType);
+                            _entryOriginalInputs.Remove(key);
+                            _entryReplacementInputs.Remove(key);
+                            _entryHueInputs.Remove(key);
+                            _entryOriginalTypeSelections.Remove(key);
                         }
                     }
 
                     ImGui.EndTable();
                 }
             }
-        }
-
-        private static GraphicType DetermineGraphicType(ushort graphic)
-        {
-            // Use heuristics to determine graphic type:
-            // - Mobiles are typically < 2000
-            // - Land tiles are 0 - 0x3FFF (16383)
-            // - Static/Item art is typically >= 0x4000
-
-            // Mobile range (most mobiles are under 2000)
-            if (graphic < 2000)
-                return GraphicType.Mobile;
-
-            // Land tiles range
-            if (graphic < 0x4000) // 16384
-                return GraphicType.Land;
-
-            // Static/Item range (0x4000 to 0x13FFF)
-            if (graphic <= 0xFFFF) // All remaining ushort values
-                return GraphicType.Static;
-
-            return GraphicType.Unknown;
         }
 
         private void ForceRefreshAllEntities()
@@ -368,11 +428,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
             GameActions.Print($"Refreshed {count} entities with graphic replacements");
         }
 
-        protected bool DrawStaticAnim(ushort graphic, Vector2 size)
+        private bool DrawStaticAnim(ushort graphic, byte type, float maxSize)
         {
+            Vector2 size;
+            (ushort graphic, byte type) cacheKey = (graphic, type);
+
             // Check if we already have this cached
-            if (_mobileTextureCache.TryGetValue(graphic, out ArtPointerStruct cached))
+            if (_textureCache.TryGetValue(cacheKey, out ArtPointerStruct cached))
             {
+                // Calculate scaled size based on cached sprite dimensions
+                size = CalculateScaledSize(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height, maxSize);
                 ImGui.Image(cached.Pointer, size, cached.UV0, cached.UV1);
                 return true;
             }
@@ -394,26 +459,129 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             SpriteInfo spriteInfo = frames[0];
 
+            // Calculate scaled size to fit within maxSize
+            size = CalculateScaledSize(spriteInfo.UV.Width, spriteInfo.UV.Height, maxSize);
+
             // Cache the first frame
             var uv0 = new Vector2(spriteInfo.UV.X / (float)spriteInfo.Texture.Width, spriteInfo.UV.Y / (float)spriteInfo.Texture.Height);
             var uv1 = new Vector2((spriteInfo.UV.X + spriteInfo.UV.Width) / (float)spriteInfo.Texture.Width, (spriteInfo.UV.Y + spriteInfo.UV.Height) / (float)spriteInfo.Texture.Height);
             nint pnt = ImGuiManager.Renderer.BindTexture(spriteInfo.Texture);
 
-            _mobileTextureCache.Add(graphic, new ArtPointerStruct(pnt, spriteInfo, uv0, uv1, size));
+            _textureCache.Add(cacheKey, new ArtPointerStruct(pnt, spriteInfo, uv0, uv1, size));
 
             ImGui.Image(pnt, size, uv0, uv1);
             return true;
+        }
+
+        private bool DrawLand(ushort graphic, float maxSize)
+        {
+            Vector2 size;
+            (ushort graphic, byte type) cacheKey = (graphic, 2); // Type 2 = Land
+
+            // Check if we already have this cached
+            if (_textureCache.TryGetValue(cacheKey, out ArtPointerStruct cached))
+            {
+                // Calculate scaled size based on cached sprite dimensions
+                size = CalculateScaledSize(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height, maxSize);
+                ImGui.Image(cached.Pointer, size, cached.UV0, cached.UV1);
+                return true;
+            }
+
+            // Get land tile graphic using GetLand()
+            ref readonly SpriteInfo spriteInfo = ref Client.Game.UO.Arts.GetLand(graphic);
+
+            if (spriteInfo.Texture == null)
+                return false;
+
+            // Calculate scaled size to fit within maxSize
+            size = CalculateScaledSize(spriteInfo.UV.Width, spriteInfo.UV.Height, maxSize);
+
+            // Calculate UV coordinates and bind texture
+            var uv0 = new Vector2(spriteInfo.UV.X / (float)spriteInfo.Texture.Width, spriteInfo.UV.Y / (float)spriteInfo.Texture.Height);
+            var uv1 = new Vector2((spriteInfo.UV.X + spriteInfo.UV.Width) / (float)spriteInfo.Texture.Width, (spriteInfo.UV.Y + spriteInfo.UV.Height) / (float)spriteInfo.Texture.Height);
+            nint pnt = ImGuiManager.Renderer.BindTexture(spriteInfo.Texture);
+
+            // Cache it
+            _textureCache.Add(cacheKey, new ArtPointerStruct(pnt, spriteInfo, uv0, uv1, size));
+
+            ImGui.Image(pnt, size, uv0, uv1);
+            return true;
+        }
+
+        private bool DrawArt(ushort graphic, float maxSize, bool useSmallerIfGfxSmaller = true)
+        {
+            Vector2 size;
+            (ushort graphic, byte type) cacheKey = (graphic, 3); // Type 3 = Static/Art
+
+            // Check if we already have this cached
+            if (_textureCache.TryGetValue(cacheKey, out ArtPointerStruct cached))
+            {
+                // Calculate scaled size based on cached sprite dimensions
+                size = CalculateScaledSize(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height, maxSize);
+
+                if (useSmallerIfGfxSmaller && cached.SpriteInfo.UV.Width < maxSize && cached.SpriteInfo.UV.Height < maxSize)
+                    size = new Vector2(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height);
+
+                ImGui.Image(cached.Pointer, size, cached.UV0, cached.UV1);
+                return true;
+            }
+
+            SpriteInfo artInfo = Client.Game.UO.Arts.GetArt(graphic);
+
+            if (artInfo.Texture == null)
+                return false;
+
+            size = CalculateScaledSize(artInfo.UV.Width, artInfo.UV.Height, maxSize);
+
+            if (useSmallerIfGfxSmaller && artInfo.UV.Width < maxSize && artInfo.UV.Height < maxSize)
+                size = new Vector2(artInfo.UV.Width, artInfo.UV.Height);
+
+            // Calculate UV coordinates and bind texture
+            var uv0 = new Vector2(artInfo.UV.X / (float)artInfo.Texture.Width, artInfo.UV.Y / (float)artInfo.Texture.Height);
+            var uv1 = new Vector2((artInfo.UV.X + artInfo.UV.Width) / (float)artInfo.Texture.Width, (artInfo.UV.Y + artInfo.UV.Height) / (float)artInfo.Texture.Height);
+            nint pnt = ImGuiManager.Renderer.BindTexture(artInfo.Texture);
+
+            // Cache it
+            _textureCache.Add(cacheKey, new ArtPointerStruct(pnt, artInfo, uv0, uv1, size));
+
+            ImGui.Image(pnt, size, uv0, uv1);
+            return true;
+        }
+
+        private Vector2 CalculateScaledSize(int width, int height, float maxSize)
+        {
+            if (width <= 0 || height <= 0)
+                return new Vector2(maxSize, maxSize);
+
+            float aspectRatio = (float)width / height;
+
+            if (width >= height)
+            {
+                // Width is larger, scale based on width
+                return new Vector2(maxSize, maxSize / aspectRatio);
+            }
+            else
+            {
+                // Height is larger, scale based on height
+                return new Vector2(maxSize * aspectRatio, maxSize);
+            }
         }
 
         protected override void OnWindowClosed()
         {
             base.OnWindowClosed();
 
-            // Clean up mobile texture cache
-            foreach (KeyValuePair<ushort, ArtPointerStruct> item in _mobileTextureCache)
+            // Clean up texture cache
+            foreach (KeyValuePair<(ushort, byte), ArtPointerStruct> item in _textureCache)
                 if (item.Value.Pointer != IntPtr.Zero)
                     ImGuiManager.Renderer.UnbindTexture(item.Value.Pointer);
-            _mobileTextureCache.Clear();
+            _textureCache.Clear();
+
+            _entryOriginalInputs = new Dictionary<(ushort, byte), string>();
+            _entryReplacementInputs = new Dictionary<(ushort, byte), string>();
+            _entryHueInputs = new Dictionary<(ushort, byte), string>();
+            _entryOriginalTypeSelections = new Dictionary<(ushort, byte), byte>();
+            _textureCache = new Dictionary<(ushort, byte), ArtPointerStruct>();
         }
 
     }

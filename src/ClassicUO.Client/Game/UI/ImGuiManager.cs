@@ -49,6 +49,7 @@ namespace ClassicUO.Game.UI
             if (window == null) return;
             lock (_windowsLock)
             {
+                window.Dispose();
                 _windows.Remove(window);
                 _hasWindows = _windows.Count > 0;
             }

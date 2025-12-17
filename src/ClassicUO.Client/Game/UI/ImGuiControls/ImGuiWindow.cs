@@ -146,7 +146,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         public IntPtr Pointer = pointer;
         public Vector2 UV0 = uv0;
         public Vector2 UV1 = uv1;
-        SpriteInfo SpriteInfo = spriteInfo;
+        public SpriteInfo SpriteInfo = spriteInfo;
     }
 
     public abstract class SingletonImGuiWindow<T> : ImGuiWindow where T : SingletonImGuiWindow<T>
