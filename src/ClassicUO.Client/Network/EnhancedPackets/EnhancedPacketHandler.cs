@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.IO;
 using ClassicUO.Utility.Logging;
@@ -12,10 +11,14 @@ public class EnhancedPacketHandler
     //Make sure all enhanced packets use BigEndian for numbers. Avoid LittleEndian.
     
     public const byte EPID = 0xCE;
+    
+    public static bool Enabled;
 
     static EnhancedPacketHandler()
     {
-        if (!Settings.GlobalSettings.EnhancedPacketsEnabled)
+        Enabled = Client.Settings.Get(SettingsScope.Server, Constants.SqlSettings.ENABLE_ENHANCED_PACKETS, false);
+
+        if (!Enabled)
             return;
         
         Handler.Add(EnhancedPacketType.EnableEnhancedPacket, EnableEnhancedPacket);
@@ -61,7 +64,7 @@ public class EnhancedPacketHandler
 
     public void HandlePacket(ushort packetID, ref StackDataReader p, int version)
     {
-        if (!Settings.GlobalSettings.EnhancedPacketsEnabled)
+        if (!Enabled)
             return;
         
         if (_handlers.ContainsKey(packetID))
