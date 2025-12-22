@@ -295,9 +295,6 @@ namespace ClassicUO.Game.UI.Gumps
                     Graphic = Settings.Graphic_Button_Durability
                 });
 
-            Mobile mobiles = World.Mobiles.Get(LocalSerial);
-            Item twoHandedItem = mobiles.FindItemByLayer(Layer.TwoHanded);
-
             // Equipment slots for hat/earrings/neck/ring/bracelet
             Add(_slots[0] = new EquipmentSlot(0, Settings.Position_X_LeftSlots, Settings.Position_Y_LeftSlots, Layer.Helmet, this));
 
@@ -357,8 +354,9 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
+            Mobile mob = World.Mobiles.Get(LocalSerial);
             // Name and title
-            _titleLabel = new Label("", false, Settings.Hue_Title, Settings.Size_Width_Hue, font: 1) { X = Settings.Position_X_Title, Y = Settings.Position_Y_Title };
+            _titleLabel = new Label(mob.Title, false, Settings.Hue_Title, Settings.Size_Width_Hue, font: 1) { X = Settings.Position_X_Title, Y = Settings.Position_Y_Title };
 
             Add(_titleLabel);
 

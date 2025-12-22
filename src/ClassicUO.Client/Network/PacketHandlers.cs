@@ -3257,7 +3257,7 @@ sealed class PacketHandlers
             {
                 UIManager.Add(new ModernPaperdoll(world, mobile.Serial));
             }
-                GameActions.RequestEquippedOPL(world);
+            GameActions.RequestEquippedOPL(world);
         }
         else
         {

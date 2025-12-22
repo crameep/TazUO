@@ -139,6 +139,7 @@ internal static class GameActions
                 UIManager.Add(new ModernPaperdoll(world, serial));
             else
             {
+                modernPaperdoll.RequestUpdateContents();
                 modernPaperdoll.SetInScreen();
                 modernPaperdoll.BringOnTop();
             }
@@ -160,6 +161,7 @@ internal static class GameActions
                     paperDollGump.IsMinimized = false;
                 }
 
+                paperDollGump.RequestUpdateContents();
                 paperDollGump.SetInScreen();
                 paperDollGump.BringOnTop();
             }
