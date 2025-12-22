@@ -170,6 +170,7 @@ namespace ClassicUO
             byte[] bytes = Loader.GetBackgroundImage().ToArray();
             using var ms = new MemoryStream(bytes);
             _background = Texture2D.FromStream(GraphicsDevice, ms);
+            SetWindowPositionBySettings();
 
 #if false
             SetScene(new MainScene(this));
@@ -180,7 +181,7 @@ namespace ClassicUO
             PNGLoader.Instance.LoadResourceAssets(Client.Game.UO.Gumps.GetGumpsLoader);
 
             Audio.Initialize();
-            // TODO: temporary fix to avoid crash when laoding plugins
+
             Settings.GlobalSettings.Encryption = (byte)AsyncNetClient.Load(UO.FileManager.Version, (EncryptionType)Settings.GlobalSettings.Encryption);
 
             LoadPlugins();
@@ -189,7 +190,6 @@ namespace ClassicUO
 
             SetScene(new LoginScene(UO.World));
 #endif
-            SetWindowPositionBySettings();
             new DiscordManager(UO.World); //Instance is set inside the constructor
             DiscordManager.Instance.FromSavedToken();
         }

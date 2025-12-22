@@ -101,9 +101,6 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_systemChatControl);
             Resize();
 
-            // Clamp viewport to window bounds after initialization
-            ClampViewportToWindowBounds();
-
             if (ProfileManager.CurrentProfile.LastVersionHistoryShown != CUOEnviroment.Version.ToString())
             {
                 UIManager.Add(new VersionHistory(world));
