@@ -305,6 +305,8 @@ public class GridContainerEntry
 
     [JsonPropertyName("sm")] public int SortMode { get; set; }
 
+    [JsonPropertyName("m")] public bool IsMinimized { get; set; }
+
     [JsonPropertyName("ls")] public Dictionary<uint, GridContainerSlotEntry> Slots { get; set; } = new();
 
     public GridContainerSlotEntry GetSlot(uint serial)
@@ -327,13 +329,15 @@ public class GridContainerEntry
     {
         Serial = container.LocalSerial;
         Width = container.Width;
-        Height = container.Height;
+        // Store the full height, not the minimized height
+        Height = container.IsMinimized ? container.HeightBeforeMinimize : container.Height;
         X = container.X;
         Y = container.Y;
         UseOriginalContainer = container.UseOldContainerStyle ?? false;
         AutoSort = container.AutoSortContainer;
         VisuallyStackNonStackables = container.StackNonStackableItems;
         SortMode = (int)container.SortMode;
+        IsMinimized = container.IsMinimized;
 
         // Sync all item positions from GridSlotManager to Slots
         // First, remove any entries for items no longer in ItemPositions (they were removed/moved)

@@ -55,6 +55,7 @@ namespace ClassicUO.Game.UI.Gumps
         #region CONSTANTS
         private const int X_SPACING = 1, Y_SPACING = 1;
         private const int TOP_BAR_HEIGHT = 20;
+        private const int LABEL_HEIGHT = 20;
         #endregion
 
         #region private static vars
@@ -65,6 +66,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         #region private readonly vars
         private readonly AlphaBlendControl background;
+        private readonly AlphaBlendControl searchBoxBackground;
         private readonly Label containerNameLabel;
         private readonly StbTextBox searchBox;
         private readonly GumpPic openRegularGump, sortContents;
@@ -87,6 +89,8 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly ushort originalContainerItemGraphic;
 
         private GridScrollArea scrollArea;
+        private bool _isMinimized;
+        private int _heightBeforeMinimize;
         #endregion
 
         #region private tooltip vars
@@ -122,6 +126,21 @@ namespace ClassicUO.Game.UI.Gumps
         public bool AutoSortContainer => autoSortContainer;
         public GridSortMode SortMode => sortMode;
         public GridSlotManager SlotManager;
+
+        public bool IsMinimized
+        {
+            get => _isMinimized;
+            set
+            {
+                if (_isMinimized != value)
+                {
+                    _isMinimized = value;
+                    UpdateMinimizedState();
+                }
+            }
+        }
+
+        public int HeightBeforeMinimize => _heightBeforeMinimize;
         #endregion
 
         public GridContainer(World world, uint local, ushort originalContainerGraphic, bool? useGridStyle = null) : base(world, GetWidth(), GetHeight(), GetWidth(2), GetHeight(1), local, 0)
@@ -144,6 +163,9 @@ namespace ClassicUO.Game.UI.Gumps
             autoSortContainer = gridContainerEntry.AutoSort;
             StackNonStackableItems = gridContainerEntry.VisuallyStackNonStackables;
             sortMode = (GridSortMode)gridContainerEntry.SortMode;
+
+            // Load minimized state from save data
+            bool loadMinimized = gridContainerEntry.IsMinimized;
 
             Point lastPos = IsPlayerBackpack ? ProfileManager.CurrentProfile.BackpackGridPosition : gridContainerEntry.GetPosition();
             if (lastPos == Point.Zero || (lastPos.X == 100 && lastPos.Y == 100)) //Default positions, use last static position
@@ -193,30 +215,58 @@ namespace ClassicUO.Game.UI.Gumps
                 X = borderWidth,
                 Y = borderWidth,
                 Alpha = (float)ProfileManager.CurrentProfile.ContainerOpacity / 100,
-                Hue = ProfileManager.CurrentProfile.Grid_UseContainerHue ? container.Hue : ProfileManager.CurrentProfile.AltGridContainerBackgroundHue
+                Hue = ProfileManager.CurrentProfile.Grid_UseContainerHue ? container.Hue : ProfileManager.CurrentProfile.AltGridContainerBackgroundHue,
+                AcceptMouseInput = true,
+                CanMove = true
+            };
+            background.MouseDoubleClick += (sender, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    IsMinimized = !IsMinimized;
+                }
             };
 
             backgroundTexture = new GumpPicTiled(0);
+            backgroundTexture.CanMove = true;
+            backgroundTexture.MouseDoubleClick += (sender, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    IsMinimized = !IsMinimized;
+                }
+            };
             #endregion
 
             #region TOP BAR AREA
-            containerNameLabel = new Label(GetContainerName(), true, 0x0481, ishtml: true)
-            {
-                X = borderWidth,
-                Y = -20
-            };
-
-            searchBox = new StbTextBox(0xFF, 20, 150, true, FontStyle.None, 0x0481)
+            containerNameLabel = new Label(GetContainerName(), true, 0x0481, 150, ishtml: true)
             {
                 X = borderWidth,
                 Y = borderWidth,
+                AcceptMouseInput = true,
+                CanMove = true
+            };
+            containerNameLabel.MouseDoubleClick += (sender, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    IsMinimized = !IsMinimized;
+                    e.Result = true;
+                }
+            };
+
+            searchBox = new StbTextBox(0xFF, 20, 0, true, FontStyle.None, 0x0481)
+            {
+                X = borderWidth,
+                Y = borderWidth + LABEL_HEIGHT,
                 Multiline = false,
-                Width = 150,
+                Width = background.Width - 18,
                 Height = 20
             };
+            searchBox.PlaceHolderText = "Search...";
             searchBox.TextChanged += (sender, e) => { UpdateItems(); };
 
-            searchClearButton = new NiceButton(searchBox.X + searchBox.Width + 2, searchBox.Y, 16, searchBox.Height, ButtonAction.Default, "X");
+            searchClearButton = new NiceButton(borderWidth + background.Width - 16, borderWidth + LABEL_HEIGHT, 16, searchBox.Height, ButtonAction.Default, "X");
             searchClearButton.MouseUp += (sender, e) =>
             {
                 if (e.Button == MouseButtonType.Left)
@@ -302,12 +352,24 @@ namespace ClassicUO.Game.UI.Gumps
             #region Scroll Area
             scrollArea = new GridScrollArea(
                 background.X,
-                TOP_BAR_HEIGHT + background.Y,
+                LABEL_HEIGHT + TOP_BAR_HEIGHT + background.Y,
                 background.Width,
-                background.Height - (containerNameLabel.Height + 1)
+                background.Height - LABEL_HEIGHT - TOP_BAR_HEIGHT
                 );
 
             scrollArea.MouseUp += ScrollArea_MouseUp;
+            scrollArea.MouseDoubleClick += (sender, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    // Only toggle if clicking on empty space (not on grid items)
+                    Control clickedControl = UIManager.MouseOverControl;
+                    if (clickedControl == scrollArea)
+                    {
+                        IsMinimized = !IsMinimized;
+                    }
+                }
+            };
             #endregion
 
             #region Set loot bag
@@ -325,12 +387,13 @@ namespace ClassicUO.Game.UI.Gumps
             Add(background);
             Add(backgroundTexture);
             Add(containerNameLabel);
-            searchBox.Add(new AlphaBlendControl(0.5f)
+            searchBoxBackground = new AlphaBlendControl(0.5f)
             {
                 Hue = 0x0481,
                 Width = searchBox.Width,
                 Height = searchBox.Height
-            });
+            };
+            searchBox.Add(searchBoxBackground);
             Add(searchBox);
             Add(searchClearButton);
             Add(openRegularGump);
@@ -351,9 +414,147 @@ namespace ClassicUO.Game.UI.Gumps
 
             BuildBorder();
             ResizeWindow(savedSize);
+
+            // Apply minimized state after all controls are created
+            if (loadMinimized)
+            {
+                // Store the current (full) height from savedSize before minimizing
+                _heightBeforeMinimize = savedSize.Y > 0 ? savedSize.Y : Height;
+                _isMinimized = true;
+                // Don't call UpdateMinimizedState here - just apply the minimized dimensions directly
+                // to avoid overwriting _heightBeforeMinimize
+                ApplyMinimizedDimensions();
+            }
         }
 
         public override GumpType GumpType => GumpType.GridContainer;
+
+        private void UpdateMinimizedState()
+        {
+            if (_isMinimized)
+            {
+                // Store current height before minimizing
+                _heightBeforeMinimize = Height;
+
+                // Hide everything except container name, background, and border
+                if (searchBox != null) searchBox.IsVisible = false;
+                if (searchClearButton != null) searchClearButton.IsVisible = false;
+                if (openRegularGump != null) openRegularGump.IsVisible = false;
+                if (quickDropBackpack != null) quickDropBackpack.IsVisible = false;
+                if (sortContents != null) sortContents.IsVisible = false;
+                if (scrollArea != null) scrollArea.IsVisible = false;
+                if (setLootBag != null) setLootBag.IsVisible = false;
+
+                // Hide the resize button by finding it in Children (it's a Button control added by ResizableGump)
+                foreach (Control child in Children)
+                {
+                    if (child is Button)
+                    {
+                        child.IsVisible = false;
+                        break;
+                    }
+                }
+
+                // Resize to minimal height (just the label area + border)
+                int minimizedHeight = LABEL_HEIGHT + (borderWidth * 2);
+                ResizeWindow(new Point(Width, minimizedHeight));
+                Height = minimizedHeight;
+
+                // Update border and background dimensions
+                if (background != null) background.Height = LABEL_HEIGHT;
+                if (backgroundTexture != null) backgroundTexture.Height = LABEL_HEIGHT;
+
+                // Update the border control to match new dimensions
+                OnResize();
+            }
+            else
+            {
+                // Restore all controls
+                if (searchBox != null) searchBox.IsVisible = true;
+                if (searchClearButton != null) searchClearButton.IsVisible = true;
+                if (openRegularGump != null) openRegularGump.IsVisible = true;
+                if (quickDropBackpack != null) quickDropBackpack.IsVisible = true;
+                if (sortContents != null) sortContents.IsVisible = true;
+                if (scrollArea != null) scrollArea.IsVisible = true;
+                if (setLootBag != null) setLootBag.IsVisible = isCorpse;
+
+                // Show the resize button
+                foreach (Control child in Children)
+                {
+                    if (child is Button)
+                    {
+                        child.IsVisible = true;
+                        break;
+                    }
+                }
+
+                // Restore original height (fallback to default if not set)
+                int restoredHeight;
+                if (_heightBeforeMinimize > 0)
+                {
+                    restoredHeight = _heightBeforeMinimize;
+                }
+                else
+                {
+                    // Fallback to a reasonable default height
+                    restoredHeight = GetHeight();
+                }
+
+                ResizeWindow(new Point(Width, restoredHeight));
+                Height = restoredHeight;
+
+                // Restore border and background dimensions
+                if (background != null) background.Height = Height - (borderWidth * 2);
+                if (backgroundTexture != null) backgroundTexture.Height = Height - (borderWidth * 2);
+
+                // Update the border control to match restored dimensions
+                OnResize();
+            }
+
+            WantUpdateSize = true;
+
+            // Save the minimized state
+            gridContainerEntry?.UpdateSaveDataEntry(this);
+        }
+
+        /// <summary>
+        /// Applies minimized dimensions without storing height (used on initial load)
+        /// </summary>
+        private void ApplyMinimizedDimensions()
+        {
+            // Hide everything except container name, background, and border
+            if (searchBox != null) searchBox.IsVisible = false;
+            if (searchClearButton != null) searchClearButton.IsVisible = false;
+            if (openRegularGump != null) openRegularGump.IsVisible = false;
+            if (quickDropBackpack != null) quickDropBackpack.IsVisible = false;
+            if (sortContents != null) sortContents.IsVisible = false;
+            if (scrollArea != null) scrollArea.IsVisible = false;
+            if (setLootBag != null) setLootBag.IsVisible = false;
+
+            // Hide the resize button by finding it in Children (it's a Button control added by ResizableGump)
+            foreach (Control child in Children)
+            {
+                if (child is Button)
+                {
+                    child.IsVisible = false;
+                    break;
+                }
+            }
+
+            // Resize to minimal height (just the label area + border)
+            int minimizedHeight = LABEL_HEIGHT + (borderWidth * 2);
+            ResizeWindow(new Point(Width, minimizedHeight));
+            Height = minimizedHeight;
+
+            // Update border and background dimensions
+            if (background != null) background.Height = LABEL_HEIGHT;
+            if (backgroundTexture != null) backgroundTexture.Height = LABEL_HEIGHT;
+
+            // Update the border control to match new dimensions
+            OnResize();
+
+            WantUpdateSize = true;
+        }
 
         private ContextMenuControl GenContextMenu()
         {
@@ -444,7 +645,8 @@ namespace ClassicUO.Game.UI.Gumps
                 rows = ProfileManager.CurrentProfile.Grid_DefaultRows;
 
             // Calculate the total height of the grid container
-            return TOP_BAR_HEIGHT               // Height of the top bar
+            return LABEL_HEIGHT                 // Height of the container name label
+                   + TOP_BAR_HEIGHT             // Height of the top bar
                    + (borderWidth * 2)          // Borders on the top and bottom
                    + ((gridItemSize + Y_SPACING) * rows); // Total height of grid items with spacing
         }
@@ -580,6 +782,16 @@ namespace ClassicUO.Game.UI.Gumps
                 SelectedObject.CorpseObject = null;
         }
 
+        public override bool Contains(int x, int y)
+        {
+            if (_isMinimized)
+            {
+                // When minimized, only accept mouse input within the minimized bounds
+                return x >= 0 && x < Width && y >= 0 && y < (LABEL_HEIGHT + (borderWidth * 2));
+            }
+            return base.Contains(x, y);
+        }
+
         protected override void OnMove(int x, int y)
         {
             base.OnMove(x, y);
@@ -651,20 +863,44 @@ namespace ClassicUO.Game.UI.Gumps
                 return;
             }
 
-            if (lastWidth != Width || lastHeight != Height || lastGridItemScale != gridItemSize)
+            // Maintain minimized height when minimized
+            if (_isMinimized && Height != LABEL_HEIGHT + (borderWidth * 2))
+            {
+                Height = LABEL_HEIGHT + (borderWidth * 2);
+                background.Height = LABEL_HEIGHT;
+                backgroundTexture.Height = LABEL_HEIGHT;
+                BorderControl.Width = Width;
+                BorderControl.Height = Height;
+
+                // Manually reposition the resize button since we're bypassing ResizeWindow's min height
+                foreach (Control child in Children)
+                {
+                    if (child is Button btn)
+                    {
+                        btn.X = Width - (btn.Width >> 0) + 2;
+                        btn.Y = Height - (btn.Height >> 0) + 2;
+                        break;
+                    }
+                }
+
+                WantUpdateSize = true;
+            }
+
+            if (!_isMinimized && (lastWidth != Width || lastHeight != Height || lastGridItemScale != gridItemSize))
             {
                 lastGridItemScale = gridItemSize;
                 background.Width = Width - (borderWidth * 2);
                 background.Height = Height - (borderWidth * 2);
                 scrollArea.Width = background.Width;
-                scrollArea.Height = background.Height - TOP_BAR_HEIGHT;
+                scrollArea.Height = background.Height - LABEL_HEIGHT - TOP_BAR_HEIGHT;
                 openRegularGump.X = Width - openRegularGump.Width - borderWidth;
                 quickDropBackpack.X = openRegularGump.X - quickDropBackpack.Width;
                 sortContents.X = quickDropBackpack.X - sortContents.Width;
                 lastHeight = Height;
                 lastWidth = Width;
-                searchBox.Width = Math.Min(Width - (borderWidth * 2) - openRegularGump.Width - quickDropBackpack.Width - sortContents.Width - 20, 150);
-                searchClearButton.X = searchBox.X + searchBox.Width + 2;
+                searchBox.Width = background.Width - 18;
+                searchBoxBackground.Width = searchBox.Width;
+                searchClearButton.X = borderWidth + background.Width - 16;
                 backgroundTexture.Width = background.Width;
                 backgroundTexture.Height = background.Height;
                 backgroundTexture.Alpha = background.Alpha;
@@ -673,6 +909,8 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (IsPlayerBackpack)
                     ProfileManager.CurrentProfile.BackpackGridSize = new Point(Width, Height);
+                else
+                    gridContainerEntry?.UpdateSaveDataEntry(this); // Save size for non-backpack containers
 
                 RequestUpdateContents();
             }
@@ -808,10 +1046,9 @@ namespace ClassicUO.Game.UI.Gumps
         {
             background.X = background.Y = borderWidth;
             scrollArea.X = background.X;
-            scrollArea.Y = TOP_BAR_HEIGHT + background.Y;
-            searchBox.X = searchBox.Y = borderWidth;
-            searchClearButton.X = searchBox.X + searchBox.Width + 2;
-            searchClearButton.Y = borderWidth;
+            scrollArea.Y = LABEL_HEIGHT + TOP_BAR_HEIGHT + background.Y;
+            searchBox.X = borderWidth;
+            searchBox.Y = borderWidth + LABEL_HEIGHT;
             quickDropBackpack.Y = sortContents.Y = openRegularGump.Y = borderWidth;
             backgroundTexture.X = background.X;
             backgroundTexture.Y = background.Y;
@@ -822,8 +1059,13 @@ namespace ClassicUO.Game.UI.Gumps
             backgroundTexture.Width = background.Width = adjustedWidth;
             backgroundTexture.Height = background.Height = adjustedHeight;
 
+            searchBox.Width = adjustedWidth - 18;
+            searchBoxBackground.Width = searchBox.Width;
+            searchClearButton.X = borderWidth + adjustedWidth - 16;
+            searchClearButton.Y = borderWidth + LABEL_HEIGHT;
+
             scrollArea.Width = adjustedWidth;
-            scrollArea.Height = adjustedHeight - TOP_BAR_HEIGHT;
+            scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT;
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
