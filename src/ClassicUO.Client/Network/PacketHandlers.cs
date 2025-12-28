@@ -4329,7 +4329,10 @@ sealed class PacketHandlers
             season = 0;
         }
 
-        if (world.Player.IsDead && season == 4)
+        // Apply season filter
+        Season filteredSeason = Game.Managers.SeasonFilter.Instance.ApplyFilter((Season)season);
+
+        if (world.Player.IsDead && filteredSeason == Game.Managers.Season.Desolation)
         {
             return;
         }
@@ -4342,7 +4345,7 @@ sealed class PacketHandlers
             world.OldMusicIndex = 42;
         }
 
-        world.ChangeSeason((Season)season, music);
+        world.ChangeSeason(filteredSeason, music);
     }
 
     private static void ClientVersion(World world, ref StackDataReader p) => AsyncNetClient.Socket.Send_ClientVersion(Settings.GlobalSettings.ClientVersion);

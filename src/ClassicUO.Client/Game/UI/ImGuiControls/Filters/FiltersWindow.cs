@@ -7,6 +7,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool graphics = false;
         private bool journalFilters = false;
         private bool soundFilters = false;
+        private bool seasonFilter = false;
         private FiltersWindow() : base("Filters Tab")
         {
             WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
@@ -39,6 +40,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.EndTabItem();
                 }
 
+                if (ImGui.BeginTabItem("Season Filter"))
+                {
+                    SeasonFilterWindow.GetInstance()?.DrawContent();
+                    seasonFilter = true;
+                    ImGui.EndTabItem();
+                }
+
                 ImGui.EndTabBar();
             }
         }
@@ -55,6 +63,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             if(soundFilters)
                 SoundFilterWindow.GetInstance()?.Dispose();
+
+            if(seasonFilter)
+                SeasonFilterWindow.GetInstance()?.Dispose();
         }
     }
 }

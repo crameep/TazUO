@@ -436,7 +436,7 @@ namespace ClassicUO.Game.UI.Gumps
                     Tag = 0
                 };
 
-                _myCoinsEntries[0].SetText("0");
+                _myCoinsEntries[0].SetText(FormatAsCurrency(0));
 
                 Add(_myCoinsEntries[0]);
 
@@ -450,7 +450,7 @@ namespace ClassicUO.Game.UI.Gumps
                     Tag = 1
                 };
 
-                _myCoinsEntries[1].SetText("0");
+                _myCoinsEntries[1].SetText(FormatAsCurrency(0));
 
                 Add(_myCoinsEntries[1]);
 
