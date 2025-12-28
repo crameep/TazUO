@@ -31,6 +31,12 @@ namespace ClassicUO.Game.Scenes
     {
         public static GameScene Instance { get; private set; }
 
+        private bool _waitingForWindowResize = false;
+        private Point? _expectedWindowSize = null;
+        private long _windowResizeStartTime = 0;
+        private const int WINDOW_RESIZE_TIMEOUT_MS = 500;
+        private const int TOLERANCE = 5;
+
         private static readonly Lazy<BlendState> _darknessBlend = new Lazy<BlendState>(() =>
         {
             var state = new BlendState();
@@ -105,15 +111,33 @@ namespace ClassicUO.Game.Scenes
             }
             else if (Settings.GlobalSettings.IsWindowMaximized)
             {
+                _waitingForWindowResize = true;
+                _windowResizeStartTime = Time.Ticks;
                 Client.Game.MaximizeWindow();
             }
-            else if (Settings.GlobalSettings.WindowSize.HasValue)
+            else
             {
-                int w = Settings.GlobalSettings.WindowSize.Value.X;
-                int h = Settings.GlobalSettings.WindowSize.Value.Y;
+                // Determine target size: prioritize saved GlobalSettings, fallback to Profile
+                int w, h;
+
+                if (Settings.GlobalSettings.WindowSize.HasValue)
+                {
+                    w = Settings.GlobalSettings.WindowSize.Value.X;
+                    h = Settings.GlobalSettings.WindowSize.Value.Y;
+                }
+                else
+                {
+                    // FALLBACK: Use profile's game window size
+                    w = Math.Max(800, ProfileManager.CurrentProfile.GameWindowSize.X);
+                    h = Math.Max(600, ProfileManager.CurrentProfile.GameWindowSize.Y);
+                }
 
                 w = Math.Max(640, w);
                 h = Math.Max(480, h);
+
+                _expectedWindowSize = new Point(w, h);
+                _waitingForWindowResize = true;
+                _windowResizeStartTime = Time.Ticks;
 
                 Client.Game.SetWindowSize(w, h);
             }
@@ -836,6 +860,58 @@ namespace ClassicUO.Game.Scenes
             SelectedObject.TranslatedMousePositionByViewport = Camera.MouseToWorldPosition();
 
             base.Update();
+
+            // Check if we're waiting for window resize to complete
+            if (_waitingForWindowResize)
+            {
+                if (_expectedWindowSize.HasValue)
+                {
+                    // We're waiting for a specific window size
+                    Point expected = _expectedWindowSize.Value;
+                    int actualWidth = Client.Game.Window.ClientBounds.Width;
+                    int actualHeight = Client.Game.Window.ClientBounds.Height;
+
+                    bool widthMatch = Math.Abs(actualWidth - expected.X) <= TOLERANCE;
+                    bool heightMatch = Math.Abs(actualHeight - expected.Y) <= TOLERANCE;
+
+                    if (widthMatch && heightMatch)
+                    {
+                        // Resize succeeded
+                        _waitingForWindowResize = false;
+                        _expectedWindowSize = null;
+                    }
+                    else if (Time.Ticks - _windowResizeStartTime > WINDOW_RESIZE_TIMEOUT_MS)
+                    {
+                        // Timeout reached, retry resize once
+                        Log.Trace($"Window resize timeout, retrying. Expected: {expected.X}x{expected.Y}, Actual: {actualWidth}x{actualHeight}");
+                        Client.Game.SetWindowSize(expected.X, expected.Y);
+
+                        // Reset timer for one more attempt
+                        _windowResizeStartTime = Time.Ticks;
+                        _waitingForWindowResize = false;
+                        _expectedWindowSize = null;
+                    }
+                }
+                else
+                {
+                    // We're waiting for maximize operation to complete
+                    if (Client.Game.IsWindowMaximized())
+                    {
+                        // Maximize succeeded
+                        _waitingForWindowResize = false;
+                    }
+                    else if (Time.Ticks - _windowResizeStartTime > WINDOW_RESIZE_TIMEOUT_MS)
+                    {
+                        // Timeout reached, retry maximize once
+                        Log.Trace("Window maximize timeout, retrying.");
+                        Client.Game.MaximizeWindow();
+
+                        // Reset timer for one more attempt
+                        _windowResizeStartTime = Time.Ticks;
+                        _waitingForWindowResize = false;
+                    }
+                }
+            }
 
             // Temporary to see if memory usage get's too high or not. This will keep map chunks loaded
             // for better performance at the cost of more ram.
