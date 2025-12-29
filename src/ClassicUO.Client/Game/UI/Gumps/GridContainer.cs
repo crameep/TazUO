@@ -167,7 +167,7 @@ namespace ClassicUO.Game.UI.Gumps
             // Load minimized state from save data
             bool loadMinimized = gridContainerEntry.IsMinimized;
 
-            Point lastPos = IsPlayerBackpack ? ProfileManager.CurrentProfile.BackpackGridPosition : gridContainerEntry.GetPosition();
+            Point lastPos = IsPlayerBackpack ? ProfileManager.CurrentProfile.BackpackGridPosition : gridContainerEntry.GetPositionForState(loadMinimized);
             if (lastPos == Point.Zero || (lastPos.X == 100 && lastPos.Y == 100)) //Default positions, use last static position
             {
                 lastPos.X = lastX;
@@ -436,6 +436,17 @@ namespace ClassicUO.Game.UI.Gumps
                 // Store current height before minimizing
                 _heightBeforeMinimize = Height;
 
+                // Save current maximized position and load minimized position
+                if (gridContainerEntry != null)
+                {
+                    gridContainerEntry.SetPositionForState(X, Y, false); // Save maximized position
+
+                    // Load and apply minimized position
+                    Point minimizedPos = gridContainerEntry.GetPositionForState(true);
+                    X = minimizedPos.X;
+                    Y = minimizedPos.Y;
+                }
+
                 // Hide everything except container name, background, and border
                 if (searchBox != null) searchBox.IsVisible = false;
                 if (searchClearButton != null) searchClearButton.IsVisible = false;
@@ -469,6 +480,17 @@ namespace ClassicUO.Game.UI.Gumps
             }
             else
             {
+                // Save current minimized position and load maximized position
+                if (gridContainerEntry != null)
+                {
+                    gridContainerEntry.SetPositionForState(X, Y, true); // Save minimized position
+
+                    // Load and apply maximized position
+                    Point maximizedPos = gridContainerEntry.GetPositionForState(false);
+                    X = maximizedPos.X;
+                    Y = maximizedPos.Y;
+                }
+
                 // Restore all controls
                 if (searchBox != null) searchBox.IsVisible = true;
                 if (searchClearButton != null) searchClearButton.IsVisible = true;
@@ -795,8 +817,17 @@ namespace ClassicUO.Game.UI.Gumps
         protected override void OnMove(int x, int y)
         {
             base.OnMove(x, y);
-            gridContainerEntry.X = X;
-            gridContainerEntry.Y = Y;
+
+            if (gridContainerEntry != null)
+            {
+                gridContainerEntry.SetPositionForState(X, Y, IsMinimized);
+            }
+
+            // Backpack special handling
+            if (IsPlayerBackpack)
+            {
+                ProfileManager.CurrentProfile.BackpackGridPosition = new Point(X, Y);
+            }
         }
 
         public override void Dispose()

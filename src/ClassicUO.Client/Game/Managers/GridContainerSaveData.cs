@@ -297,6 +297,14 @@ public class GridContainerEntry
 
     [JsonPropertyName("y")] public int Y { get; set; }
 
+    [JsonPropertyName("mx")] public int MaximizedX { get; set; }
+
+    [JsonPropertyName("my")] public int MaximizedY { get; set; }
+
+    [JsonPropertyName("mnx")] public int MinimizedX { get; set; }
+
+    [JsonPropertyName("mny")] public int MinimizedY { get; set; }
+
     [JsonPropertyName("og")] public bool UseOriginalContainer { get; set; }
 
     [JsonPropertyName("as")] public bool AutoSort { get; set; }
@@ -323,6 +331,32 @@ public class GridContainerEntry
 
     public Point GetSize() => new Point(Width, Height);
 
+    public Point GetPositionForState(bool isMinimized)
+    {
+        if (isMinimized)
+            return new Point(MinimizedX != 0 ? MinimizedX : X, MinimizedY != 0 ? MinimizedY : Y);
+        else
+            return new Point(MaximizedX != 0 ? MaximizedX : X, MaximizedY != 0 ? MaximizedY : Y);
+    }
+
+    public void SetPositionForState(int x, int y, bool isMinimized)
+    {
+        if (isMinimized)
+        {
+            MinimizedX = x;
+            MinimizedY = y;
+        }
+        else
+        {
+            MaximizedX = x;
+            MaximizedY = y;
+        }
+
+        // Also update legacy X/Y for backward compatibility
+        X = x;
+        Y = y;
+    }
+
     public void UpdateSaveDataEntry(GridContainer container) => GridContainerSaveData.Instance.AddOrReplaceContainer(container);
 
     public GridContainerEntry UpdateFromContainer(GridContainer container)
@@ -331,8 +365,7 @@ public class GridContainerEntry
         Width = container.Width;
         // Store the full height, not the minimized height
         Height = container.IsMinimized ? container.HeightBeforeMinimize : container.Height;
-        X = container.X;
-        Y = container.Y;
+        SetPositionForState(container.X, container.Y, container.IsMinimized);
         UseOriginalContainer = container.UseOldContainerStyle ?? false;
         AutoSort = container.AutoSortContainer;
         VisuallyStackNonStackables = container.StackNonStackableItems;
