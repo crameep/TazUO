@@ -62,6 +62,18 @@ namespace ClassicUO.Game.UI.Gumps
         private static int lastX = 100, lastY = 100, lastCorpseX = 100, lastCorpseY = 100;
         private static int gridItemSize => (int)Math.Round(50 * (ProfileManager.CurrentProfile.GridContainersScale / 100f));
         private static int borderWidth = 4;
+
+        private static readonly Dictionary<BorderStyle, (int graphic, int borderSize)> BorderStyleConfig = new Dictionary<BorderStyle, (int graphic, int borderSize)>
+        {
+            { BorderStyle.Style1, (3500, 26) },
+            { BorderStyle.Style2, (5054, 12) },
+            { BorderStyle.Style3, (5120, 10) },
+            { BorderStyle.Style4, (9200, 7) },
+            { BorderStyle.Style5, (9270, 10) },
+            { BorderStyle.Style6, (9300, 4) },
+            { BorderStyle.Style7, (9260, 17) },
+            { BorderStyle.Style8, (40303, 16) }
+        };
         #endregion
 
         #region private readonly vars
@@ -94,7 +106,7 @@ namespace ClassicUO.Game.UI.Gumps
         #endregion
 
         #region private tooltip vars
-        private string quickLootStatus => ProfileManager.CurrentProfile.CorpseSingleClickLoot ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled";
+        private string quickLootStatus => GetEnabledDisabledText(ProfileManager.CurrentProfile.CorpseSingleClickLoot);
         private string quickLootTooltip
         {
             get
@@ -102,7 +114,7 @@ namespace ClassicUO.Game.UI.Gumps
                 if (isCorpse)
                     return $"Drop an item here to send it to your backpack.<br><br>Click this icon to enable/disable single-click looting for corpses.<br>   Currently {quickLootStatus}";
                 else
-                    return $"Drop an item here to send it to your backpack.<br><br>Click this icon to enable/disable single-click loot for this container while it remains open.<br>   Currently " + (quickLootThisContainer ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled");
+                    return $"Drop an item here to send it to your backpack.<br><br>Click this icon to enable/disable single-click loot for this container while it remains open.<br>   Currently {GetEnabledDisabledText(quickLootThisContainer)}";
             }
 
         }
@@ -110,7 +122,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             get
             {
-                string status = autoSortContainer ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled";
+                string status = GetEnabledDisabledText(autoSortContainer);
                 string sortModeText = sortMode == GridSortMode.Name ? "Name" : "Graphic + Hue";
                 return $"Sort this container.<br>Left click to show sort options<br>Alt + Click to enable auto sort<br>Current sort: {sortModeText}<br>Auto sort currently {status}";
             }
@@ -141,6 +153,88 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         public int HeightBeforeMinimize => _heightBeforeMinimize;
+        #endregion
+
+        #region Helper Methods
+        /// <summary>
+        /// Sets the visibility of all UI controls (used during minimize/maximize)
+        /// </summary>
+        /// <param name="visible">True to show controls, false to hide them</param>
+        private void SetControlsVisibility(bool visible)
+        {
+            if (searchBox != null) searchBox.IsVisible = visible;
+            if (searchClearButton != null) searchClearButton.IsVisible = visible;
+            if (openRegularGump != null) openRegularGump.IsVisible = visible;
+            if (quickDropBackpack != null) quickDropBackpack.IsVisible = visible;
+            if (sortContents != null) sortContents.IsVisible = visible;
+            if (scrollArea != null) scrollArea.IsVisible = visible;
+            if (setLootBag != null) setLootBag.IsVisible = visible && isCorpse;
+
+            // Find and toggle resize button
+            foreach (Control child in Children)
+            {
+                if (child is Button)
+                {
+                    child.IsVisible = visible;
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Switches between minimized and maximized position states
+        /// </summary>
+        /// <param name="fromMinimized">True if switching from minimized to maximized, false otherwise</param>
+        private void SwitchPositionState(bool fromMinimized)
+        {
+            if (gridContainerEntry == null) return;
+
+            // Save current position for current state
+            gridContainerEntry.SetPositionForState(X, Y, fromMinimized);
+
+            // Load position for new state
+            Point newPos = gridContainerEntry.GetPositionForState(!fromMinimized);
+            X = newPos.X;
+            Y = newPos.Y;
+        }
+
+        /// <summary>
+        /// Event handler for double-clicking to toggle minimize/maximize state
+        /// </summary>
+        private void OnMinimizeToggleDoubleClick(object sender, MouseDoubleClickEventArgs e)
+        {
+            if (e.Button == MouseButtonType.Left)
+            {
+                IsMinimized = !IsMinimized;
+                e.Result = true;
+            }
+        }
+
+        /// <summary>
+        /// Generates color-coded enabled/disabled status text for tooltips
+        /// </summary>
+        private static string GetEnabledDisabledText(bool isEnabled)
+        {
+            return isEnabled ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled";
+        }
+
+        /// <summary>
+        /// Updates both background and backgroundTexture dimensions
+        /// </summary>
+        private void UpdateBackgroundDimensions(int width, int height)
+        {
+            background.Width = backgroundTexture.Width = width;
+            background.Height = backgroundTexture.Height = height;
+        }
+
+        /// <summary>
+        /// Updates both background and backgroundTexture style properties (hue and alpha)
+        /// </summary>
+        private void UpdateBackgroundStyle(ushort hue, float alpha)
+        {
+            background.Hue = backgroundTexture.Hue = hue;
+            background.Alpha = backgroundTexture.Alpha = alpha;
+        }
         #endregion
 
         public GridContainer(World world, uint local, ushort originalContainerGraphic, bool? useGridStyle = null) : base(world, GetWidth(), GetHeight(), GetWidth(2), GetHeight(1), local, 0)
@@ -219,23 +313,11 @@ namespace ClassicUO.Game.UI.Gumps
                 AcceptMouseInput = true,
                 CanMove = true
             };
-            background.MouseDoubleClick += (sender, e) =>
-            {
-                if (e.Button == MouseButtonType.Left)
-                {
-                    IsMinimized = !IsMinimized;
-                }
-            };
+            background.MouseDoubleClick += OnMinimizeToggleDoubleClick;
 
             backgroundTexture = new GumpPicTiled(0);
             backgroundTexture.CanMove = true;
-            backgroundTexture.MouseDoubleClick += (sender, e) =>
-            {
-                if (e.Button == MouseButtonType.Left)
-                {
-                    IsMinimized = !IsMinimized;
-                }
-            };
+            backgroundTexture.MouseDoubleClick += OnMinimizeToggleDoubleClick;
             #endregion
 
             #region TOP BAR AREA
@@ -246,14 +328,7 @@ namespace ClassicUO.Game.UI.Gumps
                 AcceptMouseInput = true,
                 CanMove = true
             };
-            containerNameLabel.MouseDoubleClick += (sender, e) =>
-            {
-                if (e.Button == MouseButtonType.Left)
-                {
-                    IsMinimized = !IsMinimized;
-                    e.Result = true;
-                }
-            };
+            containerNameLabel.MouseDoubleClick += OnMinimizeToggleDoubleClick;
 
             searchBox = new StbTextBox(0xFF, 20, 0, true, FontStyle.None, 0x0481)
             {
@@ -366,7 +441,7 @@ namespace ClassicUO.Game.UI.Gumps
                     Control clickedControl = UIManager.MouseOverControl;
                     if (clickedControl == scrollArea)
                     {
-                        IsMinimized = !IsMinimized;
+                        OnMinimizeToggleDoubleClick(sender, e);
                     }
                 }
             };
@@ -437,34 +512,10 @@ namespace ClassicUO.Game.UI.Gumps
                 _heightBeforeMinimize = Height;
 
                 // Save current maximized position and load minimized position
-                if (gridContainerEntry != null)
-                {
-                    gridContainerEntry.SetPositionForState(X, Y, false); // Save maximized position
+                SwitchPositionState(false);
 
-                    // Load and apply minimized position
-                    Point minimizedPos = gridContainerEntry.GetPositionForState(true);
-                    X = minimizedPos.X;
-                    Y = minimizedPos.Y;
-                }
-
-                // Hide everything except container name, background, and border
-                if (searchBox != null) searchBox.IsVisible = false;
-                if (searchClearButton != null) searchClearButton.IsVisible = false;
-                if (openRegularGump != null) openRegularGump.IsVisible = false;
-                if (quickDropBackpack != null) quickDropBackpack.IsVisible = false;
-                if (sortContents != null) sortContents.IsVisible = false;
-                if (scrollArea != null) scrollArea.IsVisible = false;
-                if (setLootBag != null) setLootBag.IsVisible = false;
-
-                // Hide the resize button by finding it in Children (it's a Button control added by ResizableGump)
-                foreach (Control child in Children)
-                {
-                    if (child is Button)
-                    {
-                        child.IsVisible = false;
-                        break;
-                    }
-                }
+                // Hide all controls except container name, background, and border
+                SetControlsVisibility(false);
 
                 // Resize to minimal height (just the label area + border)
                 int minimizedHeight = LABEL_HEIGHT + (borderWidth * 2);
@@ -481,34 +532,10 @@ namespace ClassicUO.Game.UI.Gumps
             else
             {
                 // Save current minimized position and load maximized position
-                if (gridContainerEntry != null)
-                {
-                    gridContainerEntry.SetPositionForState(X, Y, true); // Save minimized position
-
-                    // Load and apply maximized position
-                    Point maximizedPos = gridContainerEntry.GetPositionForState(false);
-                    X = maximizedPos.X;
-                    Y = maximizedPos.Y;
-                }
+                SwitchPositionState(true);
 
                 // Restore all controls
-                if (searchBox != null) searchBox.IsVisible = true;
-                if (searchClearButton != null) searchClearButton.IsVisible = true;
-                if (openRegularGump != null) openRegularGump.IsVisible = true;
-                if (quickDropBackpack != null) quickDropBackpack.IsVisible = true;
-                if (sortContents != null) sortContents.IsVisible = true;
-                if (scrollArea != null) scrollArea.IsVisible = true;
-                if (setLootBag != null) setLootBag.IsVisible = isCorpse;
-
-                // Show the resize button
-                foreach (Control child in Children)
-                {
-                    if (child is Button)
-                    {
-                        child.IsVisible = true;
-                        break;
-                    }
-                }
+                SetControlsVisibility(true);
 
                 // Restore original height (fallback to default if not set)
                 int restoredHeight;
@@ -544,24 +571,8 @@ namespace ClassicUO.Game.UI.Gumps
         /// </summary>
         private void ApplyMinimizedDimensions()
         {
-            // Hide everything except container name, background, and border
-            if (searchBox != null) searchBox.IsVisible = false;
-            if (searchClearButton != null) searchClearButton.IsVisible = false;
-            if (openRegularGump != null) openRegularGump.IsVisible = false;
-            if (quickDropBackpack != null) quickDropBackpack.IsVisible = false;
-            if (sortContents != null) sortContents.IsVisible = false;
-            if (scrollArea != null) scrollArea.IsVisible = false;
-            if (setLootBag != null) setLootBag.IsVisible = false;
-
-            // Hide the resize button by finding it in Children (it's a Button control added by ResizableGump)
-            foreach (Control child in Children)
-            {
-                if (child is Button)
-                {
-                    child.IsVisible = false;
-                    break;
-                }
-            }
+            // Hide all controls except container name, background, and border
+            SetControlsVisibility(false);
 
             // Resize to minimal height (just the label area + border)
             int minimizedHeight = LABEL_HEIGHT + (borderWidth * 2);
@@ -920,22 +931,20 @@ namespace ClassicUO.Game.UI.Gumps
             if (!_isMinimized && (lastWidth != Width || lastHeight != Height || lastGridItemScale != gridItemSize))
             {
                 lastGridItemScale = gridItemSize;
-                background.Width = Width - (borderWidth * 2);
-                background.Height = Height - (borderWidth * 2);
-                scrollArea.Width = background.Width;
-                scrollArea.Height = background.Height - LABEL_HEIGHT - TOP_BAR_HEIGHT;
+                int adjustedWidth = Width - (borderWidth * 2);
+                int adjustedHeight = Height - (borderWidth * 2);
+                UpdateBackgroundDimensions(adjustedWidth, adjustedHeight);
+                scrollArea.Width = adjustedWidth;
+                scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT;
                 openRegularGump.X = Width - openRegularGump.Width - borderWidth;
                 quickDropBackpack.X = openRegularGump.X - quickDropBackpack.Width;
                 sortContents.X = quickDropBackpack.X - sortContents.Width;
                 lastHeight = Height;
                 lastWidth = Width;
-                searchBox.Width = background.Width - 18;
+                searchBox.Width = adjustedWidth - 18;
                 searchBoxBackground.Width = searchBox.Width;
-                searchClearButton.X = borderWidth + background.Width - 16;
-                backgroundTexture.Width = background.Width;
-                backgroundTexture.Height = background.Height;
-                backgroundTexture.Alpha = background.Alpha;
-                backgroundTexture.Hue = background.Hue;
+                searchClearButton.X = borderWidth + adjustedWidth - 16;
+                UpdateBackgroundStyle(background.Hue, background.Alpha);
                 setLootBag.Y = Height - 20;
 
                 if (IsPlayerBackpack)
@@ -977,10 +986,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ? container.Hue
                 : ProfileManager.CurrentProfile.AltGridContainerBackgroundHue;
 
-            background.Hue = newHue;
-            background.Alpha = newAlpha;
-            backgroundTexture.Hue = newHue;
-            backgroundTexture.Alpha = newAlpha;
+            UpdateBackgroundStyle(newHue, newAlpha);
             BorderControl.Hue = newHue;
             BorderControl.Alpha = newAlpha;
 
@@ -1006,48 +1012,27 @@ namespace ClassicUO.Game.UI.Gumps
         public void BuildBorder()
         {
             int graphic = 0, borderSize = 0;
-            switch ((BorderStyle)ProfileManager.CurrentProfile.Grid_BorderStyle)
-            {
-                case BorderStyle.Style1:
-                    graphic = 3500; borderSize = 26;
-                    break;
-                case BorderStyle.Style2:
-                    graphic = 5054; borderSize = 12;
-                    break;
-                case BorderStyle.Style3:
-                    graphic = 5120; borderSize = 10;
-                    break;
-                case BorderStyle.Style4:
-                    graphic = 9200; borderSize = 7;
-                    break;
-                case BorderStyle.Style5:
-                    graphic = 9270; borderSize = 10;
-                    break;
-                case BorderStyle.Style6:
-                    graphic = 9300; borderSize = 4;
-                    break;
-                case BorderStyle.Style7:
-                    graphic = 9260; borderSize = 17;
-                    break;
-                case BorderStyle.Style8:
-                    if (Client.Game.UO.Gumps.GetGump(40303).Texture != null)
-                        graphic = 40303;
-                    else
-                        graphic = 83;
-                    borderSize = 16;
-                    break;
+            BorderStyle currentStyle = (BorderStyle)ProfileManager.CurrentProfile.Grid_BorderStyle;
 
-                default:
-                case BorderStyle.Default:
-                    BorderControl.DefaultGraphics();
-                    backgroundTexture.IsVisible = false;
-                    background.IsVisible = true;
-                    borderWidth = 4;
-                    break;
+            if (currentStyle == BorderStyle.Default)
+            {
+                BorderControl.DefaultGraphics();
+                backgroundTexture.IsVisible = false;
+                background.IsVisible = true;
+                borderWidth = 4;
             }
-
-            if ((BorderStyle)ProfileManager.CurrentProfile.Grid_BorderStyle != BorderStyle.Default)
+            else if (BorderStyleConfig.TryGetValue(currentStyle, out var config))
             {
+                graphic = config.graphic;
+                borderSize = config.borderSize;
+
+                // Special handling for Style8 fallback
+                if (currentStyle == BorderStyle.Style8 && Client.Game.UO.Gumps.GetGump(40303).Texture == null)
+                {
+                    graphic = 83;
+                }
+
+                // Apply border graphics for non-default styles
                 BorderControl.T_Left = (ushort)graphic;
                 BorderControl.H_Border = (ushort)(graphic + 1);
                 BorderControl.T_Right = (ushort)(graphic + 2);
@@ -1087,8 +1072,7 @@ namespace ClassicUO.Game.UI.Gumps
             int adjustedWidth = Width - (borderWidth * 2);
             int adjustedHeight = Height - (borderWidth * 2);
 
-            backgroundTexture.Width = background.Width = adjustedWidth;
-            backgroundTexture.Height = background.Height = adjustedHeight;
+            UpdateBackgroundDimensions(adjustedWidth, adjustedHeight);
 
             searchBox.Width = adjustedWidth - 18;
             searchBoxBackground.Width = searchBox.Width;
@@ -1489,38 +1473,95 @@ namespace ClassicUO.Game.UI.Gumps
             private static Vector3 _borderHueVec;
             private bool _shouldDraw;
 
+            /// <summary>
+            /// Calculates the centered dimension and offset for rendering an item within a grid cell
+            /// </summary>
+            private (int size, int offset) CalculateCenteredDimension(int rectDimension, int cellDimension, bool scaleItems, float scale)
+            {
+                int originalSize = cellDimension;
+                int offset = 0;
+
+                if (rectDimension < cellDimension)
+                {
+                    originalSize = scaleItems ? (int)(rectDimension * scale) : rectDimension;
+                    offset = (cellDimension >> 1) - (originalSize >> 1);
+                }
+                else if (rectDimension > cellDimension)
+                {
+                    originalSize = scaleItems ? (int)(cellDimension * scale) : cellDimension;
+                    offset = (cellDimension >> 1) - (originalSize >> 1);
+                }
+
+                return (originalSize, offset);
+            }
+
+            /// <summary>
+            /// Gets the weapon comparison items for tooltip comparison (handles one-handed and two-handed weapons)
+            /// </summary>
+            private (Item primary, Item secondary) GetWeaponComparisonItems(Layer itemLayer)
+            {
+                if (itemLayer != Layer.OneHanded && itemLayer != Layer.TwoHanded)
+                    return (null, null);
+
+                Layer primaryLayer = itemLayer;
+                Layer secondaryLayer = itemLayer == Layer.OneHanded ? Layer.TwoHanded : Layer.OneHanded;
+
+                Item primary = _world.Player.FindItemByLayer(primaryLayer);
+                Item secondary = _world.Player.FindItemByLayer(secondaryLayer);
+
+                // If no item in primary layer, swap with secondary
+                if (primary == null && secondary != null)
+                {
+                    primary = secondary;
+                    secondary = null;
+                }
+
+                return (primary, secondary);
+            }
+
+            /// <summary>
+            /// Draws a highlighted border around the grid item
+            /// </summary>
+            private void DrawHighlightBorder(UltimaBatcher2D batcher, int x, int y, Texture2D borderTexture, Vector3 borderHueVec)
+            {
+                int bsize = _profile.GridHighlightSize;
+                int bx = x + 6;
+                int by = y + 6;
+                int innerWidth = Width - 12;
+                int innerHeight = Height - 12;
+
+                // Top border
+                batcher.Draw(borderTexture, new Rectangle(bx, by, innerWidth, bsize), borderHueVec);
+
+                // Left border
+                batcher.Draw(borderTexture, new Rectangle(bx, by + bsize, bsize, innerHeight - (bsize * 2)), borderHueVec);
+
+                // Right border
+                batcher.Draw(borderTexture, new Rectangle(bx + innerWidth - bsize, by + bsize, bsize, innerHeight - (bsize * 2)), borderHueVec);
+
+                // Bottom border
+                batcher.Draw(borderTexture, new Rectangle(bx, by + innerHeight - bsize, innerWidth, bsize), borderHueVec);
+            }
+
             public override bool Draw(UltimaBatcher2D batcher, int x, int y)
             {
                 if (!_shouldDraw || IsDisposed) return false;
 
                 if (_hasItem && Keyboard.Ctrl && _item.ItemData.Layer > 0 && MouseIsOver && (_toolTipThis == null || _toolTipThis.IsDisposed) && (_toolTipitem1 == null || _toolTipitem1.IsDisposed) && (_toolTipitem2 == null || _toolTipitem2.IsDisposed))
                 {
-                    Item compItem = _world.Player.FindItemByLayer((Layer)_item.ItemData.Layer);
+                    Layer itemLayer = (Layer)_item.ItemData.Layer;
+                    Item compItem = _world.Player.FindItemByLayer(itemLayer);
                     Item compItem2 = null;
 
-                    // For weapons, also check the opposite layer for comparison
-                    if ((Layer)_item.ItemData.Layer == Layer.OneHanded)
+                    // For weapons, get both possible comparison items (one-handed and two-handed)
+                    (Item weaponPrimary, Item weaponSecondary) = GetWeaponComparisonItems(itemLayer);
+                    if (weaponPrimary != null)
                     {
-                        compItem2 = _world.Player.FindItemByLayer(Layer.TwoHanded);
-                        // If no one-handed item equipped, use two-handed as primary comparison
-                        if (compItem == null && compItem2 != null)
-                        {
-                            compItem = compItem2;
-                            compItem2 = null;
-                        }
-                    }
-                    else if ((Layer)_item.ItemData.Layer == Layer.TwoHanded)
-                    {
-                        compItem2 = _world.Player.FindItemByLayer(Layer.OneHanded);
-                        // If no two-handed item equipped, use one-handed as primary comparison
-                        if (compItem == null && compItem2 != null)
-                        {
-                            compItem = compItem2;
-                            compItem2 = null;
-                        }
+                        compItem = weaponPrimary;
+                        compItem2 = weaponSecondary;
                     }
 
-                    if (compItem != null && (Layer)_item.ItemData.Layer != Layer.Backpack)
+                    if (compItem != null && itemLayer != Layer.Backpack)
                     {
                         ClearTooltip();
                         var toolTipList = new List<CustomToolTip>();
@@ -1581,37 +1622,10 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (_item.MatchesHighlightData)
                 {
-                    int bx = x + 6;
-                    int by = y + 6;
-                    int bsize = _profile.GridHighlightSize;
-
-
                     Texture2D borderTexture = SolidColorTextureCache.GetTexture(_item.HighlightColor);
                     var borderHueVec = new Vector3(1, 0, 1);
 
-                    batcher.Draw( //Top bar
-                        borderTexture,
-                        new Rectangle(bx, by, Width - 12, bsize),
-                        borderHueVec
-                        );
-
-                    batcher.Draw( //Left Bar
-                        borderTexture,
-                        new Rectangle(bx, by + bsize, bsize, Height - 12 - (bsize * 2)),
-                        borderHueVec
-                        );
-
-                    batcher.Draw( //Right Bar
-                        borderTexture,
-                        new Rectangle(bx + Width - 12 - bsize, by + bsize, bsize, Height - 12 - (bsize * 2)),
-                        borderHueVec
-                        );
-
-                    batcher.Draw( //Bottom bar
-                        borderTexture,
-                        new Rectangle(bx, by + Height - 12 - bsize, Width - 12, bsize),
-                        borderHueVec
-                        );
+                    DrawHighlightBorder(batcher, x, y, borderTexture, borderHueVec);
                 }
 
                 if (MouseIsOver)
@@ -1641,42 +1655,11 @@ namespace ClassicUO.Game.UI.Gumps
                 float scale = (_profile.GridContainersScale / 100f);
                 bool scaleItems = _profile.GridContainerScaleItems;
 
-                if (_rect.Width < Width)
-                {
-                    if (scaleItems)
-                        originalSize.X = (ushort)(_rect.Width * scale);
-                    else
-                        originalSize.X = _rect.Width;
+                // Calculate centered X dimension
+                (originalSize.X, point.X) = CalculateCenteredDimension(_rect.Width, Width, scaleItems, scale);
 
-                    point.X = (Width >> 1) - (originalSize.X >> 1);
-                }
-                else if (_rect.Width > Width)
-                {
-                    if (scaleItems)
-                        originalSize.X = (ushort)(Width * scale);
-                    else
-                        originalSize.X = Width;
-                    point.X = (Width >> 1) - (originalSize.X >> 1);
-                }
-
-                if (_rect.Height < Height)
-                {
-                    if (scaleItems)
-                        originalSize.Y = (ushort)(_rect.Height * scale);
-                    else
-                        originalSize.Y = _rect.Height;
-
-                    point.Y = (Height >> 1) - (originalSize.Y >> 1);
-                }
-                else if (_rect.Height > Height)
-                {
-                    if (scaleItems)
-                        originalSize.Y = (ushort)(Height * scale);
-                    else
-                        originalSize.Y = Height;
-
-                    point.Y = (Height >> 1) - (originalSize.Y >> 1);
-                }
+                // Calculate centered Y dimension
+                (originalSize.Y, point.Y) = CalculateCenteredDimension(_rect.Height, Height, scaleItems, scale);
 
                 batcher.Draw
                 (
@@ -1986,25 +1969,26 @@ namespace ClassicUO.Game.UI.Gumps
                 return containerContents;
             }
 
+            private static bool ContainsIgnoreCase(string source, string searchLower)
+            {
+                return source != null && source.ToLower().Contains(searchLower);
+            }
+
             private bool SearchItemNameAndProps(string search, Item item)
             {
                 if (item == null)
                     return false;
 
+                string searchLower = search.ToLower();
+
                 if (world.OPL.TryGetNameAndData(item.Serial, out string name, out string data))
                 {
-                    if (name != null && name.ToLower().Contains(search.ToLower()))
+                    if (ContainsIgnoreCase(name, searchLower) || ContainsIgnoreCase(data, searchLower))
                         return true;
-                    if (data != null)
-                        if (data.ToLower().Contains(search.ToLower()))
-                            return true;
                 }
                 else
                 {
-                    if (item.Name != null && item.Name.ToLower().Contains(search.ToLower()))
-                        return true;
-
-                    if (item.ItemData.Name.ToLower().Contains(search.ToLower()))
+                    if (ContainsIgnoreCase(item.Name, searchLower) || ContainsIgnoreCase(item.ItemData.Name, searchLower))
                         return true;
                 }
 
