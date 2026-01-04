@@ -94,8 +94,6 @@ namespace ClassicUO
                 }
             };
 
-            ReadSettingsFromArgs(args);
-
             if (CUOEnviroment.IsHighDPI)
             {
                 Environment.SetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI", "1");
@@ -201,21 +199,21 @@ namespace ClassicUO
                 {
                     Client.ShowErrorMessage(ResGeneral.YourUOClientVersionIsInvalid);
                 }
-
-                //PlatformHelper.LaunchBrowser(ResGeneral.ClassicUOLink);
             }
             else
             {
                 switch (Settings.GlobalSettings.ForceDriver)
                 {
+                    default:
                     case 1: // OpenGL
                         Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
+                        SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_DRIVER, "opengl");
 
                         break;
 
                     case 2: // Vulkan
                         Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
-
+                        SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_DRIVER, "vulkan");
                         break;
                 }
 

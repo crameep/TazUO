@@ -63,7 +63,6 @@ namespace ClassicUO
             };
 
             GraphicManager.PreferredDepthStencilFormat = DepthFormat.Depth24Stencil8;
-            SetVSync(false);
 
             Window.ClientSizeChanged += WindowOnClientSizeChanged;
             Window.AllowUserResizing = true;
@@ -1035,7 +1034,7 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP:
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }
@@ -1061,7 +1060,7 @@ namespace ClassicUO
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION: //Work around because sdl doesn't see trigger buttons as buttons, they are axis probably for pressure support
                                                                   //GameActions.Print(typeof(SDL_GamepadButton).GetEnumName((SDL_GamepadButton)sdlEvent->gbutton.button));
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }

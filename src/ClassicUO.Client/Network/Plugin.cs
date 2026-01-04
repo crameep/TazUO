@@ -124,6 +124,11 @@ namespace ClassicUO.Network
 
         public static Plugin Create(string path)
         {
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
             path = Path.GetFullPath(
                 Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Plugins", path)
             );
