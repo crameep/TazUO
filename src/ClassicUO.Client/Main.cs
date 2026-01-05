@@ -94,6 +94,8 @@ namespace ClassicUO
                 }
             };
 
+            ReadSettingsFromArgs(args);
+
             if (CUOEnviroment.IsHighDPI)
             {
                 Environment.SetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI", "1");
