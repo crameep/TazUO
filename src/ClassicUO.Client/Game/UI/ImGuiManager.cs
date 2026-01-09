@@ -1,8 +1,6 @@
-using ClassicUO.Configuration;
 using ClassicUO.Utility.Logging;
 using ImGuiNET;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using ClassicUO.Assets;
@@ -16,6 +14,7 @@ namespace ClassicUO.Game.UI
         private static bool _isInitialized;
         private static bool _hasWindows;
         private static readonly List<ImGuiWindow> _windows = new();
+        private static readonly List<ImGuiWindow> _activeSingletons = new();
         private static readonly object _windowsLock = new();
         private static Microsoft.Xna.Framework.Game _game;
 
@@ -31,6 +30,16 @@ namespace ClassicUO.Game.UI
                     return _windows.ToArray();
                 }
             }
+        }
+
+        public static void AddSingleton(ImGuiWindow singleton) => _activeSingletons.Add(singleton);
+        public static void TryRemoveSingleton(ImGuiWindow singleton) => _activeSingletons.Remove(singleton);
+
+        public static void ClearAllSingletons()
+        {
+            for(int i = _activeSingletons.Count - 1; i >= 0; i--)
+                _activeSingletons[i]?.Dispose();
+            _activeSingletons.Clear();
         }
 
         public static void AddWindow(ImGuiWindow window)
@@ -189,8 +198,6 @@ namespace ClassicUO.Game.UI
 
         public static void Initialize(Microsoft.Xna.Framework.Game game)
         {
-            //return; //Disable for now, basic implementation is done
-
             _game = game;
             try
             {
@@ -260,6 +267,7 @@ namespace ClassicUO.Game.UI
         public static void Dispose()
         {
             RemoveAllWindows();
+            ClearAllSingletons();
             _imGuiRenderer?.Dispose();
             _imGuiRenderer = null;
             _isInitialized = false;

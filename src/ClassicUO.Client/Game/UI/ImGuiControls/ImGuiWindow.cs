@@ -115,6 +115,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
         {
             SpriteInfo artInfo = Client.Game.UO.Arts.GetArt(graphic);
 
+            if(artInfo.Texture == null)
+                return false;
+
             if(useSmallerIfGfxSmaller && artInfo.UV.Width < size.X && artInfo.UV.Height < size.Y)
                 size = new Vector2(artInfo.UV.Width, artInfo.UV.Height);
 
@@ -155,6 +158,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         protected SingletonImGuiWindow(string title = "") : base(title)
         {
+            ImGuiManager.AddSingleton(this);
         }
 
         public static SingletonImGuiWindow<T> GetInstance()
@@ -178,6 +182,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (Instance == this)
                 Instance = null;
             base.Dispose();
+
+            ImGuiManager.TryRemoveSingleton(this);
         }
     }
 }
