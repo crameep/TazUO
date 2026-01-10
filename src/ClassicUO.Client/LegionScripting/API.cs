@@ -2221,7 +2221,9 @@ namespace ClassicUO.LegionScripting
                 {
                     if (World.Player.Skills[i].Name.ToLower().Contains(skill))
                     {
-                        World.Player.Skills[i].Lock = status;
+                        Skill skill = World.Player.Skills[i];
+                        skill.Lock = status;
+                        GameActions.ChangeSkillLockStatus((ushort)skill.Index, (byte)skill.Lock);
 
                         break;
                     }

@@ -2336,7 +2336,7 @@ namespace ClassicUO.Game.Managers
             Name = name;
         }
 
-        public string Name { get; }
+        public string Name { get; set; }
 
         public SDL_GamepadButton[] ControllerButtons { get; set; }
         public SDL_Keycode Key { get; set; }
