@@ -593,7 +593,7 @@ namespace ClassicUO.LegionScripting
                 return true;
             }
         );
-        
+
         /// <summary>
         /// Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
         /// Useful when menu IDs change every time (e.g., Tracking skill).
@@ -861,7 +861,7 @@ namespace ClassicUO.LegionScripting
                 DressAgentManager.Instance.DressFromConfig(config);
             }
         });
-        
+
         /// <summary>
         /// Undress from a saved dress configuration.
         /// Example:
@@ -2388,31 +2388,30 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <param name="ID">Gump ID</param>
-        public void CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
+        public bool CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
                 if (World.Player == null || ID == 0) //0 Prevents weird behaviour closing system chat gump
-                    return;
+                    return false;
 
                 uint gumpId = ID != uint.MaxValue ? ID : World.Player.LastGumpID;
                 Gump gump = UIManager.GetGumpServer(gumpId);
-                DisposeGump(gump);
+                return DisposeGump(gump);
             }
         );
 
-        private void DisposeGump(Gump gump)
+        private bool DisposeGump(Gump gump)
         {
-            if (gump == null)
-            {
-                return;
-            }
+            if (gump == null) return false;
 
             if (gump.CanCloseWithRightClick)
             {
                 gump.InvokeMouseCloseGumpWithRClick();
-                return;
+                return true;
             }
+
             gump.Dispose();
+            return true;
         }
 
         /// <summary>
