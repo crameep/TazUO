@@ -4330,7 +4330,8 @@ sealed class PacketHandlers
         }
 
         // Apply season filter
-        Season filteredSeason = Game.Managers.SeasonFilter.Instance.ApplyFilter((Season)season);
+        world.RealSeason = (Season)season;
+        Season filteredSeason = SeasonFilter.Instance.ApplyFilter((Season)season);
 
         if (world.Player.IsDead && filteredSeason == Game.Managers.Season.Desolation)
         {

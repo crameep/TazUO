@@ -9,7 +9,6 @@ namespace ClassicUO.Game.Managers
 {
     public class SeasonFilter
     {
-        private static SeasonFilter _instance;
         private Dictionary<Season, Season> _seasonFilters;
         private bool _isLoaded;
 
@@ -17,9 +16,8 @@ namespace ClassicUO.Game.Managers
         {
             get
             {
-                if (_instance == null)
-                    _instance = new SeasonFilter();
-                return _instance;
+                field ??= new SeasonFilter();
+                return field;
             }
         }
 
@@ -40,13 +38,10 @@ namespace ClassicUO.Game.Managers
 
         private void EnsureLoaded()
         {
-            if (!_isLoaded)
-            {
-                Load();
-            }
+            if (!_isLoaded) Load();
         }
 
-        public void Load()
+        private void Load()
         {
             if (Client.Settings == null)
             {
@@ -61,14 +56,10 @@ namespace ClassicUO.Game.Managers
                 string json = Client.Settings.Get(SettingsScope.Account, Constants.SqlSettings.SEASON_FILTER, "{}");
 
                 if (!string.IsNullOrWhiteSpace(json))
-                {
                     _seasonFilters = JsonSerializer.Deserialize(json, SeasonFilterJsonContext.Default.DictionarySeasonSeason)
-                        ?? new Dictionary<Season, Season>();
-                }
+                                     ?? new Dictionary<Season, Season>();
                 else
-                {
                     _seasonFilters = new Dictionary<Season, Season>();
-                }
             }
             catch (Exception ex)
             {
@@ -79,7 +70,7 @@ namespace ClassicUO.Game.Managers
             _isLoaded = true;
         }
 
-        public void Save()
+        private void Save()
         {
             if (Client.Settings == null)
             {
@@ -103,10 +94,7 @@ namespace ClassicUO.Game.Managers
             EnsureLoaded();
 
             // If filter exists for this season, return replacement
-            if (_seasonFilters.TryGetValue(incoming, out Season replacement))
-            {
-                return replacement;
-            }
+            if (_seasonFilters.TryGetValue(incoming, out Season replacement)) return replacement;
 
             // No filter, return original
             return incoming;
@@ -116,16 +104,16 @@ namespace ClassicUO.Game.Managers
         {
             EnsureLoaded();
             _seasonFilters[from] = to;
+
+            if (World.Instance != null && World.Instance.RealSeason == from) World.Instance.ChangeSeason(to);
+
             Save();
         }
 
         public void RemoveFilter(Season from)
         {
             EnsureLoaded();
-            if (_seasonFilters.Remove(from))
-            {
-                Save();
-            }
+            if (_seasonFilters.Remove(from)) Save();
         }
 
         public void Clear()
@@ -133,12 +121,6 @@ namespace ClassicUO.Game.Managers
             EnsureLoaded();
             _seasonFilters.Clear();
             Save();
-        }
-
-        public void Reset()
-        {
-            _isLoaded = false;
-            _seasonFilters.Clear();
         }
     }
 
