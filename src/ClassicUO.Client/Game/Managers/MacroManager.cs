@@ -148,6 +148,88 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        #nullable enable
+        public string? GetXmlExport()
+        {
+            try
+            {
+                List<Macro> macros = GetAllMacros();
+
+                if (macros.Count == 0)
+                    return null;
+
+                var sb = new StringBuilder();
+                using (var xml = new XmlTextWriter(new StringWriter(sb)) { Formatting = Formatting.Indented, IndentChar = '\t', Indentation = 1 })
+                {
+                    xml.WriteStartDocument(true);
+                    xml.WriteStartElement("macros");
+
+                    foreach (Macro macro in macros)
+                    {
+                        macro.Save(xml);
+                    }
+
+                    xml.WriteEndElement();
+                    xml.WriteEndDocument();
+                }
+                return sb.ToString();
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error exporting macros to XML: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromXml(string xml)
+        {
+            try
+            {
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                XmlElement root = doc["macros"];
+
+                if (root != null)
+                {
+                    int addedCount = 0;
+
+                    foreach (XmlElement xmlMacro in root.GetElementsByTagName("macro"))
+                    {
+                        string macroName = xmlMacro.GetAttribute("name");
+
+                        // Make name unique if it already exists
+                        string uniqueName = macroName;
+                        int counter = 1;
+                        while (GetAllMacros().Any(m => m.Name == uniqueName))
+                        {
+                            uniqueName = $"{macroName} ({counter++})";
+                        }
+
+                        var macro = new Macro(uniqueName);
+                        macro.Load(xmlMacro);
+                        PushToBack(macro);
+                        addedCount++;
+                    }
+
+                    if (addedCount > 0)
+                    {
+                        Save();
+                        GameActions.Print($"Imported {addedCount} macro(s) from clipboard!", Constants.HUE_SUCCESS);
+                        return true;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error importing macros from XML: {e}");
+            }
+
+            return false;
+        }
+
         private void CreateDefaultMacros()
         {
             PushToBack
@@ -155,7 +237,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     ResGeneral.Paperdoll,
-                    (SDL.SDL_Keycode)112,
+                    (SDL_Keycode)112,
                     true,
                     false,
                     false
@@ -173,7 +255,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     ResGeneral.Options,
-                    (SDL.SDL_Keycode)111,
+                    (SDL_Keycode)111,
                     true,
                     false,
                     false
@@ -191,7 +273,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     ResGeneral.Journal,
-                    (SDL.SDL_Keycode)106,
+                    (SDL_Keycode)106,
                     true,
                     false,
                     false
@@ -209,7 +291,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     ResGeneral.Backpack,
-                    (SDL.SDL_Keycode)105,
+                    (SDL_Keycode)105,
                     true,
                     false,
                     false
@@ -227,7 +309,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     "Use last object",
-                    SDL.SDL_Keycode.SDLK_F5,
+                    SDL_Keycode.SDLK_F5,
                     false,
                     false,
                     false
@@ -242,7 +324,7 @@ namespace ClassicUO.Game.Managers
                 new Macro
                 (
                     "Last target",
-                    SDL.SDL_Keycode.SDLK_F6,
+                    SDL_Keycode.SDLK_F6,
                     false,
                     false,
                     false
@@ -346,7 +428,7 @@ namespace ClassicUO.Game.Managers
             return obj;
         }
 
-        public Macro FindMacro(SDL.SDL_Keycode key, bool alt, bool ctrl, bool shift)
+        public Macro FindMacro(SDL_Keycode key, bool alt, bool ctrl, bool shift)
         {
             var obj = (Macro)Items;
 
@@ -1116,7 +1198,7 @@ namespace ClassicUO.Game.Managers
                     }
                     else
                     {
-                        GameActions.Print(_world, "That is not a valid row.", 32);
+                        GameActions.Print(_world, "That is not a valid row.", Constants.HUE_ERROR);
                     }
                     break;
 
@@ -1125,14 +1207,14 @@ namespace ClassicUO.Game.Managers
                     if (m != null)
                     {
                         GameActions.DoubleClickQueued(_world.Player, true);
-                        ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordDismount();
+                        ScriptRecorder.Instance.RecordDismount();
                     }
                     break;
 
                 case MacroType.Mount:
                     if(!GameActions.Mount())
                     {
-                        GameActions.Print(_world, "Saved mount not found.", 32);
+                        GameActions.Print(_world, "Saved mount not found.", Constants.HUE_ERROR);
                         goto case MacroType.SetMount;
                     }
                     break;
@@ -1147,14 +1229,14 @@ namespace ClassicUO.Game.Managers
                     {
                         // Player is mounted, dismount
                         GameActions.DoubleClickQueued(_world.Player);
-                        ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordDismount();
+                        ScriptRecorder.Instance.RecordDismount();
                     }
                     else
                     {
                         // Player is not mounted, try to mount
                         if(!GameActions.Mount())
                         {
-                            GameActions.Print(_world, "Saved mount not found.", 32);
+                            GameActions.Print(_world, "Saved mount not found.", Constants.HUE_ERROR);
                             goto case MacroType.SetMount;
                         }
                     }
@@ -1172,36 +1254,36 @@ namespace ClassicUO.Game.Managers
                             }
                             else
                             {
-                                GameActions.Print(_world, $"Could not add {mobile.Name} - already in friends list", 33);
+                                GameActions.Print(_world, $"Could not add {mobile.Name} - already in friends list", Constants.HUE_ERROR);
                             }
                         }
                         else
                         {
                             if (targeted is Entity entity && entity.Serial == _world.Player.Serial)
                             {
-                                GameActions.Print(_world, "You cannot add yourself as a friend", 33);
+                                GameActions.Print(_world, "You cannot add yourself as a friend", Constants.HUE_ERROR);
                             }
                             else
                             {
-                                GameActions.Print(_world, "Invalid target - must be a player", 33);
+                                GameActions.Print(_world, "Invalid target - must be a player", Constants.HUE_ERROR);
                             }
                         }
                     });
                     break;
 
                 case MacroType.RemoveFriend:
-                    GameActions.Print(_world, "Target a friend to remove from your friend list.", 33);
+                    GameActions.Print(_world, "Target a friend to remove from your friend list.", Constants.HUE_ERROR);
                     _world.TargetManager.SetTargeting(targeted =>
                     {
                         if (targeted != null && targeted is Mobile mobile)
                         {
                             if (FriendsListManager.Instance.RemoveFriend(mobile))
                             {
-                                GameActions.Print(_world, $"Removed {mobile.Name} from friends list", 33);
+                                GameActions.Print(_world, $"Removed {mobile.Name} from friends list", Constants.HUE_ERROR);
                             }
                             else
                             {
-                                GameActions.Print(_world, $"Could not remove {mobile.Name} - not in friends list", 33);
+                                GameActions.Print(_world, $"Could not remove {mobile.Name} - not in friends list", Constants.HUE_ERROR);
                             }
                         }
                     });
@@ -1639,7 +1721,7 @@ namespace ClassicUO.Game.Managers
                 case MacroType.BandageSelf:
                 case MacroType.BandageTarget:
 
-                    if (Client.Game.UO.Version < Utility.ClientVersion.CV_5020 || ProfileManager.CurrentProfile.BandageSelfOld)
+                    if (Client.Game.UO.Version < ClientVersion.CV_5020 || ProfileManager.CurrentProfile.BandageSelfOld)
                     {
                         if (WaitingBandageTarget)
                         {
@@ -2306,7 +2388,7 @@ namespace ClassicUO.Game.Managers
 
     public class Macro : LinkedObject, IEquatable<Macro>
     {
-        public Macro(string name, SDL.SDL_Keycode key, bool alt, bool ctrl, bool shift) : this(name)
+        public Macro(string name, SDL_Keycode key, bool alt, bool ctrl, bool shift) : this(name)
         {
             Key = key;
             Alt = alt;
@@ -2336,7 +2418,7 @@ namespace ClassicUO.Game.Managers
             Name = name;
         }
 
-        public string Name { get; }
+        public string Name { get; set; }
 
         public SDL_GamepadButton[] ControllerButtons { get; set; }
         public SDL_Keycode Key { get; set; }
@@ -2451,7 +2533,7 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            Key = (SDL.SDL_Keycode)int.Parse(xml.GetAttribute("key"));
+            Key = (SDL_Keycode)int.Parse(xml.GetAttribute("key"));
             Alt = bool.Parse(xml.GetAttribute("alt"));
             Ctrl = bool.Parse(xml.GetAttribute("ctrl"));
             Shift = bool.Parse(xml.GetAttribute("shift"));
@@ -2596,7 +2678,7 @@ namespace ClassicUO.Game.Managers
             var macro = new Macro
             (
                 name,
-                (SDL.SDL_Keycode)0,
+                (SDL_Keycode)0,
                 false,
                 false,
                 false
@@ -2614,7 +2696,7 @@ namespace ClassicUO.Game.Managers
             var macro = new Macro
               (
                   name,
-                  (SDL.SDL_Keycode)0,
+                  (SDL_Keycode)0,
                   false,
                   false,
                   false

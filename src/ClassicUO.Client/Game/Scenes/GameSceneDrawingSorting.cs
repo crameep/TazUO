@@ -325,7 +325,7 @@ namespace ClassicUO.Game.Scenes
                         rect.X = obj.RealScreenPosition.X - (rect.Width >> 1) + rect.X;
                         rect.Y = obj.RealScreenPosition.Y - rect.Height + rect.Y;
 
-                        check = Exstentions.InRect(ref rect, ref _rectanglePlayer);
+                        check = Utility.Extensions.InRect(ref rect, ref _rectanglePlayer);
 
                         if (check)
                         {

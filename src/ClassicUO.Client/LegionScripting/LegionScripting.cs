@@ -121,6 +121,29 @@ namespace ClassicUO.LegionScripting
                         }
                 }
             );
+
+            world.CommandManager.Register
+            (
+                "stopall", a =>
+                {
+                    if (RunningScripts.Count == 0)
+                    {
+                        GameActions.Print(world, "No scripts are currently running.");
+                        return;
+                    }
+
+                    int count = RunningScripts.Count;
+                    // Create a copy of the list to avoid modification during iteration
+                    var scriptsToStop = RunningScripts.ToList();
+
+                    foreach (ScriptFile sf in scriptsToStop)
+                    {
+                        StopScript(sf);
+                    }
+
+                    GameActions.Print(world, $"Stopped {count} running script(s).");
+                }
+            );
         }
 
         private static void EventSink_JournalEntryAdded(object sender, JournalEntry e)

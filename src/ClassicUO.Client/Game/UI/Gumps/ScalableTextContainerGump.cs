@@ -56,11 +56,5 @@ namespace ClassicUO.Game.UI.Gumps
 
             return true;
         }
-
-        protected void RequestUpdateContents() => InvalidateContents = true;
-
-        protected virtual void UpdateContents()
-        {
-        }
     }
 }

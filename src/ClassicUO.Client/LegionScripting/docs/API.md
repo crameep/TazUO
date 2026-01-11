@@ -2004,7 +2004,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | --- | --- | --- | --- |
 | `ID` | `uint` | ✅ Yes | Gump ID |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `bool`
 
 ---
 

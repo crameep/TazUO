@@ -537,7 +537,7 @@ namespace ClassicUO.LegionScripting
             }
             catch (Exception ex)
             {
-                GameActions.Print($"Failed to save script: {ex.Message}");
+                GameActions.Print($"Failed to save script: {ex.Message}", Constants.HUE_ERROR);
             }
         }
 

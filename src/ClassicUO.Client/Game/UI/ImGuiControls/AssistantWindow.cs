@@ -17,6 +17,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             AddTab("Organizer", DrawOrganizer, OrganizerWindow.Show, () => OrganizerWindow.Instance?.Dispose());
             AddTab("Filters", DrawFilters, FiltersWindow.Show, () => FiltersWindow.Instance?.Dispose());
             AddTab("Item Database", DrawItemDatabase, ItemDatabaseSearchWindow.Show, () => ItemDatabaseSearchWindow.Instance?.Dispose());
+            AddTab("Macros", DrawMacros, MacrosWindow.Show, () => MacrosWindow.Instance?.Dispose());
         }
 
         public void AddTab(string title, Action drawContent, Action showFullWindow, Action dispose) => _tabs.Add(new TabItem { Title = title, DrawContent = drawContent, ShowFullWindow = showFullWindow, Dispose = dispose });
@@ -70,6 +71,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private void DrawOrganizer() => OrganizerWindow.GetInstance()?.DrawContent();
         private void DrawFilters() => FiltersWindow.GetInstance()?.DrawContent();
         private void DrawItemDatabase() => ItemDatabaseSearchWindow.GetInstance()?.DrawContent();
+        private void DrawMacros() => MacrosWindow.GetInstance()?.DrawContent();
 
         public override void Dispose()
         {

@@ -310,7 +310,7 @@ namespace ClassicUO.Game.Managers
 
                     if (spellD == SpellDefinition.EmptySpell) SpellDefinition.TryGetSpellFromName(entry.Name, out spellD);
 
-                    if (spellD != SpellDefinition.EmptySpell) entry.PowerWords = spellD.PowerWords;
+                    if (spellD != null &&  spellD != SpellDefinition.EmptySpell) entry.PowerWords = spellD.PowerWords;
                 }
                 if (!string.IsNullOrEmpty(entry.PowerWords)) spellRangePowerWordCache.Add(entry.PowerWords, entry);
             }

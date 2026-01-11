@@ -63,7 +63,6 @@ namespace ClassicUO
             };
 
             GraphicManager.PreferredDepthStencilFormat = DepthFormat.Depth24Stencil8;
-            SetVSync(false);
 
             Window.ClientSizeChanged += WindowOnClientSizeChanged;
             Window.AllowUserResizing = true;
@@ -170,6 +169,7 @@ namespace ClassicUO
             byte[] bytes = Loader.GetBackgroundImage().ToArray();
             using var ms = new MemoryStream(bytes);
             _background = Texture2D.FromStream(GraphicsDevice, ms);
+            SetWindowPositionBySettings();
 
 #if false
             SetScene(new MainScene(this));
@@ -180,7 +180,7 @@ namespace ClassicUO
             PNGLoader.Instance.LoadResourceAssets(Client.Game.UO.Gumps.GetGumpsLoader);
 
             Audio.Initialize();
-            // TODO: temporary fix to avoid crash when laoding plugins
+
             Settings.GlobalSettings.Encryption = (byte)AsyncNetClient.Load(UO.FileManager.Version, (EncryptionType)Settings.GlobalSettings.Encryption);
 
             LoadPlugins();
@@ -189,7 +189,6 @@ namespace ClassicUO
 
             SetScene(new LoginScene(UO.World));
 #endif
-            SetWindowPositionBySettings();
             new DiscordManager(UO.World); //Instance is set inside the constructor
             DiscordManager.Instance.FromSavedToken();
         }
@@ -1035,7 +1034,7 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP:
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }
@@ -1061,7 +1060,7 @@ namespace ClassicUO
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION: //Work around because sdl doesn't see trigger buttons as buttons, they are axis probably for pressure support
                                                                   //GameActions.Print(typeof(SDL_GamepadButton).GetEnumName((SDL_GamepadButton)sdlEvent->gbutton.button));
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }

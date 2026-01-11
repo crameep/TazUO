@@ -8,9 +8,9 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
-using ClassicUO.Network;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
+using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using System;
 using System.Xml;
@@ -295,9 +295,6 @@ namespace ClassicUO.Game.UI.Gumps
                     Graphic = Settings.Graphic_Button_Durability
                 });
 
-            Mobile mobiles = World.Mobiles.Get(LocalSerial);
-            Item twoHandedItem = mobiles.FindItemByLayer(Layer.TwoHanded);
-
             // Equipment slots for hat/earrings/neck/ring/bracelet
             Add(_slots[0] = new EquipmentSlot(0, Settings.Position_X_LeftSlots, Settings.Position_Y_LeftSlots, Layer.Helmet, this));
 
@@ -357,8 +354,9 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
+            Mobile mob = World.Mobiles.Get(LocalSerial);
             // Name and title
-            _titleLabel = new Label("", false, Settings.Hue_Title, Settings.Size_Width_Hue, font: 1) { X = Settings.Position_X_Title, Y = Settings.Position_Y_Title };
+            _titleLabel = new Label(mob.Title, false, Settings.Hue_Title, Settings.Size_Width_Hue, font: 1) { X = Settings.Position_X_Title, Y = Settings.Position_Y_Title };
 
             Add(_titleLabel);
 
@@ -400,10 +398,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        private void PartyManifest_MouseDoubleClickEvent(
-            object sender,
-            MouseDoubleClickEventArgs args
-        )
+        private void PartyManifest_MouseDoubleClickEvent(object sender, MouseDoubleClickEventArgs args)
         {
             if (args.Button == MouseButtonType.Left)
             {
@@ -616,33 +611,30 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void UpdateContents()
         {
-            Mobile mobile = World.Mobiles.Get(LocalSerial);
-
-            if (mobile != null && mobile.Title != _titleLabel.Text)
-            {
-                UpdateTitle(mobile.Title);
-            }
-
-            if (mobile != null)
-            {
-                for (int i = 0; i < _slots.Length; i++)
-                {
-                    int idx = (int)_slots[i].Layer;
-
-                    _slots[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
-                }
-
-                for (int i = 0; i < _slots_right.Length; i++)
-                {
-                    int idx = (int)_slots_right[i].Layer;
-
-                    _slots_right[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
-                }
-            }
-
             // Clear fake item preview and request a full UI update to ensure items render
             _paperDollInteractable.SetFakeItem(false);
             _paperDollInteractable.RequestUpdate();
+
+            Mobile mobile = World.Mobiles.Get(LocalSerial);
+
+            if (mobile == null) return;
+
+            if (mobile.Title != _titleLabel.Text)
+                UpdateTitle(mobile.Title);
+
+            for (int i = 0; i < _slots.Length; i++)
+            {
+                int idx = (int)_slots[i].Layer;
+
+                _slots[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
+            }
+
+            for (int i = 0; i < _slots_right.Length; i++)
+            {
+                int idx = (int)_slots_right[i].Layer;
+
+                _slots_right[i].LocalSerial = mobile.FindItemByLayer((Layer)idx)?.Serial ?? 0;
+            }
         }
 
         public override void OnButtonClick(int buttonID)

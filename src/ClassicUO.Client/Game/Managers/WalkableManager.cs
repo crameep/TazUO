@@ -73,7 +73,7 @@ namespace ClassicUO.Game.Managers
                 int x = World.Instance.Player.X;
                 int y =  World.Instance.Player.Y;
                 bool walkable = IsWalkable(x, y);
-                GameActions.Print($"Is walkable: {x}, {y}: {walkable}", (ushort)(walkable ? 64 : 32));
+                GameActions.Print($"Is walkable: {x}, {y}: {walkable}", walkable ? Constants.HUE_SUCCESS : Constants.HUE_ERROR);
             });
 #endif
         }

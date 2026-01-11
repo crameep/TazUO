@@ -583,16 +583,22 @@ namespace ClassicUO.Game.Managers
             {
                 case CursorTarget.CallbackTarget:
                     GameObject candidate = _world.Map.GetTile(x, y);
+                    GameObject original = candidate;
+                    bool handled = false;
 
                     while (candidate != null)
                     {
                         if (candidate.Graphic == graphic && candidate.Z == z)
                         {
                             _targetCallback?.Invoke(candidate);
+                            handled = true;
                             break;
                         }
                         candidate = candidate.TNext;
                     }
+
+                    if(!handled && original != null)
+                        _targetCallback?.Invoke(original);
 
                     ClearTargetingWithoutTargetCancelPacket();
                     return;

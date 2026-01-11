@@ -84,12 +84,29 @@ namespace ClassicUO.Game.GameObjects
         public sbyte FoliageIndex = -1;
         public ushort OriginalGraphic => originalGraphic == 0 ? Graphic : originalGraphic;
         public void ResetOriginalGraphic() => originalGraphic = 0;
+
+        protected byte GetGraphicObjectType()
+        {
+            // Mobile class uses Animation system
+            if (this is Mobile) return 1; // Mobile
+
+            // Land class uses Arts.GetLand()
+            if (this is Land) return 2; // Land
+
+            // Item and Static classes use Arts.GetArt()
+            if (this is Item || this is Static) return 3; // Static
+
+            return 0; // Unknown
+        }
+
         public ushort Graphic
         {
             get => graphic; set
             {
                 originalGraphic = value;
-                GraphicsReplacement.Replace(originalGraphic, ref value, ref hue);
+                byte type = GetGraphicObjectType();
+                byte newType = type;
+                GraphicsReplacement.Replace(originalGraphic, type, ref value, ref hue, ref newType);
                 Hue = hue; //Workaround for making sure hues are replaced as-well
                 graphic = value;
                 OnGraphicSet(graphic);
@@ -100,7 +117,8 @@ namespace ClassicUO.Game.GameObjects
             get => hue;
             set
             {
-                GraphicsReplacement.ReplaceHue(OriginalGraphic, ref value);
+                byte type = GetGraphicObjectType();
+                GraphicsReplacement.ReplaceHue(OriginalGraphic, type, ref value);
                 hue = value;
             }
         }

@@ -221,7 +221,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     }
 
                     DressAgentManager.Instance.SetUndressBag(_selectedConfig, entity.Serial);
-                    GameActions.Print($"Undress bag set to {entity.Serial:X}", 63);
+                    GameActions.Print($"Undress bag set to {entity.Serial:X}", Constants.HUE_SUCCESS);
                 });
             }
 

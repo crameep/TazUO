@@ -105,7 +105,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if(ImGui.IsItemClicked())
             {
                 SDL3.SDL.SDL_SetClipboardText(value);
-                GameActions.Print($"Copied [{value}] to clipboard.", 62);
+                GameActions.Print($"Copied [{value}] to clipboard.", Constants.HUE_SUCCESS);
             }
         }
 
@@ -114,6 +114,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
         protected bool DrawArt(ushort graphic, Vector2 size, bool useSmallerIfGfxSmaller = true)
         {
             SpriteInfo artInfo = Client.Game.UO.Arts.GetArt(graphic);
+
+            if(artInfo.Texture == null)
+                return false;
 
             if(useSmallerIfGfxSmaller && artInfo.UV.Width < size.X && artInfo.UV.Height < size.Y)
                 size = new Vector2(artInfo.UV.Width, artInfo.UV.Height);
@@ -146,7 +149,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         public IntPtr Pointer = pointer;
         public Vector2 UV0 = uv0;
         public Vector2 UV1 = uv1;
-        SpriteInfo SpriteInfo = spriteInfo;
+        public SpriteInfo SpriteInfo = spriteInfo;
     }
 
     public abstract class SingletonImGuiWindow<T> : ImGuiWindow where T : SingletonImGuiWindow<T>
@@ -155,6 +158,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         protected SingletonImGuiWindow(string title = "") : base(title)
         {
+            ImGuiManager.AddSingleton(this);
         }
 
         public static SingletonImGuiWindow<T> GetInstance()
@@ -178,6 +182,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (Instance == this)
                 Instance = null;
             base.Dispose();
+
+            ImGuiManager.TryRemoveSingleton(this);
         }
     }
 }

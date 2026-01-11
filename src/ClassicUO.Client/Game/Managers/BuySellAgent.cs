@@ -88,6 +88,54 @@ namespace ClassicUO.Game.Managers
             return r;
         }
 
+        #nullable enable
+        public static string? GetJsonExport(AgentType type)
+        {
+            try
+            {
+                switch (type)
+                {
+                    case AgentType.Buy:
+                        return JsonSerializer.Serialize(Instance.buyItems, BuySellAgentJsonContext.Default.ListBuySellItemConfig);
+                    case AgentType.Sell:
+                        return JsonSerializer.Serialize(Instance.sellItems, BuySellAgentJsonContext.Default.ListBuySellItemConfig);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.ToString());
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public static bool ImportFromJson(string json, AgentType type)
+        {
+            try
+            {
+                List<BuySellItemConfig> res = JsonSerializer.Deserialize(json, BuySellAgentJsonContext.Default.ListBuySellItemConfig);
+
+                switch (type)
+                {
+                    case AgentType.Buy:
+                        Instance.buyItems.AddRange(res);
+                        break;
+                    case AgentType.Sell:
+                        Instance.sellItems.AddRange(res);
+                        break;
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                Log.Error(e.ToString());
+            }
+
+            return false;
+        }
+
         public static void Unload()
         {
             if (Instance != null)
@@ -329,5 +377,11 @@ namespace ClassicUO.Game.Managers
             Amount = amount;
             Price = price;
         }
+    }
+
+    public enum AgentType
+    {
+        Buy,
+        Sell
     }
 }

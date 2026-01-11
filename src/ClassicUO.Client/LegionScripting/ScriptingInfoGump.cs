@@ -181,7 +181,7 @@ namespace ClassicUO.LegionScripting
                     if (!string.IsNullOrEmpty(currentValue))
                     {
                         SetClipboardText(currentValue);
-                        GameActions.Print("Copied to clipboard!");
+                        GameActions.Print("Copied to clipboard!", Constants.HUE_SUCCESS);
                     }
                 }
                 catch (Exception)

@@ -55,7 +55,7 @@ namespace ClassicUO.Game
             {
                 if (value == 0xFF)
                 {
-                    value = (byte)(Client.Game.UO.Version >= ClientVersion.CV_305D ? 1 : 0);
+                    value = (byte)(Client.Game?.UO?.Version >= ClientVersion.CV_305D ? 1 : 0);
                 }
 
                 _font = value;
@@ -98,7 +98,7 @@ namespace ClassicUO.Game
                         Width = 0;
                         Height = 0;
 
-                        if (IsHTML)
+                        if (IsHTML && Client.Game?.UO?.FileManager?.Fonts != null)
                         {
                             Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
                         }
@@ -112,31 +112,34 @@ namespace ClassicUO.Game
                     {
                         CreateTexture();
 
-                        if (IsUnicode)
+                        if (Client.Game?.UO?.FileManager?.Fonts != null)
                         {
-                            _info = Client.Game.UO.FileManager.Fonts.GetInfoUnicode(
-                                Font,
-                                Text,
-                                Text.Length,
-                                Align,
-                                (ushort)FontStyle,
-                                MaxWidth > 0 ? MaxWidth : Width,
-                                true,
-                                true
-                            );
-                        }
-                        else
-                        {
-                            _info = Client.Game.UO.FileManager.Fonts.GetInfoASCII(
-                                Font,
-                                Text,
-                                Text.Length,
-                                Align,
-                                (ushort)FontStyle,
-                                MaxWidth > 0 ? MaxWidth : Width,
-                                true,
-                                true
-                            );
+                            if (IsUnicode)
+                            {
+                                _info = Client.Game.UO.FileManager.Fonts.GetInfoUnicode(
+                                    Font,
+                                    Text,
+                                    Text.Length,
+                                    Align,
+                                    (ushort)FontStyle,
+                                    MaxWidth > 0 ? MaxWidth : Width,
+                                    true,
+                                    true
+                                );
+                            }
+                            else
+                            {
+                                _info = Client.Game.UO.FileManager.Fonts.GetInfoASCII(
+                                    Font,
+                                    Text,
+                                    Text.Length,
+                                    Align,
+                                    (ushort)FontStyle,
+                                    MaxWidth > 0 ? MaxWidth : Width,
+                                    true,
+                                    true
+                                );
+                            }
                         }
                     }
                 }
@@ -209,7 +212,12 @@ namespace ClassicUO.Game
 
         public Point GetCaretPosition(int caret_index)
         {
-            Point p;
+            Point p = Point.Zero;
+
+            if (Client.Game?.UO?.FileManager?.Fonts == null)
+            {
+                return p;
+            }
 
             if (IsUnicode)
             {
@@ -330,7 +338,7 @@ namespace ClassicUO.Game
 
         public int GetCharWidthAtIndex(int index)
         {
-            if (string.IsNullOrEmpty(Text))
+            if (string.IsNullOrEmpty(Text) || Client.Game?.UO?.FileManager?.Fonts == null)
             {
                 return 0;
             }
@@ -367,6 +375,11 @@ namespace ClassicUO.Game
 
         public int GetCharWidth(char c)
         {
+            if (Client.Game?.UO?.FileManager?.Fonts == null)
+            {
+                return 0;
+            }
+
             if (IsUnicode)
             {
                 return Client.Game.UO.FileManager.Fonts.GetCharWidthUnicode(Font, c);
@@ -589,6 +602,12 @@ namespace ClassicUO.Game
                 Texture = null;
             }
 
+            // Early return if Client.Game is not initialized yet
+            if (Client.Game?.UO?.FileManager?.Fonts == null)
+            {
+                return;
+            }
+
             if (IsHTML)
             {
                 Client.Game.UO.FileManager.Fonts.SetUseHTML(true, HTMLColor, HasBackgroundColor);
@@ -684,12 +703,15 @@ namespace ClassicUO.Game
                 Height = Texture.Height;
             }
 
-            if (IsHTML)
+            if (IsHTML && Client.Game?.UO?.FileManager?.Fonts != null)
             {
                 Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
             }
 
-            Client.Game.UO.FileManager.Fonts.RecalculateWidthByInfo = false;
+            if (Client.Game?.UO?.FileManager?.Fonts != null)
+            {
+                Client.Game.UO.FileManager.Fonts.RecalculateWidthByInfo = false;
+            }
         }
 
         public void Destroy()

@@ -932,7 +932,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(name))
             {
-                GameActions.Print("Invalid organizer name", 32);
+                GameActions.Print("Invalid organizer name", Constants.HUE_ERROR);
                 return;
             }
 
@@ -947,7 +947,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(command))
             {
-                GameActions.Print("Command can't be empty", 32);
+                GameActions.Print("Command can't be empty", Constants.HUE_ERROR);
                 return;
             }
 
@@ -2221,7 +2221,9 @@ namespace ClassicUO.LegionScripting
                 {
                     if (World.Player.Skills[i].Name.ToLower().Contains(skill))
                     {
-                        World.Player.Skills[i].Lock = status;
+                        Skill skill = World.Player.Skills[i];
+                        skill.Lock = status;
+                        GameActions.ChangeSkillLockStatus((ushort)skill.Index, (byte)skill.Lock);
 
                         break;
                     }
@@ -2386,31 +2388,30 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <param name="ID">Gump ID</param>
-        public void CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
+        public bool CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
                 if (World.Player == null || ID == 0) //0 Prevents weird behaviour closing system chat gump
-                    return;
+                    return false;
 
                 uint gumpId = ID != uint.MaxValue ? ID : World.Player.LastGumpID;
                 Gump gump = UIManager.GetGumpServer(gumpId);
-                DisposeGump(gump);
+                return DisposeGump(gump);
             }
         );
 
-        private void DisposeGump(Gump gump)
+        private bool DisposeGump(Gump gump)
         {
-            if (gump == null)
-            {
-                return;
-            }
+            if (gump == null) return false;
 
             if (gump.CanCloseWithRightClick)
             {
                 gump.InvokeMouseCloseGumpWithRClick();
-                return;
+                return true;
             }
+
             gump.Dispose();
+            return true;
         }
 
         /// <summary>

@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using ClassicUO.LegionScripting;
 using ImGuiNET;
@@ -21,7 +22,7 @@ public class ScriptEditorWindow : ImGuiWindow
 
         if (_content.Length > MAX_LENGTH)
         {
-            GameActions.Print("File too large to edit!", 32);
+            GameActions.Print("File too large to edit!", Constants.HUE_ERROR);
             Dispose();
         }
     }
@@ -29,6 +30,8 @@ public class ScriptEditorWindow : ImGuiWindow
     public override void DrawContent()
     {
         Vector2 availableSize = ImGui.GetContentRegionAvail();
+        availableSize.X = Math.Max(availableSize.X, 250);
+        availableSize.Y = Math.Max(availableSize.Y, 250);
 
         // Reserve space for the Save button (button height + spacing)
         float buttonHeight = ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y;
