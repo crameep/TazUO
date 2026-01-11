@@ -22,7 +22,7 @@ public class ScriptEditorWindow : ImGuiWindow
 
         if (_content.Length > MAX_LENGTH)
         {
-            GameActions.Print("File too large to edit!", 32);
+            GameActions.Print("File too large to edit!", Constants.HUE_ERROR);
             Dispose();
         }
     }

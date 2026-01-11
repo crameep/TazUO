@@ -273,7 +273,7 @@ namespace ClassicUO.Game.Managers
                 Settings.GlobalSettings.FPS = GameController.SupportedRefreshRate;
                 Settings.GlobalSettings.Save();
                 Client.Game.SetRefreshRate(Settings.GlobalSettings.FPS);
-                GameActions.Print($"FPS Limit updated to: {Settings.GlobalSettings.FPS}", 62);
+                GameActions.Print($"FPS Limit updated to: {Settings.GlobalSettings.FPS}", Constants.HUE_SUCCESS);
             });
 
             Register("dressagent", (s) => DressAgentManager.Instance?.DressAgentCommand(s));
@@ -289,7 +289,7 @@ namespace ClassicUO.Game.Managers
 
                 if (string.IsNullOrWhiteSpace(msg))
                 {
-                    GameActions.Print("No message text provided.", 32);
+                    GameActions.Print("No message text provided.", Constants.HUE_ERROR);
                     return;
                 }
 
@@ -334,7 +334,7 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
-                GameActions.Print("No active Discord conversation or message to reply to.", 32);
+                GameActions.Print("No active Discord conversation or message to reply to.", Constants.HUE_ERROR);
             });
 
 #if DEBUG

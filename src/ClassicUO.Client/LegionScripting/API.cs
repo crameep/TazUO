@@ -932,7 +932,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(name))
             {
-                GameActions.Print("Invalid organizer name", 32);
+                GameActions.Print("Invalid organizer name", Constants.HUE_ERROR);
                 return;
             }
 
@@ -947,7 +947,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(command))
             {
-                GameActions.Print("Command can't be empty", 32);
+                GameActions.Print("Command can't be empty", Constants.HUE_ERROR);
                 return;
             }
 

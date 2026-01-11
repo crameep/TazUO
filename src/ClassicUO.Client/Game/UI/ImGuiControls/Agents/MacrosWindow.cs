@@ -105,7 +105,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     macroName = $"{baseName} {counter++}";
                 }
 
-                Macro newMacro = new Macro(macroName);
+                var newMacro = new Macro(macroName);
                 newMacro.Items = new MacroObject(MacroType.None, MacroSubType.MSC_NONE);
                 World.Instance.Macros.PushToBack(newMacro);
                 _selectedMacro = newMacro;
@@ -480,9 +480,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
-        public override void Dispose() 
+        public override void Dispose()
         {
-            base.Dispose(); 
+            base.Dispose();
             if (_isListeningForHotkey)
                 ProfileManager.CurrentProfile.DisableHotkeys = false;
         }
@@ -552,10 +552,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             return parts.Count > 0 ? string.Join(" + ", parts) : "Listening...";
         }
 
-        private void MarkDirty()
-        {
-            _saveTimer = SAVE_DELAY;
-        }
+        private void MarkDirty() => _saveTimer = SAVE_DELAY;
 
         #endregion
 

@@ -115,7 +115,7 @@ namespace ClassicUO.Game.UI.Gumps
                 fps.Elapsed += (sender, args) =>
                 {
                     if (World.Instance != null)
-                        GameActions.Print($"Your monitor supports {GameController.SupportedRefreshRate} fps, but you currently have your fps limited to {Settings.GlobalSettings.FPS}. To update this type -syncfps", 32);
+                        GameActions.Print($"Your monitor supports {GameController.SupportedRefreshRate} fps, but you currently have your fps limited to {Settings.GlobalSettings.FPS}. To update this type -syncfps", Constants.HUE_ERROR);
                     fps?.Stop();
                 };
                 fps.Start();

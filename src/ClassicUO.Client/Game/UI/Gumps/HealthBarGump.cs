@@ -437,13 +437,11 @@ namespace ClassicUO.Game.UI.Gumps
             return false;
         }
 
-        protected bool IsPet(Entity entity)
-        {
-            return entity is Mobile mobile
-                && mobile.IsRenamable
-                && entity != World.Player
-                && !World.Party.Contains(LocalSerial);
-        }
+        protected bool IsPet(Entity entity) =>
+            entity is Mobile mobile
+            && mobile.IsRenamable
+            && entity != World.Player
+            && !World.Party.Contains(LocalSerial);
     }
 
     public class HealthBarGumpCustom : BaseHealthBarGump

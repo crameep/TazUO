@@ -46,11 +46,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 SDL3.SDL.SDL_SetClipboardText(json);
 
                 int count = SoundFilterManager.Instance.FilteredSounds.Count;
-                GameActions.Print($"Exported {count} sound filter(s) to clipboard", 62);
+                GameActions.Print($"Exported {count} sound filter(s) to clipboard", Constants.HUE_SUCCESS);
             }
             catch (Exception ex)
             {
-                GameActions.Print($"Export failed: {ex.Message}", 32);
+                GameActions.Print($"Export failed: {ex.Message}", Constants.HUE_ERROR);
             }
         }
 
@@ -62,7 +62,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if (string.IsNullOrWhiteSpace(json))
                 {
-                    GameActions.Print("Clipboard is empty", 32);
+                    GameActions.Print("Clipboard is empty", Constants.HUE_ERROR);
                     return;
                 }
 
@@ -72,7 +72,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if (importedFilters == null)
                 {
-                    GameActions.Print("Failed to parse clipboard data", 32);
+                    GameActions.Print("Failed to parse clipboard data", Constants.HUE_ERROR);
                     return;
                 }
 
@@ -99,7 +99,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 SoundFilterManager.Instance.Save();
                 RefreshFilterList();
 
-                GameActions.Print($"Added {addedCount} sound filter(s) from clipboard", 62);
+                GameActions.Print($"Added {addedCount} sound filter(s) from clipboard", Constants.HUE_SUCCESS);
 
                 if (clampedCount > 0)
                 {
@@ -108,11 +108,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             catch (JsonException ex)
             {
-                GameActions.Print($"Invalid JSON format: {ex.Message}", 32);
+                GameActions.Print($"Invalid JSON format: {ex.Message}", Constants.HUE_ERROR);
             }
             catch (Exception ex)
             {
-                GameActions.Print($"Import failed: {ex.Message}", 32);
+                GameActions.Print($"Import failed: {ex.Message}", Constants.HUE_ERROR);
             }
         }
 

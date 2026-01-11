@@ -1,4 +1,5 @@
 using System;
+using ClassicUO.Game;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 
@@ -57,7 +58,7 @@ public class PyControlDropDown(Combobox combobox, API api) : PyBaseControl(combo
                 }
                 catch (Exception ex)
                 {
-                    Game.GameActions.Print($"Script callback error: {ex}", 32);
+                    Game.GameActions.Print($"Script callback error: {ex}", Constants.HUE_ERROR);
                 }
             });
         };

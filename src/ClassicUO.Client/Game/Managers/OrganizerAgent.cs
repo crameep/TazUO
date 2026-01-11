@@ -324,7 +324,7 @@ namespace ClassicUO.Game.Managers
 
             if (totalItemsMoved > 0)
             {
-                GameActions.Print($"Organizing {totalItemsMoved} items from '{config.Name}'...", 63);
+                GameActions.Print($"Organizing {totalItemsMoved} items from '{config.Name}'...", Constants.HUE_SUCCESS);
             }
 
             return totalItemsMoved;
@@ -334,7 +334,7 @@ namespace ClassicUO.Game.Managers
         {
             if (!config.Enabled)
             {
-                GameActions.Print(World.Instance, $"Organizer '{config.Name}' is disabled.", 33);
+                GameActions.Print(World.Instance, $"Organizer '{config.Name}' is disabled.", Constants.HUE_ERROR);
                 return;
             }
 
@@ -364,14 +364,14 @@ namespace ClassicUO.Game.Managers
 
             if (destCont == null)
             {
-                GameActions.Print(World.Instance, $"Cannot find destination container for organizer '{config.Name}' (Serial: {config.DestContSerial:X})", 33);
+                GameActions.Print(World.Instance, $"Cannot find destination container for organizer '{config.Name}' (Serial: {config.DestContSerial:X})", Constants.HUE_ERROR);
                 return;
             }
 
             int organized = OrganizeItems(sourceCont, destCont, config);
             if (organized == 0)
             {
-                GameActions.Print(World.Instance, $"No items were organized by '{config.Name}'.", 33);
+                GameActions.Print(World.Instance, $"No items were organized by '{config.Name}'.", Constants.HUE_ERROR);
             }
         }
 

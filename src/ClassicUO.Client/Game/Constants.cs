@@ -4,11 +4,8 @@ namespace ClassicUO.Game
 {
     internal static class Constants
     {
-        public const string WIKI_LINK = "https://github.com/ClassicUO/ClassicUO/wiki";
-
         public const int MIN_FPS = 12;
         public const int MAX_FPS = 1000;
-        public const int LOGIN_SCREEN_FPS = 60;
 
         public const int CHARACTER_ANIMATION_DELAY = 80;
         public const int ITEM_EFFECT_ANIMATION_DELAY = 50;
@@ -16,14 +13,11 @@ namespace ClassicUO.Game
         public const int ALLOWED_Z_DIFFERENCE = 10;
 
         public const int MAX_STEP_COUNT = 5;
-        public const int TURN_DELAY = 100; // original client 12.5 fps = 80ms delay. Edit --> it causes throttling
-        public const int TURN_DELAY_FAST = 45;
         public const int WALKING_DELAY = 150; // 750
         public const int PLAYER_WALKING_DELAY = 150;
         public const int DEFAULT_CHARACTER_HEIGHT = 16;
         public const int DEFAULT_BLOCK_HEIGHT = 16;
 
-        public const float TIME_FADEOUT_TEXT = 1000;
         public const uint TIME_DISPLAY_SYSTEM_MESSAGE_TEXT = 10000;
 
         public const int MIN_TERRAIN_SHADOWS_LEVEL = 5;
@@ -32,10 +26,6 @@ namespace ClassicUO.Game
         public const int USED_LAYER_COUNT = 23;
 
         public const int CLEAR_TEXTURES_DELAY = 3000;
-        public const int MAX_ANIMATIONS_OBJECT_REMOVED_BY_GARBAGE_COLLECTOR = 20;
-        public const int MAX_ART_OBJECT_REMOVED_BY_GARBAGE_COLLECTOR = 20;
-        public const int MAX_GUMP_OBJECT_REMOVED_BY_GARBAGE_COLLECTOR = 20;
-        public const int MAX_SOUND_OBJECT_REMOVED_BY_GARBAGE_COLLECTOR = 20;
         public const int MAX_MAP_OBJECT_REMOVED_BY_GARBAGE_COLLECTOR = 50;
 
         public const int MAX_FAST_WALK_STACK_SIZE = 5;
@@ -43,8 +33,6 @@ namespace ClassicUO.Game
         public const byte FOLIAGE_ALPHA = 76;
         public const byte ALPHA_TIME = 20;
 
-        public const int MAX_OBJECT_HANDLES = 200;
-        public const int OBJECT_HANDLES_GUMP_WIDTH = 100;
         public const int OBJECT_HANDLES_GUMP_HEIGHT = 18;
 
         public const int SPELLBOOK_1_SPELLS_COUNT = 64;
@@ -54,7 +42,6 @@ namespace ClassicUO.Game
         public const int SPELLBOOK_5_SPELLS_COUNT = 8;
         public const int SPELLBOOK_6_SPELLS_COUNT = 16;
         public const int SPELLBOOK_7_SPELLS_COUNT = 30;
-        public const int SPELLBOOK_8_SPELLS_COUNT = 45;
 
         public const int WAIT_FOR_TARGET_DELAY = 5000;
 
@@ -99,9 +86,6 @@ namespace ClassicUO.Game
         public const int WEATHER_TIMER = 6 * 60 * 1000;
 
         public const int PREDICTABLE_CHUNKS = 300;
-        public const int PREDICTABLE_TILE_COUNT = 64 * PREDICTABLE_CHUNKS;
-        public const int PREDICTABLE_STATICS = PREDICTABLE_TILE_COUNT * 2;
-        public const int PREDICTABLE_MULTIS = PREDICTABLE_TILE_COUNT * 4;
         public const float MAX_GAME_SCALE = 1.5f;
         public const float MIN_GAME_SCALE = -0.6f;
 
@@ -116,6 +100,9 @@ namespace ClassicUO.Game
         };
 
         public const uint RECHECK_HITS_STATUS = 20000;
+
+        public const ushort HUE_ERROR = 32;
+        public const ushort HUE_SUCCESS = 62;
 
         public static class SqlSettings
         {

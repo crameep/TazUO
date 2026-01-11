@@ -213,10 +213,7 @@ namespace ClassicUO.Game.UI.Gumps
         /// <summary>
         /// Generates color-coded enabled/disabled status text for tooltips
         /// </summary>
-        private static string GetEnabledDisabledText(bool isEnabled)
-        {
-            return isEnabled ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled";
-        }
+        private static string GetEnabledDisabledText(bool isEnabled) => isEnabled ? "<basefont color=\"green\">Enabled" : "<basefont color=\"red\">Disabled";
 
         /// <summary>
         /// Updates both background and backgroundTexture dimensions
@@ -1012,7 +1009,7 @@ namespace ClassicUO.Game.UI.Gumps
         public void BuildBorder()
         {
             int graphic = 0, borderSize = 0;
-            BorderStyle currentStyle = (BorderStyle)ProfileManager.CurrentProfile.Grid_BorderStyle;
+            var currentStyle = (BorderStyle)ProfileManager.CurrentProfile.Grid_BorderStyle;
 
             if (currentStyle == BorderStyle.Default)
             {
@@ -1021,7 +1018,7 @@ namespace ClassicUO.Game.UI.Gumps
                 background.IsVisible = true;
                 borderWidth = 4;
             }
-            else if (BorderStyleConfig.TryGetValue(currentStyle, out var config))
+            else if (BorderStyleConfig.TryGetValue(currentStyle, out (int graphic, int borderSize) config))
             {
                 graphic = config.graphic;
                 borderSize = config.borderSize;
@@ -1549,7 +1546,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (_hasItem && Keyboard.Ctrl && _item.ItemData.Layer > 0 && MouseIsOver && (_toolTipThis == null || _toolTipThis.IsDisposed) && (_toolTipitem1 == null || _toolTipitem1.IsDisposed) && (_toolTipitem2 == null || _toolTipitem2.IsDisposed))
                 {
-                    Layer itemLayer = (Layer)_item.ItemData.Layer;
+                    var itemLayer = (Layer)_item.ItemData.Layer;
                     Item compItem = _world.Player.FindItemByLayer(itemLayer);
                     Item compItem2 = null;
 
@@ -1969,10 +1966,7 @@ namespace ClassicUO.Game.UI.Gumps
                 return containerContents;
             }
 
-            private static bool ContainsIgnoreCase(string source, string searchLower)
-            {
-                return source != null && source.ToLower().Contains(searchLower);
-            }
+            private static bool ContainsIgnoreCase(string source, string searchLower) => source != null && source.ToLower().Contains(searchLower);
 
             private bool SearchItemNameAndProps(string search, Item item)
             {

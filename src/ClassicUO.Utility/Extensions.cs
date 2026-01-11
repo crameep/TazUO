@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace ClassicUO.Utility
 {
-    public static class Exstentions
+    public static partial class Extensions
     {
         public static void Raise(this EventHandler handler, object sender = null) => handler?.Invoke(sender, EventArgs.Empty);
 
@@ -237,5 +237,7 @@ namespace ClassicUO.Utility
 
             return characterPaths;
         }
+
+        public static bool NotNullNotEmpty(this string text) => !string.IsNullOrEmpty(text);
     }
 }

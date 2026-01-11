@@ -105,7 +105,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if(ImGui.IsItemClicked())
             {
                 SDL3.SDL.SDL_SetClipboardText(value);
-                GameActions.Print($"Copied [{value}] to clipboard.", 62);
+                GameActions.Print($"Copied [{value}] to clipboard.", Constants.HUE_SUCCESS);
             }
         }
 

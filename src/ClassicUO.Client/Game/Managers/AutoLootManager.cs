@@ -416,7 +416,7 @@ namespace ClassicUO.Game.Managers
             }
             catch (Exception e)
             {
-                GameActions.Print($"Error exporting autoloot configuration: {e.Message}", 32);
+                GameActions.Print($"Error exporting autoloot configuration: {e.Message}", Constants.HUE_ERROR);
             }
         }
 
@@ -426,7 +426,7 @@ namespace ClassicUO.Game.Managers
             {
                 if (!File.Exists(filePath))
                 {
-                    GameActions.Print($"File not found: {filePath}", 32);
+                    GameActions.Print($"File not found: {filePath}", Constants.HUE_ERROR);
                     return;
                 }
 
@@ -437,7 +437,7 @@ namespace ClassicUO.Game.Managers
             }
             catch (Exception e)
             {
-                GameActions.Print($"Error importing autoloot configuration: {e.Message}", 32);
+                GameActions.Print($"Error importing autoloot configuration: {e.Message}", Constants.HUE_ERROR);
             }
         }
 
@@ -448,11 +448,11 @@ namespace ClassicUO.Game.Managers
                 if (entries != null && entries.Count > 0)
                     ImportEntries(entries, $"character: {characterName}");
                 else
-                    GameActions.Print($"No autoloot entries found for character: {characterName}", 32);
+                    GameActions.Print($"No autoloot entries found for character: {characterName}", Constants.HUE_ERROR);
             }
             catch (Exception e)
             {
-                GameActions.Print($"Error importing from other character: {e.Message}", 32);
+                GameActions.Print($"Error importing from other character: {e.Message}", Constants.HUE_ERROR);
             }
         }
 
@@ -500,7 +500,7 @@ namespace ClassicUO.Game.Managers
             }
             catch (Exception e)
             {
-                GameActions.Print($"Error loading autoloot config from {characterPath}: {e.Message}", 32);
+                GameActions.Print($"Error loading autoloot config from {characterPath}: {e.Message}", Constants.HUE_ERROR);
             }
             return new List<AutoLootConfigEntry>();
         }
@@ -516,7 +516,7 @@ namespace ClassicUO.Game.Managers
                 rootpath = Settings.GlobalSettings.ProfilesPath;
 
             string currentCharacterName = ProfileManager.CurrentProfile?.CharacterName ?? "";
-            Dictionary<string, string> characterPaths = Exstentions.GetAllCharacterPaths(rootpath);
+            Dictionary<string, string> characterPaths = Utility.Extensions.GetAllCharacterPaths(rootpath);
 
             foreach (KeyValuePair<string, string> kvp in characterPaths)
             {
