@@ -533,6 +533,42 @@ namespace ClassicUO.Game.Managers
             return otherConfigs;
         }
 
+        #nullable enable
+        public string? GetJsonExport()
+        {
+            try
+            {
+                return JsonSerializer.Serialize(_autoLootItems, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error exporting autoloot to JSON: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromJson(string json)
+        {
+            try
+            {
+                List<AutoLootConfigEntry> importedItems = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+
+                if (importedItems != null)
+                {
+                    ImportEntries(importedItems, "clipboard");
+                    return true;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error importing autoloot from JSON: {e}");
+            }
+
+            return false;
+        }
+
         public class AutoLootConfigEntry
         {
             public string Name { get; set; } = "";

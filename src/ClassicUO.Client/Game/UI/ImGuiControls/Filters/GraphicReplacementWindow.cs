@@ -106,6 +106,37 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
 
             ImGui.SameLine();
+            if (ImGui.Button("Import"))
+            {
+                string json = Utility.Clipboard.GetClipboardText();
+
+                if(json.NotNullNotEmpty() && GraphicsReplacement.ImportFromJson(json))
+                {
+                    // Clear input dictionaries to refresh with new data
+                    _entryOriginalInputs.Clear();
+                    _entryReplacementInputs.Clear();
+                    _entryHueInputs.Clear();
+                    _entryOriginalTypeSelections.Clear();
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+
+            Dictionary<(ushort, byte), GraphicChangeFilter> filters = GraphicsReplacement.GraphicFilters;
+            if (filters.Count > 0)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Export"))
+                {
+                    GraphicsReplacement.GetJsonExport()?.CopyToClipboard();
+                    GameActions.Print("Exported graphic filters to your clipboard!", Constants.HUE_SUCCESS);
+                }
+                ImGuiComponents.Tooltip("Export your filters to your clipboard.");
+            }
+
+            ImGui.SameLine();
             if (ImGui.Button("Apply to All Entities")) ForceRefreshAllEntities();
             ImGuiComponents.Tooltip("Reapply graphic replacements to all entities currently in the world");
 
@@ -208,7 +239,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // List of current filters
             ImGui.Text("Current Graphic Replacements:");
 
-            Dictionary<(ushort, byte), GraphicChangeFilter> filters = GraphicsReplacement.GraphicFilters;
             if (filters.Count == 0)
                 ImGui.Text("No replacements configured");
             else

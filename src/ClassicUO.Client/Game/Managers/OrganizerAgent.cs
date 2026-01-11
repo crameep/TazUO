@@ -375,9 +375,49 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        #nullable enable
+        public string? GetJsonExport(OrganizerConfig config)
+        {
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(config, OrganizerAgentContext.Default.OrganizerConfig);
+            }
+            catch (Exception e)
+            {
+                Utility.Logging.Log.Error($"Error exporting organizer to JSON: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromJson(string json)
+        {
+            try
+            {
+                OrganizerConfig importedConfig = System.Text.Json.JsonSerializer.Deserialize(json, OrganizerAgentContext.Default.OrganizerConfig);
+
+                if (importedConfig != null)
+                {
+                    importedConfig.Name = GetUniqueName(importedConfig.Name);
+                    importedConfig.Enabled = false;
+                    OrganizerConfigs.Add(importedConfig);
+                    GameActions.Print($"Imported organizer '{importedConfig.Name}' with {importedConfig.ItemConfigs.Count} items!", Constants.HUE_SUCCESS);
+                    return true;
+                }
+            }
+            catch (Exception e)
+            {
+                Utility.Logging.Log.Error($"Error importing organizer from JSON: {e}");
+            }
+
+            return false;
+        }
+
     }
 
     [JsonSerializable(typeof(List<OrganizerConfig>))]
+    [JsonSerializable(typeof(OrganizerConfig))]
     internal partial class OrganizerAgentContext : JsonSerializerContext
     { }
 

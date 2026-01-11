@@ -110,6 +110,32 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 });
             }
 
+            ImGui.SameLine();
+            if (ImGui.Button("Import"))
+            {
+                string json = Clipboard.GetClipboardText();
+
+                if(json.NotNullNotEmpty() && BuySellAgent.ImportFromJson(json, AgentType.Sell))
+                {
+                    GameActions.Print("Imported sell list!", Constants.HUE_SUCCESS);
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+
+            if (_sellEntries.Count > 0)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Export"))
+                {
+                    BuySellAgent.GetJsonExport(AgentType.Sell)?.CopyToClipboard();
+                    GameActions.Print("Exported sell list to your clipboard!", Constants.HUE_SUCCESS);
+                }
+                ImGuiComponents.Tooltip("Export your list to your clipboard.");
+            }
+
             if (_showAddEntry)
                 DrawAddEntry();
 

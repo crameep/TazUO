@@ -148,6 +148,88 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        #nullable enable
+        public string? GetXmlExport()
+        {
+            try
+            {
+                List<Macro> macros = GetAllMacros();
+
+                if (macros.Count == 0)
+                    return null;
+
+                var sb = new StringBuilder();
+                using (var xml = new XmlTextWriter(new StringWriter(sb)) { Formatting = Formatting.Indented, IndentChar = '\t', Indentation = 1 })
+                {
+                    xml.WriteStartDocument(true);
+                    xml.WriteStartElement("macros");
+
+                    foreach (Macro macro in macros)
+                    {
+                        macro.Save(xml);
+                    }
+
+                    xml.WriteEndElement();
+                    xml.WriteEndDocument();
+                }
+                return sb.ToString();
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error exporting macros to XML: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromXml(string xml)
+        {
+            try
+            {
+                var doc = new XmlDocument();
+                doc.LoadXml(xml);
+
+                XmlElement root = doc["macros"];
+
+                if (root != null)
+                {
+                    int addedCount = 0;
+
+                    foreach (XmlElement xmlMacro in root.GetElementsByTagName("macro"))
+                    {
+                        string macroName = xmlMacro.GetAttribute("name");
+
+                        // Make name unique if it already exists
+                        string uniqueName = macroName;
+                        int counter = 1;
+                        while (GetAllMacros().Any(m => m.Name == uniqueName))
+                        {
+                            uniqueName = $"{macroName} ({counter++})";
+                        }
+
+                        var macro = new Macro(uniqueName);
+                        macro.Load(xmlMacro);
+                        PushToBack(macro);
+                        addedCount++;
+                    }
+
+                    if (addedCount > 0)
+                    {
+                        Save();
+                        GameActions.Print($"Imported {addedCount} macro(s) from clipboard!", Constants.HUE_SUCCESS);
+                        return true;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error importing macros from XML: {e}");
+            }
+
+            return false;
+        }
+
         private void CreateDefaultMacros()
         {
             PushToBack

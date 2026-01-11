@@ -1,5 +1,6 @@
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Utility;
 using ImGuiNET;
 using System;
 using System.Linq;
@@ -140,6 +141,28 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 OrganizerAgent.Instance?.CreateOrganizerMacroButton(_selectedConfig.Name);
                 GameActions.Print($"Created Organizer Macro: {_selectedConfig.Name}");
             }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Import"))
+            {
+                string json = Clipboard.GetClipboardText();
+
+                if(json.NotNullNotEmpty() && OrganizerAgent.Instance.ImportFromJson(json))
+                {
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+
+            ImGui.SameLine();
+            if (ImGui.Button("Export"))
+            {
+                OrganizerAgent.Instance.GetJsonExport(_selectedConfig)?.CopyToClipboard();
+                GameActions.Print("Exported organizer to your clipboard!", Constants.HUE_SUCCESS);
+            }
+            ImGuiComponents.Tooltip("Export this organizer to your clipboard.");
 
             ImGui.SameLine();
             ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.8f, 0.2f, 0.2f, 1.0f));

@@ -182,6 +182,64 @@ namespace ClassicUO.Game.Managers
                 quickLookup.Remove(key);
         }
 
+        #nullable enable
+        public static string? GetJsonExport()
+        {
+            try
+            {
+                var filterList = new List<GraphicChangeFilter>(graphicChangeFilters.Values);
+                return JsonSerializer.Serialize(filterList, GraphicsReplacementJsonContext.Default.ListGraphicChangeFilter);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error exporting graphic filters to JSON: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public static bool ImportFromJson(string json)
+        {
+            try
+            {
+                List<GraphicChangeFilter> importedFilters = JsonSerializer.Deserialize(json, GraphicsReplacementJsonContext.Default.ListGraphicChangeFilter);
+
+                if (importedFilters != null)
+                {
+                    int addedCount = 0;
+                    int duplicateCount = 0;
+
+                    foreach (GraphicChangeFilter filter in importedFilters)
+                    {
+                        (ushort OriginalGraphic, byte OriginalType) key = (filter.OriginalGraphic, filter.OriginalType);
+                        if (!graphicChangeFilters.ContainsKey(key))
+                        {
+                            graphicChangeFilters[key] = filter;
+                            quickLookup.Add(key);
+                            addedCount++;
+                        }
+                        else
+                        {
+                            duplicateCount++;
+                        }
+                    }
+
+                    string message = $"Imported {addedCount} graphic filters from clipboard";
+                    if (duplicateCount > 0)
+                        message += $" ({duplicateCount} duplicates skipped)";
+                    GameActions.Print(message, Constants.HUE_SUCCESS);
+                    return true;
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error importing graphic filters from JSON: {e}");
+            }
+
+            return false;
+        }
+
         private static string GetSavePath() => Path.Combine(CUOEnviroment.ExecutablePath, "Data", "MobileReplacementFilter.json");
     }
 

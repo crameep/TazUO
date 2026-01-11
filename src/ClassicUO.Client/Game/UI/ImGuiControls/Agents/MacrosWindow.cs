@@ -9,6 +9,7 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Input;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
+using ClassicUO.Utility;
 using SDL3;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -114,17 +115,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             ImGui.SameLine();
 
-            // Delete button
-            if (ImGui.Button("Delete"))
-            {
-                if (_selectedMacro != null)
-                {
-                    _showDeleteMacroDialog = true;
-                }
-            }
-
-            ImGui.SameLine();
-
             // Move Up button
             if (ImGui.Button("Move Up"))
             {
@@ -145,6 +135,36 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     World.Instance.Macros.MoveMacroDown(_selectedMacro);
                     MarkDirty();
                 }
+            }
+
+            ImGui.SameLine();
+
+            // Import button
+            if (ImGui.Button("Import"))
+            {
+                string xml = Utility.Clipboard.GetClipboardText();
+
+                if(xml.NotNullNotEmpty() && World.Instance.Macros.ImportFromXml(xml))
+                {
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid macro export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import macros from your clipboard, must have a valid export copied.");
+
+            List<Macro> allMacros = World.Instance.Macros.GetAllMacros();
+            if (allMacros.Count > 0)
+            {
+                ImGui.SameLine();
+
+                // Export button
+                if (ImGui.Button("Export"))
+                {
+                    World.Instance.Macros.GetXmlExport()?.CopyToClipboard();
+                    GameActions.Print($"Exported {allMacros.Count} macro(s) to your clipboard!", Constants.HUE_SUCCESS);
+                }
+                ImGuiComponents.Tooltip("Export all macros to your clipboard.");
             }
 
             ImGui.SameLine();
@@ -235,6 +255,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             // Actions List
             DrawActionsList(macro);
+
+            // Delete button
+            ImGui.SameLine();
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
+            if (ImGui.Button("Delete Macro"))
+            {
+                _showDeleteMacroDialog = true;
+            }
+            ImGui.PopStyleColor();
+            ImGuiComponents.Tooltip("Delete this macro");
         }
 
         private void DrawHotkeyCapture(Macro macro)

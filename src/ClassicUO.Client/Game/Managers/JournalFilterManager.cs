@@ -51,6 +51,62 @@ public class JournalFilterManager
         if(JsonHelper.Load(_savePath, HashSetContext.Default.HashSetString, out HashSet<string> obj))
             _filters = obj;
     }
+
+    #nullable enable
+    public string? GetJsonExport()
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Serialize(_filters, HashSetContext.Default.HashSetString);
+        }
+        catch (Exception e)
+        {
+            Utility.Logging.Log.Error($"Error exporting journal filters to JSON: {e}");
+        }
+
+        return null;
+    }
+    #nullable disable
+
+    public bool ImportFromJson(string json)
+    {
+        try
+        {
+            HashSet<string> importedFilters = System.Text.Json.JsonSerializer.Deserialize(json, HashSetContext.Default.HashSetString);
+
+            if (importedFilters != null)
+            {
+                int addedCount = 0;
+                int duplicateCount = 0;
+
+                foreach (string filter in importedFilters)
+                {
+                    if (_filters.Add(filter))
+                    {
+                        addedCount++;
+                    }
+                    else
+                    {
+                        duplicateCount++;
+                    }
+                }
+
+                Save(false);
+
+                string message = $"Imported {addedCount} journal filters from clipboard";
+                if (duplicateCount > 0)
+                    message += $" ({duplicateCount} duplicates skipped)";
+                GameActions.Print(message, Constants.HUE_SUCCESS);
+                return true;
+            }
+        }
+        catch (Exception e)
+        {
+            Utility.Logging.Log.Error($"Error importing journal filters from JSON: {e}");
+        }
+
+        return false;
+    }
 }
 
 
