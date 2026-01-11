@@ -25,7 +25,7 @@ public class ApiTests
     public void CurrentAbilityNames_Returns_Empty_String_When_No_Player()
     {
         // Basically check this doesn't crash when player mobile is gone
-        Assert.Equivalent(api.CurrentAbilityNames(), Array.Empty<string>());
+        Assert.Empty(api.CurrentAbilityNames());
     }
 
     [Fact]
@@ -43,6 +43,6 @@ public class ApiTests
             "ForceOfNature", "InfusedThrow", "MysticArc", "Invalid"
         ];
         
-        Assert.Equal(api.KnownAbilityNames(), expected);
+        Assert.Equal(expected, api.KnownAbilityNames());
     }
 }
