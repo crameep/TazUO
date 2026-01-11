@@ -24,11 +24,12 @@ public class ApiTests
     [Fact]
     public void CurrentAbilityNames_Returns_Empty_String_When_No_Player()
     {
+        // Basically check this doesn't crash when player mobile is gone
         Assert.Equivalent(api.CurrentAbilityNames(), Array.Empty<string>());
     }
 
     [Fact]
-    public void API_KnownAbilityNames()
+    public void API_KnownAbilityNames_Returns_Expected_Strings()
     {
         // This can be replaced with a call to Enum.GetNames but that would somewhat defeat the point.
         // Notice that ordering here is by binary value (None = 0, Invalid = FF)
