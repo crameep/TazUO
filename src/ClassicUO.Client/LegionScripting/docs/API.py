@@ -2376,7 +2376,7 @@ def CurrentAbilityNames() -> "list[str]":
 
 def KnownAbilityNames() -> "list[str]":
     """
-     Gets an array of all know ability names
+     Gets an array of all known ability names
     
     """
     pass

@@ -2716,7 +2716,7 @@ namespace ClassicUO.LegionScripting
         public string[] CurrentAbilityNames() => World.Player != null?[Enum.GetName(World.Player.PrimaryAbility), Enum.GetName(World.Player.SecondaryAbility)] : [];
 
         /// <summary>
-        /// Gets an array of all know ability names
+        /// Gets an array of all known ability names
         /// </summary>
         /// <returns>A list of all known ability names, as defined by the `Ability` enumeration</returns>
         public string[] KnownAbilityNames() => Enum.GetNames<Ability>();
