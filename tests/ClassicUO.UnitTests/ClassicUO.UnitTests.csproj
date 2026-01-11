@@ -25,8 +25,4 @@
     <ProjectReference Include="..\..\src\ClassicUO.Client\ClassicUO.Client.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Game\LegionScript\" />
-  </ItemGroup>
-
 </Project>
