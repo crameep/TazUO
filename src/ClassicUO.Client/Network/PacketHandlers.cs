@@ -6664,6 +6664,7 @@ sealed class PacketHandlers
         if (mobile != null)
         {
             mobile.SetInWorldTile(mobile.X, mobile.Y, mobile.Z);
+            HealthbarCollectorGump.CheckAndAddMobile(world, mobile);
 
             if (created)
             {

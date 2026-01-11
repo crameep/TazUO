@@ -195,7 +195,17 @@ namespace ClassicUO.Game.GameObjects
         public bool IsRenamable;
         public bool IsRunning;
         public long LastStepSoundTime;
-        public NotorietyFlag NotorietyFlag;
+
+        public NotorietyFlag NotorietyFlag
+        {
+            get;
+            set
+            {
+                field = value;
+                HealthbarCollectorGump.CheckAndAddMobile(World, Serial);
+            }
+        }
+
         public RaceType Race;
         public CharacterSpeedType SpeedMode = CharacterSpeedType.Normal;
         public ushort Stamina;

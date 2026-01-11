@@ -37,5 +37,6 @@ namespace ClassicUO.Game.UI.Gumps
         SpellBar,
         MenuGump,
         TextEntryDialogGump,
+        HealthBarCollector
     }
 }

@@ -1185,6 +1185,7 @@ namespace ClassicUO.Configuration
                                     NameOverHeadHandlerGump.LastPosition = new Point(x, y);
                                     // Gump gets opened by NameOverHeadManager, we just want to save the last position from profile
                                     break;
+
                                 case GumpType.GridContainer:
                                     ushort ogContainer = ushort.Parse(xml.GetAttribute("ogContainer"));
                                     gump = new GridContainer(world, serial, ogContainer);
@@ -1194,11 +1195,13 @@ namespace ClassicUO.Configuration
                                         y = ProfileManager.CurrentProfile.BackpackGridPosition.Y;
                                     }
                                     break;
+
                                 case GumpType.DurabilityGump:
                                     gump = new DurabilitysGump(world);
                                     break;
-                                case GumpType.ScriptManager:
-                                    // ScriptManagerGump removed - use ScriptManagerWindow instead
+
+                                case GumpType.HealthBarCollector:
+                                    gump = new HealthbarCollectorGump(world);
                                     break;
                             }
 
