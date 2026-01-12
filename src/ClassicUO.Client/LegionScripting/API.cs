@@ -2709,6 +2709,20 @@ namespace ClassicUO.LegionScripting
         public bool SecondaryAbilityActive() => World.Player != null && ((byte)World.Player.SecondaryAbility & 0x80) != 0;
 
         /// <summary>
+        /// Gets your currently available ability names.
+        ///
+        /// The full list of known abilities can be obtained via the `KnownAbilityNames` API
+        /// </summary>
+        /// <returns>The returned array will be [PrimaryAbility, SecondaryAbility] or an empty array if no ability is available</returns>
+        public string[] CurrentAbilityNames() => World.Player != null?[Enum.GetName(World.Player.PrimaryAbility), Enum.GetName(World.Player.SecondaryAbility)] : [];
+
+        /// <summary>
+        /// Gets an array of all known ability names
+        /// </summary>
+        /// <returns>A list of all known ability names, as defined by the `Ability` enumeration</returns>
+        public string[] KnownAbilityNames() => Enum.GetNames<Ability>();
+
+        /// <summary>
         /// Check if your journal contains a message.
         /// Example:
         /// ```py
