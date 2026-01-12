@@ -26,6 +26,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly AlphaBlendControl _background;
         private readonly Label _titleLabel;
         private readonly NiceButton _notorietiesButton;
+        private readonly NiceButton _sortButton;
         private ClickableColorBox _borderColorBox;
         private ModernScrollArea _scrollArea;
         private VBoxContainer _container;
@@ -35,6 +36,9 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly Dictionary<uint, CompactHealthBar> _healthbars = new();
         private readonly Dictionary<uint, NotorietyFlag> _trackedMobiles = new();
         private ushort _borderHue = 0;
+        private bool _sortByDistance = false;
+        private int _sortUpdateCounter = 0;
+        private const int SORT_UPDATE_INTERVAL = 10; // Update sorting every 10 frames
 
         public HealthbarCollectorGump(World world) : base(world, 0, 0)
         {
@@ -67,13 +71,22 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_titleLabel);
 
             // Notorieties button
-            _notorietiesButton = new NiceButton(5, 28, 80, 20, ButtonAction.Activate, "Notorieties")
+            _notorietiesButton = new NiceButton(5, 28, 55, 20, ButtonAction.Activate, "Filter")
             {
                 IsSelectable = false,
                 ButtonParameter = 0
             };
             _notorietiesButton.MouseUp += OnNotorietiesButtonClick;
             Add(_notorietiesButton);
+
+            // Sort button
+            _sortButton = new NiceButton(62, 28, 40, 20, ButtonAction.Activate, "Sort")
+            {
+                IsSelectable = true,
+                ButtonParameter = 1
+            };
+            _sortButton.MouseUp += OnSortButtonClick;
+            Add(_sortButton);
 
             // Create border color picker
             _borderColorBox = new ClickableColorBox(world, WIDTH - 22, 28, 16, 16, _borderHue, true)
@@ -138,6 +151,18 @@ namespace ClassicUO.Game.UI.Gumps
             contextMenu.Show();
         }
 
+        private void OnSortButtonClick(object sender, Input.MouseEventArgs e)
+        {
+            if (e.Button != Input.MouseButtonType.Left)
+                return;
+
+            _sortByDistance = !_sortByDistance;
+            _sortButton.IsSelected = _sortByDistance;
+
+            if (_sortByDistance)
+                SortHealthbarsByDistance();
+        }
+
         private void ToggleNotoriety(NotorietyFlag flag)
         {
             if (_enabledNotorieties.Contains(flag))
@@ -147,6 +172,29 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Rebuild the healthbar list when notorieties are changed
             RebuildHealthbarList();
+        }
+
+        private void SortHealthbarsByDistance()
+        {
+            if (_healthbars.Count == 0)
+                return;
+
+            // Get all healthbars and sort by distance
+            var sortedBars = _healthbars.Values
+                .OrderBy(bar => bar.Distance)
+                .ToList();
+
+            // Remove all from container without disposing
+            foreach (CompactHealthBar bar in sortedBars)
+            {
+                _container.Remove(bar);
+            }
+
+            // Re-add in sorted order
+            foreach (CompactHealthBar bar in sortedBars)
+            {
+                _container.Add(bar);
+            }
         }
 
         private void RebuildHealthbarList()
@@ -226,6 +274,17 @@ namespace ClassicUO.Game.UI.Gumps
                     if (_scrollArea != null) _scrollArea.UpdateHeight(Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20);
                 }
             }
+
+            // Update sorting periodically if enabled
+            if (_sortByDistance)
+            {
+                _sortUpdateCounter++;
+                if (_sortUpdateCounter >= SORT_UPDATE_INTERVAL)
+                {
+                    _sortUpdateCounter = 0;
+                    SortHealthbarsByDistance();
+                }
+            }
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
@@ -277,6 +336,9 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Save border hue
             writer.WriteAttributeString("borderHue", _borderHue.ToString());
+
+            // Save sort state
+            writer.WriteAttributeString("sortByDistance", _sortByDistance.ToString());
         }
 
         public override void Restore(XmlElement xml)
@@ -298,6 +360,13 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 _borderHue = hue;
                 if (_borderColorBox != null) _borderColorBox.Hue = hue;
+            }
+
+            // Restore sort state
+            if (bool.TryParse(xml.GetAttribute("sortByDistance"), out bool sortByDistance))
+            {
+                _sortByDistance = sortByDistance;
+                if (_sortButton != null) _sortButton.IsSelected = sortByDistance;
             }
 
             // Rebuild healthbar list based on restored notorieties
