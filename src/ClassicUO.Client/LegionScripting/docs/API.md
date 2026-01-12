@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `1/12/26`.*
+*This was generated on `1/11/26`.*
 
 ## Properties
 ### `JournalEntries`
@@ -2202,26 +2202,6 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 
 **Return Type:** `bool`
-
----
-
-### CurrentAbilityNames
-
- Gets your currently available ability names.
-
- The full list of known abilities can be obtained via the `KnownAbilityNames` API
-
-
-**Return Type:** `string[]`
-
----
-
-### KnownAbilityNames
-
- Gets an array of all known ability names
-
-
-**Return Type:** `string[]`
 
 ---
 
