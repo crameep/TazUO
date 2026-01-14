@@ -198,7 +198,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Re-add in sorted order
             foreach (CompactHealthBar bar in sortedBars) _container.Add(bar);
-            
+
             _container.Reposition();
         }
 
@@ -536,11 +536,11 @@ namespace ClassicUO.Game.UI.Gumps
             private void CheckQuickHealButtons()
             {
                 bool visible = _lastPercent < 100 &&
-                               _mobile.NotorietyFlag is not NotorietyFlag.Invulnerable
+                               ((_mobile.NotorietyFlag is not NotorietyFlag.Invulnerable
                                    and not NotorietyFlag.Enemy
                                    and not NotorietyFlag.Murderer
                                    and not NotorietyFlag.Criminal
-                                   and not NotorietyFlag.Gray;
+                                   and not NotorietyFlag.Gray) || _mobile.IsRenamable);
 
                 _buttonHeal1.IsVisible = visible;
                 _buttonHeal2.IsVisible = visible;
