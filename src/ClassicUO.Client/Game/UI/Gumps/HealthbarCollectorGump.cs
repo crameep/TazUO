@@ -198,9 +198,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Re-add in sorted order
             foreach (CompactHealthBar bar in sortedBars) _container.Add(bar);
-
-            Log.TraceDebug("RESORTED");
-
+            
             _container.Reposition();
         }
 
@@ -463,6 +461,7 @@ namespace ClassicUO.Game.UI.Gumps
             private readonly Label _nameLabel, _percentLabel;
             private readonly HealthBarLine _hpBar;
             private readonly Mobile _mobile;
+            private readonly Button _buttonHeal1,  _buttonHeal2;
             private int _lastPercent = 0;
             public int Distance = 0;
 
@@ -514,7 +513,37 @@ namespace ClassicUO.Game.UI.Gumps
                 };
                 Add(_percentLabel);
 
+                Add(_buttonHeal1 = new Button(0, 0x0938, 0x093A, 0x0938)
+                {
+                    ButtonAction = ButtonAction.Activate,
+                    X = BAR_WIDTH - 30,
+                    Y = 14
+                });
+
+                Add(_buttonHeal2 = new Button(1, 0x0939, 0x093A, 0x0939)
+                {
+                    ButtonAction = ButtonAction.Activate,
+                    X = BAR_WIDTH - 15,
+                    Y = 14
+
+                });
+
+                CheckQuickHealButtons();
+
                 WantUpdateSize = false;
+            }
+
+            private void CheckQuickHealButtons()
+            {
+                bool visible = _lastPercent < 100 &&
+                               _mobile.NotorietyFlag is not NotorietyFlag.Invulnerable
+                                   and not NotorietyFlag.Enemy
+                                   and not NotorietyFlag.Murderer
+                                   and not NotorietyFlag.Criminal
+                                   and not NotorietyFlag.Gray;
+
+                _buttonHeal1.IsVisible = visible;
+                _buttonHeal2.IsVisible = visible;
             }
 
             private void SetName()
@@ -552,6 +581,8 @@ namespace ClassicUO.Game.UI.Gumps
                         _lastPercent = hpWidth;
 
                         _percentLabel.Text = _lastPercent < 100 ? hpWidth.ToString() : string.Empty;
+
+                        CheckQuickHealButtons();
                     }
 
                     // Change color based on status
@@ -624,6 +655,23 @@ namespace ClassicUO.Game.UI.Gumps
                 return false;
             }
 
+            public override void OnButtonClick(int buttonID)
+            {
+                switch (buttonID)
+                {
+                    case 0:
+                        GameActions.QuickHeal(_world, Serial);
+                        break;
+
+                    case 1:
+                        GameActions.QuickCure(_world, Serial);
+                        break;
+                }
+
+                Mouse.CancelDoubleClick = true;
+                Mouse.LastLeftButtonClickTime = 0;
+            }
+
             private static int CalculatePercents(int max, int current, int maxValue)
             {
                 if (max > 0)
@@ -645,7 +693,6 @@ namespace ClassicUO.Game.UI.Gumps
 
                 public Texture2D BarColor
                 {
-                    get => _texture;
                     set => _texture = value;
                 }
 

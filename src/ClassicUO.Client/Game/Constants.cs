@@ -122,6 +122,8 @@ namespace ClassicUO.Game
             public const string DISABLE_WEATHER = "disable_weather";
             public const string SEASON_FILTER = "season_filter";
             public const string ENABLE_ENHANCED_PACKETS = "enhanced_packets_enabled";
+            public const string QUICK_HEAL_SPELL = "quick_heal_spell";
+            public const string QUICK_CURE_SPELL = "quick_cure_spell";
         }
     }
 }

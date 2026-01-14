@@ -993,6 +993,20 @@ internal static class GameActions
         }
     }
 
+    internal static void QuickHeal(World world, uint target)
+    {
+        CastSpell(ProfileManager.CurrentProfile.QuickHealSpell);
+        world.Party.PartyHealTimer = Time.Ticks + 50;
+        world.Party.PartyHealTarget = target;
+    }
+
+    internal static void QuickCure(World world, uint target)
+    {
+        CastSpell(ProfileManager.CurrentProfile.QuickCureSpell);
+        world.Party.PartyHealTimer = Time.Ticks + 50;
+        world.Party.PartyHealTarget = target;
+    }
+
     internal static void CastSpell(int index)
     {
         if (index >= 0)
