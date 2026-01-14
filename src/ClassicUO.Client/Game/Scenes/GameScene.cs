@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 
 using ClassicUO.Assets;
@@ -794,7 +794,7 @@ namespace ClassicUO.Game.Scenes
                         if (firstObj?.IsDestroyed != false)
                             continue;
 
-                        AddTileToRenderList(firstObj, useHandles, 150, maxCotZ, ref playerPos);
+                        AddTileToRenderList(firstObj, useHandles, 200, maxCotZ, ref playerPos);
                     }
                 }
             }
