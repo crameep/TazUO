@@ -4,10 +4,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
+using ClassicUO.Input;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
@@ -34,11 +36,10 @@ namespace ClassicUO.Game.UI.Gumps
 
         private readonly HashSet<NotorietyFlag> _enabledNotorieties = new();
         private readonly Dictionary<uint, CompactHealthBar> _healthbars = new();
-        private readonly Dictionary<uint, NotorietyFlag> _trackedMobiles = new();
         private ushort _borderHue = 0;
         private bool _sortByDistance = false;
         private int _sortUpdateCounter = 0;
-        private const int SORT_UPDATE_INTERVAL = 10; // Update sorting every 10 frames
+        private bool _sortRequested = false;
 
         public HealthbarCollectorGump(World world) : base(world, 0, 0)
         {
@@ -115,9 +116,9 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override GumpType GumpType => GumpType.HealthBarCollector;
 
-        private void OnNotorietiesButtonClick(object sender, Input.MouseEventArgs e)
+        private void OnNotorietiesButtonClick(object sender, MouseEventArgs e)
         {
-            if (e.Button != Input.MouseButtonType.Left)
+            if (e.Button != MouseButtonType.Left)
                 return;
 
             // Create context menu with all notoriety types
@@ -151,9 +152,9 @@ namespace ClassicUO.Game.UI.Gumps
             contextMenu.Show();
         }
 
-        private void OnSortButtonClick(object sender, Input.MouseEventArgs e)
+        private void OnSortButtonClick(object sender, MouseEventArgs e)
         {
-            if (e.Button != Input.MouseButtonType.Left)
+            if (e.Button != MouseButtonType.Left)
                 return;
 
             _sortByDistance = !_sortByDistance;
@@ -165,18 +166,26 @@ namespace ClassicUO.Game.UI.Gumps
 
         private void ToggleNotoriety(NotorietyFlag flag)
         {
-            if (_enabledNotorieties.Contains(flag))
+            if (!_enabledNotorieties.Add(flag))
                 _enabledNotorieties.Remove(flag);
-            else
-                _enabledNotorieties.Add(flag);
 
             // Rebuild the healthbar list when notorieties are changed
             RebuildHealthbarList();
         }
 
+        public void RequestSorting()
+        {
+            if (!_sortByDistance)
+                return;
+
+            _sortRequested = true;
+        }
+
         private void SortHealthbarsByDistance()
         {
-            if (_healthbars.Count == 0)
+            _sortRequested = false;
+
+            if (_healthbars.Count < 2 || !_sortByDistance)
                 return;
 
             // Get all healthbars and sort by distance
@@ -185,31 +194,36 @@ namespace ClassicUO.Game.UI.Gumps
                 .ToList();
 
             // Remove all from container without disposing
-            foreach (CompactHealthBar bar in sortedBars)
-            {
-                _container.Remove(bar);
-            }
+            foreach (CompactHealthBar bar in sortedBars) _container.Remove(bar);
 
             // Re-add in sorted order
-            foreach (CompactHealthBar bar in sortedBars)
-            {
-                _container.Add(bar);
-            }
+            foreach (CompactHealthBar bar in sortedBars) _container.Add(bar);
+
+            Log.TraceDebug("RESORTED");
+
+            _container.Reposition();
         }
 
         private void RebuildHealthbarList()
         {
             // Clear existing healthbars
-            foreach (CompactHealthBar bar in _healthbars.Values) bar.Dispose();
+            foreach (CompactHealthBar bar in _healthbars.Values)
+            {
+                bar.Dispose();
+                _container.Remove(bar);
+            }
+
             _healthbars.Clear();
-            _trackedMobiles.Clear();
+
+            if (_enabledNotorieties.Count <= 0) return;
 
             // Add healthbars for mobiles that match enabled notorieties
-            if (_enabledNotorieties.Count > 0)
-                foreach (Mobile mobile in World.Mobiles.Values)
-                    if (mobile != null && !mobile.IsDestroyed && mobile.Serial != World.Player?.Serial)
-                        if (_enabledNotorieties.Contains(mobile.NotorietyFlag))
-                            AddMobileHealthbar(mobile);
+            foreach (Mobile mobile in World.Mobiles.Values)
+                if (mobile != null && !mobile.IsDestroyed && mobile.Serial != World.Player?.Serial)
+                    if (_enabledNotorieties.Contains(mobile.NotorietyFlag))
+                        AddMobileHealthbar(mobile);
+
+            _container.Reposition();
         }
 
         public static void CheckAndAddMobile(World world, uint serial)
@@ -238,9 +252,8 @@ namespace ClassicUO.Game.UI.Gumps
                 return;
 
             // Create compact healthbar
-            var compactBar = new CompactHealthBar(World, mobile.Serial);
+            var compactBar = new CompactHealthBar(World, mobile.Serial, this);
             _healthbars[mobile.Serial] = compactBar;
-            _trackedMobiles[mobile.Serial] = mobile.NotorietyFlag;
             _container.Add(compactBar);
         }
 
@@ -250,7 +263,6 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 bar.Dispose();
                 _healthbars.Remove(serial);
-                _trackedMobiles.Remove(serial);
             }
         }
 
@@ -275,16 +287,8 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
-            // Update sorting periodically if enabled
-            if (_sortByDistance)
-            {
-                _sortUpdateCounter++;
-                if (_sortUpdateCounter >= SORT_UPDATE_INTERVAL)
-                {
-                    _sortUpdateCounter = 0;
-                    SortHealthbarsByDistance();
-                }
-            }
+            if(_sortRequested)
+                SortHealthbarsByDistance();
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
@@ -378,7 +382,6 @@ namespace ClassicUO.Game.UI.Gumps
             // Dispose all compact healthbars
             foreach (CompactHealthBar bar in _healthbars.Values) bar.Dispose();
             _healthbars.Clear();
-            _trackedMobiles.Clear();
 
             base.Dispose();
         }
@@ -401,19 +404,19 @@ namespace ClassicUO.Game.UI.Gumps
 
             public bool IsDragging => _isDragging;
 
-            protected override void OnMouseDown(int x, int y, Input.MouseButtonType button)
+            protected override void OnMouseDown(int x, int y, MouseButtonType button)
             {
-                if (button == Input.MouseButtonType.Left)
+                if (button == MouseButtonType.Left)
                 {
                     _isDragging = true;
-                    _dragStartY = Input.Mouse.Position.Y;
+                    _dragStartY = Mouse.Position.Y;
                     _startY = Y;
                 }
             }
 
-            protected override void OnMouseUp(int x, int y, Input.MouseButtonType button)
+            protected override void OnMouseUp(int x, int y, MouseButtonType button)
             {
-                if (button == Input.MouseButtonType.Left) _isDragging = false;
+                if (button == MouseButtonType.Left) _isDragging = false;
             }
 
             public override void Update()
@@ -422,7 +425,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (_isDragging)
                 {
-                    int deltaY = Input.Mouse.Position.Y - _dragStartY;
+                    int deltaY = Mouse.Position.Y - _dragStartY;
                     int newY = _startY + deltaY;
 
                     // Calculate the minimum Y position based on MIN_HEIGHT
@@ -456,17 +459,19 @@ namespace ClassicUO.Game.UI.Gumps
             private const int BAR_WIDTH = 100;
             private const int BAR_HEIGHT = 8;
             private readonly World _world;
-            private readonly Label _nameLabel;
+            private readonly HealthbarCollectorGump _parent;
+            private readonly Label _nameLabel, _percentLabel;
             private readonly HealthBarLine _hpBar;
-            private readonly HealthBarLine _hpBackground;
-            private Mobile _mobile;
+            private readonly Mobile _mobile;
+            private int _lastPercent = 0;
             public int Distance = 0;
 
             public uint Serial { get; }
 
-            public CompactHealthBar(World world, uint serial)
+            public CompactHealthBar(World world, uint serial, HealthbarCollectorGump parent)
             {
                 _world = world;
+                _parent = parent;
                 Serial = serial;
 
                 Width = 100;
@@ -485,7 +490,8 @@ namespace ClassicUO.Game.UI.Gumps
                 Distance = entity.Distance;
 
                 // Name label (centered)
-                _nameLabel = new Label(string.Empty, true, Notoriety.GetHue((entity as Mobile)?.NotorietyFlag ?? NotorietyFlag.Gray), font: 1, style: FontStyle.BlackBorder)
+                ushort hue = Notoriety.GetHue((NotorietyFlag)(entity as Mobile)?.NotorietyFlag);
+                _nameLabel = new Label(string.Empty, true, hue, font: 1, style: FontStyle.BlackBorder)
                 {
                     X = 0,
                     Y = 2,
@@ -495,19 +501,30 @@ namespace ClassicUO.Game.UI.Gumps
                 Add(_nameLabel);
 
                 // HP background (red/gray bar)
-                _hpBackground = new HealthBarLine(0, 16, BAR_WIDTH, BAR_HEIGHT, Color.DarkRed);
-                Add(_hpBackground);
+                var hpBackground = new HealthBarLine(0, 16, BAR_WIDTH, BAR_HEIGHT, Color.DarkRed);
+                Add(hpBackground);
 
                 // HP foreground (blue bar)
                 _hpBar = new HealthBarLine(0, 16, BAR_WIDTH, BAR_HEIGHT, Color.DodgerBlue);
                 Add(_hpBar);
+
+                _percentLabel = new Label(string.Empty, true, hue, font: 1, style: FontStyle.BlackBorder)
+                {
+                    X = 5, Y = 14
+                };
+                Add(_percentLabel);
 
                 WantUpdateSize = false;
             }
 
             private void SetName()
             {
-                Distance = _mobile.Distance;
+                if(Distance != _mobile.Distance)
+                {
+                    Distance = _mobile.Distance;
+                    _parent.RequestSorting();
+                }
+
                 _nameLabel.Text = $"{_mobile.Name} ({Distance})";
             }
 
@@ -530,6 +547,13 @@ namespace ClassicUO.Game.UI.Gumps
                     int hpWidth = CalculatePercents(_mobile.HitsMax, _mobile.Hits, BAR_WIDTH);
                     _hpBar.BarWidth = hpWidth;
 
+                    if (hpWidth > 0 && _lastPercent != hpWidth)
+                    {
+                        _lastPercent = hpWidth;
+
+                        _percentLabel.Text = _lastPercent < 100 ? hpWidth.ToString() : string.Empty;
+                    }
+
                     // Change color based on status
                     if (_mobile.IsPoisoned)
                         _hpBar.BarColor = SolidColorTextureCache.GetTexture(Color.LimeGreen);
@@ -544,11 +568,27 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
-            protected override void OnMouseDown(int x, int y, Input.MouseButtonType button)
+            protected override void OnMouseDown(int x, int y, MouseButtonType button)
             {
-                if (button == Input.MouseButtonType.Left)
-                    // Target on left click
-                    _world.TargetManager.Target(Serial);
+                if (button == MouseButtonType.Left)
+                {
+                    if(_world.TargetManager.IsTargeting)
+                        _world.TargetManager.Target(Serial);
+                    else if (Keyboard.Alt && !ProfileManager.CurrentProfile.DisableAutoFollowAlt) //Auto follow
+                    {
+                        ProfileManager.CurrentProfile.FollowingMode = true;
+                        ProfileManager.CurrentProfile.FollowingTarget = Serial;
+                    }
+                    else if (!_world.Player.InWarMode)
+                    {
+                        _world.DelayedObjectClickManager.Set(
+                            Serial,
+                            Mouse.Position.X,
+                            Mouse.Position.Y,
+                            Time.Ticks + Mouse.MOUSE_DELAY_DOUBLE_CLICK
+                        );
+                    }
+                }
                 base.OnMouseDown(x, y, button);
             }
 
@@ -563,9 +603,9 @@ namespace ClassicUO.Game.UI.Gumps
                 base.OnMouseOver(x, y);
             }
 
-            protected override bool OnMouseDoubleClick(int x, int y, Input.MouseButtonType button)
+            protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
             {
-                if (button == Input.MouseButtonType.Left)
+                if (button == MouseButtonType.Left)
                 {
                     Entity entity = _world.Get(Serial);
                     if (entity != null)

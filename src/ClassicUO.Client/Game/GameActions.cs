@@ -1099,9 +1099,9 @@ internal static class GameActions
 
     internal static void ResponsePopupMenu(uint serial, ushort index)
     {
-            // Record action for script recording
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordContextMenu(serial, index);
-            ScriptingInfoGump.AddOrUpdateInfo("Last Context Menu response", index);
+        // Record action for script recording
+        ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordContextMenu(serial, index);
+        ScriptingInfoGump.AddOrUpdateInfo("Last Context Menu response", index);
 
         Socket.Send_PopupMenuSelection(serial, index);
     }

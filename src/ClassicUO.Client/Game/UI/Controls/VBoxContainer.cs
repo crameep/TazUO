@@ -52,7 +52,7 @@ public class VBoxContainer : Control
         Reposition(); //Need to reposition, we don't know where the child was removed
     }
 
-    private void Reposition()
+    public void Reposition()
     {
         repositionRequested = false;
 
