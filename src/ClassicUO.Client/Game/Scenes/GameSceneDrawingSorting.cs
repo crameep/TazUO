@@ -361,7 +361,7 @@ namespace ClassicUO.Game.Scenes
             {
                 if (Vector2.Distance(new Vector2(obj.RealScreenPosition.X, obj.RealScreenPosition.Y), playerPos) < ProfileManager.CurrentProfile.CircleOfTransparencyRadius)
                 {
-                    if (obj.Z > _maxZ)
+                    if (obj.Z >= _maxZ)
                     {
                         obj.AlphaHue = 0;
                         //CalculateAlpha(ref obj.AlphaHue, 0);
@@ -393,7 +393,7 @@ namespace ClassicUO.Game.Scenes
                     }
                 }
             }
-            if (obj.Z > _maxZ)
+            if (obj.Z >= _maxZ)
             {
                 bool changed;
 
