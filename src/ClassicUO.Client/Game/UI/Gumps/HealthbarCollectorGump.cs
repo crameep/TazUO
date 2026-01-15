@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
@@ -96,6 +97,7 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 AcceptMouseInput = true
             };
+            _borderColorBox.OnHueChanged += OnBorderHueChanged;
             Add(_borderColorBox);
 
             // Create scroll area with VBoxContainer
@@ -113,6 +115,11 @@ namespace ClassicUO.Game.UI.Gumps
             // Add resize handle at bottom
             _resizeHandle = new ResizeHandle(WIDTH / 2 - 8, Height - 18);
             Add(_resizeHandle);
+        }
+
+        private void OnBorderHueChanged(object sender, ushort hue)
+        {
+            if (_borderColorBox != null && _borderColorBox.Hue != _borderHue) _borderHue = _borderColorBox.Hue;
         }
 
         public override GumpType GumpType => GumpType.HealthBarCollector;
@@ -278,10 +285,6 @@ namespace ClassicUO.Game.UI.Gumps
         {
             base.PreDraw();
 
-            // Update border hue from color box
-            if (_borderColorBox != null && _borderColorBox.Hue != _borderHue) _borderHue = _borderColorBox.Hue;
-
-            // Handle resize
             if (_resizeHandle != null && _resizeHandle.IsDragging)
             {
                 int newHeight = _resizeHandle.Y + 18;
@@ -366,14 +369,15 @@ namespace ClassicUO.Game.UI.Gumps
             if (ushort.TryParse(xml.GetAttribute("borderHue"), out ushort hue))
             {
                 _borderHue = hue;
-                if (_borderColorBox != null) _borderColorBox.Hue = hue;
+                _borderColorBox?.Hue = hue;
+                OnBorderHueChanged(null, hue);
             }
 
             // Restore sort state
             if (bool.TryParse(xml.GetAttribute("sortByDistance"), out bool sortByDistance))
             {
                 _sortByDistance = sortByDistance;
-                if (_sortButton != null) _sortButton.IsSelected = sortByDistance;
+                _sortButton?.IsSelected = sortByDistance;
             }
 
             // Restore sort state
@@ -469,7 +473,7 @@ namespace ClassicUO.Game.UI.Gumps
         private class CompactHealthBar : Control
         {
             private const int BAR_WIDTH = 100;
-            private const int BAR_HEIGHT = 8;
+            private const int BAR_HEIGHT = 16;
             private readonly World _world;
             private readonly HealthbarCollectorGump _parent;
             private readonly Label _nameLabel, _percentLabel;
@@ -501,6 +505,7 @@ namespace ClassicUO.Game.UI.Gumps
                 }
 
                 _mobile =  mob;
+                SetTooltip(mob);
                 Distance = entity.Distance;
 
                 // Name label (centered)
@@ -508,7 +513,7 @@ namespace ClassicUO.Game.UI.Gumps
                 _nameLabel = new Label(string.Empty, true, hue, font: 1, style: FontStyle.BlackBorder)
                 {
                     X = 0,
-                    Y = 2,
+                    Y = 0,
                     Width = BAR_WIDTH
                 };
                 SetName();
@@ -522,9 +527,9 @@ namespace ClassicUO.Game.UI.Gumps
                 _hpBar = new HealthBarLine(0, 16, BAR_WIDTH, BAR_HEIGHT, Color.DodgerBlue);
                 Add(_hpBar);
 
-                _percentLabel = new Label(string.Empty, true, hue, font: 1, style: FontStyle.BlackBorder)
+                _percentLabel = new Label(string.Empty, true, 0, font: 1, style: FontStyle.BlackBorder)
                 {
-                    X = 5, Y = 14
+                    X = 5, Y = 15
                 };
                 Add(_percentLabel);
 
@@ -595,7 +600,7 @@ namespace ClassicUO.Game.UI.Gumps
                     {
                         _lastPercent = hpWidth;
 
-                        _percentLabel.Text = _lastPercent < 100 ? hpWidth.ToString() : string.Empty;
+                        _percentLabel.Text = _lastPercent < 100 ? hpWidth.ToString() + "%" : string.Empty;
 
                         CheckQuickHealButtons();
                     }
@@ -638,15 +643,15 @@ namespace ClassicUO.Game.UI.Gumps
                 base.OnMouseDown(x, y, button);
             }
 
-            protected override void OnMouseOver(int x, int y)
-            {
-                Entity entity = _world.Get(Serial);
-                if (entity != null)
+            protected override void OnMouseEnter(int x, int y) 
+            { 
+                if (_mobile != null && !_mobile.IsDestroyed)
                 {
-                    SelectedObject.HealthbarObject = entity;
-                    SelectedObject.Object = entity;
+                    SelectedObject.HealthbarObject = _mobile;
+                    SelectedObject.Object = _mobile;
                 }
-                base.OnMouseOver(x, y);
+
+                base.OnMouseEnter(x, y);
             }
 
             protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
@@ -701,6 +706,20 @@ namespace ClassicUO.Game.UI.Gumps
                 return max;
             }
 
+            private Vector3 _backgroundHueVector = new(0, 0, 0.3f);
+
+            public override bool Draw(UltimaBatcher2D batcher, int x, int y) 
+            {
+                if(IsDisposed) return false;
+
+                if (MouseIsOver)
+                {
+                    batcher.Draw(SolidColorTextureCache.GetTexture(Color.White), new Rectangle(x, y, Width, Height), _backgroundHueVector);
+                }
+
+                return base.Draw(batcher, x, y);
+            }
+
             private class HealthBarLine : Control
             {
                 private Texture2D _texture;
@@ -720,6 +739,7 @@ namespace ClassicUO.Game.UI.Gumps
                     BarWidth = maxWidth;
                     _texture = SolidColorTextureCache.GetTexture(color);
                     CanMove = true;
+                    AcceptMouseInput = false;
                 }
 
                 public override bool Draw(UltimaBatcher2D batcher, int x, int y)

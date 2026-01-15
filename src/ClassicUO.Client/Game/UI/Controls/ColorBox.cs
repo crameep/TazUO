@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
 
@@ -9,6 +10,7 @@ namespace ClassicUO.Game.UI.Controls
     {
         private ushort hue;
         protected Vector3 hueVector;
+        public event EventHandler<ushort> OnHueChanged;
 
         public ColorBox(int width, int height, ushort hue)
         {
@@ -25,6 +27,7 @@ namespace ClassicUO.Game.UI.Controls
             {
                 hue = value;
                 hueVector = ShaderHueTranslator.GetHueVector(Hue, false, Alpha);
+                OnHueChanged?.Invoke(this, hue);
             }
         }
 
