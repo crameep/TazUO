@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml;
@@ -11,8 +10,6 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using ClassicUO.Renderer;
-using ClassicUO.Utility;
-using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -20,15 +17,15 @@ namespace ClassicUO.Game.UI.Gumps
 {
     public class HealthbarCollectorGump : Gump
     {
+        private readonly World _world;
         private const int WIDTH = 120;
         private const int MIN_HEIGHT = 70;
         private const int TOP_SECTION_HEIGHT = 50;
         private const int BORDER_WIDTH = 2;
 
-        private readonly AlphaBlendControl _background;
-        private readonly Label _titleLabel;
-        private readonly NiceButton _notorietiesButton;
-        private readonly NiceButton _sortButton;
+        private AlphaBlendControl _background;
+        private NiceButton _notorietiesButton;
+        private NiceButton _sortButton;
         private ClickableColorBox _borderColorBox;
         private ModernScrollArea _scrollArea;
         private VBoxContainer _container;
@@ -36,20 +33,25 @@ namespace ClassicUO.Game.UI.Gumps
 
         private readonly HashSet<NotorietyFlag> _enabledNotorieties = new();
         private readonly Dictionary<uint, CompactHealthBar> _healthbars = new();
-        private ushort _borderHue = 0;
-        private bool _sortByDistance = false;
-        private int _sortUpdateCounter = 0;
-        private bool _sortRequested = false;
+        private ushort _borderHue;
+        private bool _sortByDistance;
+        private bool _sortRequested;
 
         public HealthbarCollectorGump(World world) : base(world, 0, 0)
         {
+            _world = world;
             Width = WIDTH;
             Height = 300;
 
             CanMove = true;
-            AcceptMouseInput = true;
             CanCloseWithRightClick = true;
+            Build();
+        }
 
+        public override bool AcceptMouseInput { get; set; } = true;
+
+        private void Build()
+        {
             // Create alpha blend background - full width behind border
             _background = new AlphaBlendControl(0.75f)
             {
@@ -64,12 +66,12 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_background);
 
             // Title label
-            _titleLabel = new Label("Healthbar Collector", true, 0x0481, font: 1)
+            var titleLabel = new Label("Healthbar Collector", true, 0x0481, font: 1)
             {
                 X = 5,
                 Y = 8
             };
-            Add(_titleLabel);
+            Add(titleLabel);
 
             // Notorieties button
             _notorietiesButton = new NiceButton(5, 28, 55, 20, ButtonAction.Activate, "Filter")
@@ -90,7 +92,7 @@ namespace ClassicUO.Game.UI.Gumps
             Add(_sortButton);
 
             // Create border color picker
-            _borderColorBox = new ClickableColorBox(world, WIDTH - 22, 28, 16, 16, _borderHue, true)
+            _borderColorBox = new ClickableColorBox(_world, WIDTH - 22, 28, 16, 16, _borderHue, true)
             {
                 AcceptMouseInput = true
             };
@@ -103,8 +105,7 @@ namespace ClassicUO.Game.UI.Gumps
                 BORDER_WIDTH + 2,
                 TOP_SECTION_HEIGHT,
                 WIDTH - BORDER_WIDTH * 2 - 4,
-                Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20,
-                -1
+                Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20
             );
             _scrollArea.Add(_container);
             Add(_scrollArea);
@@ -264,13 +265,13 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        private void SetHeight(int height)
+        private new void SetHeight(int height)
         {
             Height = height;
 
-            if (_background != null) _background.Height = Height;
+            _background?.Height = Height;
 
-            if (_scrollArea != null) _scrollArea.UpdateHeight(Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20);
+            _scrollArea?.UpdateHeight(Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20);
         }
 
         public override void PreDraw()
@@ -408,9 +409,10 @@ namespace ClassicUO.Game.UI.Gumps
                 Y = y;
                 Width = 16;
                 Height = 16;
-                AcceptMouseInput = true;
                 CanMove = false;
             }
+
+            public override bool AcceptMouseInput { get; set; } = true;
 
             public bool IsDragging => _isDragging;
 
@@ -474,10 +476,12 @@ namespace ClassicUO.Game.UI.Gumps
             private readonly HealthBarLine _hpBar;
             private readonly Mobile _mobile;
             private readonly Button _buttonHeal1,  _buttonHeal2;
-            private int _lastPercent = 0;
-            public int Distance = 0;
+            private int _lastPercent;
+            public int Distance;
 
-            public uint Serial { get; }
+            private uint Serial { get; }
+
+            public override bool AcceptMouseInput { get; set; } = true;
 
             public CompactHealthBar(World world, uint serial, HealthbarCollectorGump parent)
             {
@@ -488,7 +492,6 @@ namespace ClassicUO.Game.UI.Gumps
                 Width = 100;
                 Height = 30;
                 CanMove = true;
-                AcceptMouseInput = true;
 
                 Entity entity = world.Get(serial);
                 if (entity == null || entity is not Mobile mob)
