@@ -264,6 +264,15 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
+        private void SetHeight(int height)
+        {
+            Height = height;
+
+            if (_background != null) _background.Height = Height;
+
+            if (_scrollArea != null) _scrollArea.UpdateHeight(Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20);
+        }
+
         public override void PreDraw()
         {
             base.PreDraw();
@@ -275,14 +284,7 @@ namespace ClassicUO.Game.UI.Gumps
             if (_resizeHandle != null && _resizeHandle.IsDragging)
             {
                 int newHeight = _resizeHandle.Y + 18;
-                if (newHeight >= MIN_HEIGHT)
-                {
-                    Height = newHeight;
-
-                    if (_background != null) _background.Height = Height;
-
-                    if (_scrollArea != null) _scrollArea.UpdateHeight(Height - TOP_SECTION_HEIGHT - BORDER_WIDTH - 20);
-                }
+                if (newHeight >= MIN_HEIGHT) SetHeight(newHeight);
             }
 
             if(_sortRequested)
@@ -341,6 +343,8 @@ namespace ClassicUO.Game.UI.Gumps
 
             // Save sort state
             writer.WriteAttributeString("sortByDistance", _sortByDistance.ToString());
+
+            writer.WriteAttributeString("height", Height.ToString());
         }
 
         public override void Restore(XmlElement xml)
@@ -369,6 +373,14 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 _sortByDistance = sortByDistance;
                 if (_sortButton != null) _sortButton.IsSelected = sortByDistance;
+            }
+
+            // Restore sort state
+            if (int.TryParse(xml.GetAttribute("height"), out int height))
+            {
+                SetHeight(height);
+                _resizeHandle.X = WIDTH / 2 - 8;
+                _resizeHandle.Y = Height - 18;
             }
 
             // Rebuild healthbar list based on restored notorieties

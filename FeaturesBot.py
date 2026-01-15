@@ -108,6 +108,7 @@ search_entry("Notable Options", "Check out our list of notable options, these fe
 search_entry("Post Processing", "We have a few options you can try out for post processing effects.", "post", "processing")
 search_entry("Cave Tiles", "Want to see a border around cave tiles for easier mining?.", "cave", "tile")
 search_entry("Controller", "Have you tried playing with your controller yet?.", "controller", "support")
+search_entry("Health Bar Collector", "Easily see all nearby mobiles with the health bar collector.", "health", "bar", "collector")
 
 
 
