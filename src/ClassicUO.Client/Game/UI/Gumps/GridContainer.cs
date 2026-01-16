@@ -477,7 +477,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             SlotManager = new GridSlotManager(world, LocalSerial, this, scrollArea); //Must come after scroll area
 
-            if (gridContainerEntry.UseOriginalContainer && (UseOldContainerStyle == null || UseOldContainerStyle == true))
+            if (ShouldUseOldContainerStyle())
             {
                 skipSave = true; //Avoid unsaving item slots because they have not be set up yet
                 OpenOldContainer(local);
@@ -497,6 +497,28 @@ namespace ClassicUO.Game.UI.Gumps
                 // to avoid overwriting _heightBeforeMinimize
                 ApplyMinimizedDimensions();
             }
+        }
+
+        /// <summary>
+        ///     Checks whether the container should be opened in the 'old' style.
+        ///     <br />
+        ///     Container style is determined, in order, by:
+        ///     <list type="number">
+        ///         <item>Explicit open request (such as when clicking the `Return to grid container view` button</item>
+        ///         <item>The value of the container's <see cref="GridContainerEntry.UseOriginalContainer" /> (if exists)</item>
+        ///         <item>The global preference in <see cref="Profile.GridContainersDefaultToOldStyleView" /></item>
+        ///     </list>
+        /// </summary>
+        /// <returns></returns>
+        private bool ShouldUseOldContainerStyle()
+        {
+            // If the container has no stored preference and was not opened in a specific mode, use the global default
+            if (gridContainerEntry.UseOriginalContainer == null && UseOldContainerStyle == null)
+                return ProfileManager.CurrentProfile.GridContainersDefaultToOldStyleView;
+
+            // Next, if the open request was made with a specific mode (i.e., useGridStyle != nul), use that,
+            // otherwise, fallback to the stored preference (which, if we got here is *not* null, or we'd fall into the default case above)
+            return UseOldContainerStyle ?? gridContainerEntry.UseOriginalContainer.Value;
         }
 
         public override GumpType GumpType => GumpType.GridContainer;

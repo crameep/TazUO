@@ -305,7 +305,12 @@ public class GridContainerEntry
 
     [JsonPropertyName("mny")] public int MinimizedY { get; set; }
 
-    [JsonPropertyName("og")] public bool UseOriginalContainer { get; set; }
+    /// <summary>
+    /// The container's gump style preference.
+    /// <br/>
+    /// When null, the container should be opened in accordance to the <see cref="Profile.GridContainersDefaultToOldStyleView"/> setting
+    /// </summary>
+    [JsonPropertyName("og")] public bool? UseOriginalContainer { get; set; }
 
     [JsonPropertyName("as")] public bool AutoSort { get; set; }
 
@@ -366,7 +371,9 @@ public class GridContainerEntry
         // Store the full height, not the minimized height
         Height = container.IsMinimized ? container.HeightBeforeMinimize : container.Height;
         SetPositionForState(container.X, container.Y, container.IsMinimized);
-        UseOriginalContainer = container.UseOldContainerStyle ?? false;
+        // If the container was given a new explicit preference, use it, otherwise, use whatever we already have stored.
+        // Null is also fine here and indicates a 'default', ergo, go with the profile's `GridContainersDefaultToOldStyleView` settings
+        UseOriginalContainer = container.UseOldContainerStyle ?? container.GridContainerEntry.UseOriginalContainer;
         AutoSort = container.AutoSortContainer;
         VisuallyStackNonStackables = container.StackNonStackableItems;
         SortMode = (int)container.SortMode;
