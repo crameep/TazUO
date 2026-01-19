@@ -4568,5 +4568,14 @@ namespace ClassicUO.Resources {
                 return ResourceManager.GetString("YourCurrentChannel", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///     Looks up a localized string similar to Examples:\n 1639, 1532\n 100o25'S,40o04'E\n 9 14'N 91 37'W
+        /// </summary>
+        public static string GoToExampleLabel {
+            get {
+                return ResourceManager.GetString("GoToExampleLabel", resourceCulture);
+            }
+        }
     }
 }
