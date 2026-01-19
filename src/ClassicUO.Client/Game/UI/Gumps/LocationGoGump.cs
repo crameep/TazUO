@@ -39,7 +39,7 @@ public partial class LocationGoGump : Gump
         _world = world;
         _goTo = goTo;
         _onClear = onClear;
-        _location  = prefilledLocation ?? Sextant.InvalidPoint;
+        _location = prefilledLocation ?? Sextant.InvalidPoint;
 
         CanMove = true;
         CanCloseWithRightClick = true;

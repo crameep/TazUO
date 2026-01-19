@@ -426,6 +426,9 @@ public class WorldMapGump : ResizableGump
         _center.Y = y;
     }
 
+    /// <summary>
+    /// Clears the current <em>Go-To</em> marker, if it was set
+    /// </summary>
     public void ClearGoToMarker() => _gotoMarker = null;
 
     private void BuildContextMenuForZones(ContextMenuControl parent)
