@@ -3410,6 +3410,29 @@ namespace ClassicUO.LegionScripting
 
         #endregion
 
+        #region Party
+
+        /// <summary>
+        /// Gets a list of serials for all current party members, excluding yourself.
+        ///
+        ///
+        /// Note that members may not always have an associated Mobile.
+        /// </summary>
+        /// <returns>A list of party member serials</returns>
+        public PythonList GetPartyMemberSerials() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            PythonList members = [];
+            foreach (PartyMember member in World?.Party?.Members ?? [])
+            {
+                if (member != null && member.Serial != 0 && member.Serial != World?.Player?.Serial)
+                    members.Add(member.Serial);
+            }
+
+            return members;
+        });
+
+        #endregion
+
         #region Gumps
         /// <summary>
         /// Use API.Gumps.CreateGump instead
