@@ -1624,4 +1624,10 @@ Client version: '{0}'</value>
   <data name="OverheadPartyMessages" xml:space="preserve">
     <value>Show party messages overhead</value>
   </data>
+  <data name="GoToExampleLabel" xml:space="preserve">
+    <value>Examples:
+ 1639, 1532
+ 100o25'S,40o04'E
+ 9 14'N 91 37'W</value>
+  </data>
 </root>

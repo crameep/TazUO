@@ -19,17 +19,28 @@ public partial class LocationGoGump : Gump
     [GeneratedRegex(@"^(?<X>\d+)\s*[,:\s]\s*(?<Y>\d+)$")]
     private static partial Regex PointCoordsRegex();
 
+    private const int VALID_POINT_HUE = 0x40;
+    private const int INVALID_POINT_HUE = 0x33;
+
     private readonly World _world;
     private readonly Action<int, int> _goTo;
+    private readonly Action _onClear;
 
     private readonly StbTextBox _textBox;
-    private readonly string _message = ResGumps.EnterLocation;
-    private Point _location = Sextant.InvalidPoint;
+    private Point _location;
 
-    public LocationGoGump(World world, Action<int, int> goTo) : base(world, 0, 0)
+    public LocationGoGump(
+        World world,
+        Action<int, int> goTo,
+        Action onClear,
+        Point? prefilledLocation = null
+    ) : base(world, 0, 0)
     {
         _world = world;
         _goTo = goTo;
+        _onClear = onClear;
+        _location = prefilledLocation ?? Sextant.InvalidPoint;
+
         CanMove = true;
         CanCloseWithRightClick = true;
         CanCloseWithEsc = true;
@@ -56,7 +67,7 @@ public partial class LocationGoGump : Gump
 
         Label l = Add
         (
-            new Label(_message, true, 0xFFFF, Width - 90, 0xFF)
+            new Label(ResGumps.EnterLocation, true, 0xFFFF, Width - 90, 0xFF)
             {
                 X = 12,
                 Y = 12
@@ -64,7 +75,6 @@ public partial class LocationGoGump : Gump
         );
 
         int ww = Width - 94;
-
 
         Add
         (
@@ -77,6 +87,7 @@ public partial class LocationGoGump : Gump
             }
         );
 
+        // Coordinates input box
         _textBox = Add
         (
             new StbTextBox(0xFF, -1, ww, true, FontStyle.BlackBorder, align: TEXT_ALIGN_TYPE.TS_LEFT)
@@ -85,11 +96,18 @@ public partial class LocationGoGump : Gump
                 Y = 20 + l.Height + 7,
                 Width = ww,
                 Height = 25,
+                Text = prefilledLocation.HasValue ? $"{prefilledLocation.Value.X}, {prefilledLocation.Value.Y}" : "",
             }
         );
 
-        _textBox.TextChanged += OnTextChange;
+        if (prefilledLocation.HasValue)
+        {
+            // Updating here instead of initializer to avoid unintended changes if default hue ever changes
+            _textBox.Hue = VALID_POINT_HUE;
+        }
 
+        _textBox.TextChanged += OnTextChange;
+        _textBox.SetKeyboardFocus();
 
         // OK
         Button b = Add
@@ -104,7 +122,7 @@ public partial class LocationGoGump : Gump
 
         Add
         (
-            new Label("Examples:\n 1639, 1532\n 100o25'S,40o04'E\n 9 14'N 91 37'W", true, 0xFFFF, Width - 90, 0xFF)
+            new Label(ResGumps.GoToExampleLabel, true, 0xFFFF, Width - 90, 0xFF)
             {
                 X = _textBox.X - 6,
                 Y = _textBox.Y + 28,
@@ -157,34 +175,35 @@ public partial class LocationGoGump : Gump
         if (string.IsNullOrWhiteSpace(text))
             return;
 
-        _textBox.Hue = (ushort)(Sextant.Parse(_world.Map, text, out _location) || ParsePoint(text, out _location) ? 0x40 : 0x33);
+        _textBox.Hue = (ushort)(Sextant.Parse(_world.Map, text, out _location) || ParsePoint(text, out _location) ? VALID_POINT_HUE : INVALID_POINT_HUE);
     }
 
     public override void OnButtonClick(int id)
     {
-        switch (id)
-        {
-            case 0:
-            {
-                if (Go())
-                    Dispose();
-
-                break;
-            }
-        }
+        if (id == 0)
+            Submit();
     }
 
     public override void OnKeyboardReturn(int id, string text)
     {
-        switch (id)
-        {
-            case 0:
-            {
-                if (Go())
-                    Dispose();
+        if (id == 0)
+            Submit();
+    }
 
-                break;
-            }
+    private void Submit()
+    {
+        bool shouldDispose;
+
+        // Default to the 'Go To' branch if no On-Clear callback was given. This retains standard behavior.
+        if (_onClear != null && string.IsNullOrWhiteSpace(_textBox.Text))
+        {
+            _onClear();
+            shouldDispose = true;
         }
+        else
+            shouldDispose = Go();
+
+        if (shouldDispose)
+            Dispose();
     }
 }
