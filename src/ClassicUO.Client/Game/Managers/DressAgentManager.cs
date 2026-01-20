@@ -11,6 +11,7 @@ using System.Timers;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using ClassicUO.Network;
+using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers
 {
@@ -295,7 +296,6 @@ namespace ClassicUO.Game.Managers
 
             if (config.UseKREquipPacket)
             {
-
                 // Then collect items to equip
                 var itemsToEquip = new List<uint>();
 
@@ -308,11 +308,11 @@ namespace ClassicUO.Game.Managers
 
                     if(item == null) continue;
 
-                    if (item.Container == World.Instance.Player?.Serial || _forbiddenLayers.Contains(item.Layer)) continue;
+                    if (item.Container == World.Instance.Player?.Serial  || _forbiddenLayers.Contains((Layer)item.ItemData.Layer)) continue;
 
                     itemsToEquip.Add(dressItem.Serial);
                 }
-
+                
                 if (itemsToEquip.Count > 0)
                     // Send KR equip packet for all items at once
                     AsyncNetClient.Socket.Send_EquipMacroKR(itemsToEquip.ToArray().AsSpan());
