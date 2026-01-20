@@ -37,6 +37,8 @@ namespace ClassicUO.Game.UI.Gumps
         private ushort _borderHue;
         private bool _sortByDistance;
         private bool _sortRequested;
+        private bool _filterParty;
+        private bool _filterPets;
 
         public HealthbarCollectorGump(World world) : base(world, 0, 0)
         {
@@ -132,6 +134,22 @@ namespace ClassicUO.Game.UI.Gumps
             // Create context menu with all notoriety types
             var contextMenu = new ContextMenuControl(this);
 
+            // Add Party filter option
+            contextMenu.Add(
+                "Party",
+                () => TogglePartyFilter(),
+                canBeSelected: true,
+                defaultValue: _filterParty
+            );
+
+            // Add Pets filter option
+            contextMenu.Add(
+                "Pets",
+                () => TogglePetsFilter(),
+                canBeSelected: true,
+                defaultValue: _filterPets
+            );
+
             NotorietyFlag[] notorieties =
             {
                 NotorietyFlag.Innocent,
@@ -181,6 +199,18 @@ namespace ClassicUO.Game.UI.Gumps
             RebuildHealthbarList();
         }
 
+        private void TogglePartyFilter()
+        {
+            _filterParty = !_filterParty;
+            RebuildHealthbarList();
+        }
+
+        private void TogglePetsFilter()
+        {
+            _filterPets = !_filterPets;
+            RebuildHealthbarList();
+        }
+
         public void RequestSorting()
         {
             if (!_sortByDistance)
@@ -221,15 +251,33 @@ namespace ClassicUO.Game.UI.Gumps
 
             _healthbars.Clear();
 
-            if (_enabledNotorieties.Count <= 0) return;
+            bool hasAnyFilter = _enabledNotorieties.Count > 0 || _filterParty || _filterPets;
+            if (!hasAnyFilter) return;
 
-            // Add healthbars for mobiles that match enabled notorieties
+            // Add healthbars for mobiles that match enabled filters
             foreach (Mobile mobile in World.Mobiles.Values)
                 if (mobile != null && !mobile.IsDestroyed && mobile.Serial != World.Player?.Serial)
-                    if (_enabledNotorieties.Contains(mobile.NotorietyFlag))
+                    if (MobileMatchesFilter(mobile))
                         AddMobileHealthbar(mobile);
 
             _container.Reposition();
+        }
+
+        private bool MobileMatchesFilter(Mobile mobile)
+        {
+            // Check party filter
+            if (_filterParty && World.Party.Contains(mobile.Serial))
+                return true;
+
+            // Check pets filter (IsRenamable indicates player's pet)
+            if (_filterPets && mobile.IsRenamable)
+                return true;
+
+            // Check notoriety filter
+            if (_enabledNotorieties.Contains(mobile.NotorietyFlag))
+                return true;
+
+            return false;
         }
 
         public static void CheckAndAddMobile(World world, uint serial)
@@ -239,7 +287,7 @@ namespace ClassicUO.Game.UI.Gumps
             if (ent is not Mobile mob) return;
 
             foreach (HealthbarCollectorGump collectorGump in UIManager.Gumps.OfType<HealthbarCollectorGump>())
-                if (collectorGump._enabledNotorieties.Contains(mob.NotorietyFlag))
+                if (collectorGump.MobileMatchesFilter(mob))
                     collectorGump.AddMobileHealthbar(mob);
         }
 
@@ -348,6 +396,10 @@ namespace ClassicUO.Game.UI.Gumps
             // Save sort state
             writer.WriteAttributeString("sortByDistance", _sortByDistance.ToString());
 
+            // Save party and pets filters
+            writer.WriteAttributeString("filterParty", _filterParty.ToString());
+            writer.WriteAttributeString("filterPets", _filterPets.ToString());
+
             writer.WriteAttributeString("height", Height.ToString());
         }
 
@@ -380,7 +432,14 @@ namespace ClassicUO.Game.UI.Gumps
                 _sortButton?.IsSelected = sortByDistance;
             }
 
-            // Restore sort state
+            // Restore party and pets filters
+            if (bool.TryParse(xml.GetAttribute("filterParty"), out bool filterParty))
+                _filterParty = filterParty;
+
+            if (bool.TryParse(xml.GetAttribute("filterPets"), out bool filterPets))
+                _filterPets = filterPets;
+
+            // Restore height
             if (int.TryParse(xml.GetAttribute("height"), out int height))
             {
                 SetHeight(height);
