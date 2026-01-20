@@ -33,6 +33,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private SDL.SDL_Keycode _capturedKey = SDL.SDL_Keycode.SDLK_UNKNOWN;
         private SDL.SDL_Keymod _capturedMod = SDL.SDL_Keymod.SDL_KMOD_NONE;
         private SDL.SDL_GamepadButton[] _capturedButtons = null;
+        private MouseButtonType _capturedMouseButton = MouseButtonType.None;
 
         private MacrosWindow() : base("Macros Tab")
         {
@@ -294,6 +295,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     _capturedKey = SDL.SDL_Keycode.SDLK_UNKNOWN;
                     _capturedMod = SDL.SDL_Keymod.SDL_KMOD_NONE;
                     _capturedButtons = null;
+                    _capturedMouseButton = MouseButtonType.None;
                     ProfileManager.CurrentProfile.DisableHotkeys = true;
                 }
             }
@@ -308,7 +310,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
 
                 // Show captured key if any
-                if (_capturedKey != SDL.SDL_Keycode.SDLK_UNKNOWN || (_capturedButtons != null && _capturedButtons.Length > 0))
+                if (_capturedKey != SDL.SDL_Keycode.SDLK_UNKNOWN || (_capturedButtons != null && _capturedButtons.Length > 0) || _capturedMouseButton != MouseButtonType.None)
                 {
                     ImGui.SameLine();
                     if (ImGui.Button("Apply##HotkeyApply"))
@@ -578,6 +580,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 parts.Add(Controller.GetButtonNames(_capturedButtons));
             }
 
+            // Add mouse button if captured
+            if (_capturedMouseButton != MouseButtonType.None)
+            {
+                parts.Add(_capturedMouseButton.ToString());
+            }
+
             // Return formatted string or "Listening..." if nothing captured yet
             return parts.Count > 0 ? string.Join(" + ", parts) : "Listening...";
         }
@@ -695,12 +703,40 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _capturedButtons = pressedButtons;
             }
 
+            // Capture mouse button input (Middle, Right, XButton1, XButton2)
+            // Left button is excluded as it's used for UI interaction
+            // Use ImGui's mouse detection to capture clicks within the ImGui window
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Middle))
+            {
+                _capturedMouseButton = MouseButtonType.Middle;
+            }
+            else if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+            {
+                _capturedMouseButton = MouseButtonType.Right;
+            }
+            // Also check the Mouse class for game window clicks and XButtons (ImGui doesn't expose XButton)
+            else if (Mouse.MButtonPressed && _capturedMouseButton == MouseButtonType.None)
+            {
+                _capturedMouseButton = MouseButtonType.Middle;
+            }
+            else if (Mouse.RButtonPressed && _capturedMouseButton == MouseButtonType.None)
+            {
+                _capturedMouseButton = MouseButtonType.Right;
+            }
+            else if (Mouse.XButtonPressed)
+            {
+                // Note: XButton1 and XButton2 share the same pressed state in the Mouse class
+                // Default to XButton1, but users can manually differentiate if needed
+                _capturedMouseButton = MouseButtonType.XButton1;
+            }
+
             // Check for Escape to cancel
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
             {
                 _isListeningForHotkey = false;
                 _capturedKey = SDL.SDL_Keycode.SDLK_UNKNOWN;
                 _capturedButtons = null;
+                _capturedMouseButton = MouseButtonType.None;
             }
         }
 
@@ -712,23 +748,53 @@ namespace ClassicUO.Game.UI.ImGuiControls
             bool alt = (_capturedMod & SDL.SDL_Keymod.SDL_KMOD_ALT) != 0;
             bool shift = (_capturedMod & SDL.SDL_Keymod.SDL_KMOD_SHIFT) != 0;
 
-            // Check for duplicate
-            Macro existing = World.Instance.Macros.FindMacro(_capturedKey, alt, ctrl, shift);
-            if (existing != null && existing != _selectedMacro)
+            // Check for duplicates based on what was captured
+            if (_capturedMouseButton != MouseButtonType.None)
             {
-                GameActions.Print(World.Instance,
-                    $"Hotkey already used by macro: {existing.Name}", 32);
-                return;
+                // Mouse button was captured - check for mouse button duplicates
+                Macro existing = World.Instance.Macros.FindMacro(_capturedMouseButton, alt, ctrl, shift);
+                if (existing != null && existing != _selectedMacro)
+                {
+                    GameActions.Print(World.Instance,
+                        $"Hotkey already used by macro: {existing.Name}", 32);
+                    return;
+                }
+
+                // Apply mouse button to macro
+                _selectedMacro.Key = SDL.SDL_Keycode.SDLK_UNKNOWN;
+                _selectedMacro.MouseButton = _capturedMouseButton;
+                _selectedMacro.WheelScroll = false;
+                _selectedMacro.ControllerButtons = null;
+            }
+            else if (_capturedKey != SDL.SDL_Keycode.SDLK_UNKNOWN)
+            {
+                // Keyboard key was captured - check for key duplicates
+                Macro existing = World.Instance.Macros.FindMacro(_capturedKey, alt, ctrl, shift);
+                if (existing != null && existing != _selectedMacro)
+                {
+                    GameActions.Print(World.Instance,
+                        $"Hotkey already used by macro: {existing.Name}", 32);
+                    return;
+                }
+
+                // Apply keyboard key to macro
+                _selectedMacro.Key = _capturedKey;
+                _selectedMacro.MouseButton = MouseButtonType.None;
+                _selectedMacro.WheelScroll = false;
+                _selectedMacro.ControllerButtons = _capturedButtons;
+            }
+            else if (_capturedButtons != null && _capturedButtons.Length > 0)
+            {
+                // Controller buttons were captured
+                _selectedMacro.Key = SDL.SDL_Keycode.SDLK_UNKNOWN;
+                _selectedMacro.MouseButton = MouseButtonType.None;
+                _selectedMacro.WheelScroll = false;
+                _selectedMacro.ControllerButtons = _capturedButtons;
             }
 
-            // Apply to macro
-            _selectedMacro.Key = _capturedKey;
             _selectedMacro.Ctrl = ctrl;
             _selectedMacro.Alt = alt;
             _selectedMacro.Shift = shift;
-            _selectedMacro.MouseButton = MouseButtonType.None;
-            _selectedMacro.WheelScroll = false;
-            _selectedMacro.ControllerButtons = _capturedButtons;
 
             MarkDirty();
         }
