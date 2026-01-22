@@ -34,6 +34,35 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private SDL.SDL_Keymod _capturedMod = SDL.SDL_Keymod.SDL_KMOD_NONE;
         private SDL.SDL_GamepadButton[] _capturedButtons = null;
         private MouseButtonType _capturedMouseButton = MouseButtonType.None;
+        private List<Macro> _cachedMacroList;
+        private List<Macro> _filteredMacroList;
+
+        // Sorted/filtered action type mappings
+        private static readonly string[] _sortedMacroTypeNames;
+        private static readonly MacroType[] _sortedMacroTypeValues;
+        private static readonly Dictionary<MacroType, int> _macroTypeToDisplayIndex;
+
+        private static readonly HashSet<MacroType> _filteredMacroTypes = new()
+        {
+            MacroType.INVALID
+        };
+
+        static MacrosWindow()
+        {
+            // Build sorted/filtered MacroType mapping
+            MacroType[] macroTypes = Enum.GetValues<MacroType>()
+                .Where(t => !_filteredMacroTypes.Contains(t))
+                .OrderBy(t => t == MacroType.None ? "" : t.ToString(), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            _sortedMacroTypeNames = macroTypes.Select(t => StringHelper.AddSpaceBeforeCapital(t.ToString())).ToArray();
+            _sortedMacroTypeValues = macroTypes;
+            _macroTypeToDisplayIndex = new Dictionary<MacroType, int>();
+            for (int i = 0; i < macroTypes.Length; i++)
+            {
+                _macroTypeToDisplayIndex[macroTypes[i]] = i;
+            }
+        }
 
         private MacrosWindow() : base("Macros Tab")
         {
@@ -111,6 +140,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 newMacro.Items = new MacroObject(MacroType.None, MacroSubType.MSC_NONE);
                 World.Instance.Macros.PushToBack(newMacro);
                 _selectedMacro = newMacro;
+                InvalidateMacroCache();
                 MarkDirty();
             }
 
@@ -122,6 +152,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (_selectedMacro != null)
                 {
                     World.Instance.Macros.MoveMacroUp(_selectedMacro);
+                    InvalidateMacroCache();
                     MarkDirty();
                 }
             }
@@ -134,6 +165,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (_selectedMacro != null)
                 {
                     World.Instance.Macros.MoveMacroDown(_selectedMacro);
+                    InvalidateMacroCache();
                     MarkDirty();
                 }
             }
@@ -147,6 +179,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if(xml.NotNullNotEmpty() && World.Instance.Macros.ImportFromXml(xml))
                 {
+                    InvalidateMacroCache();
                     return;
                 }
 
@@ -170,20 +203,30 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(150);
-            ImGui.InputTextWithHint("##Filter", "Filter...", ref _filterText, 256);
+            if (ImGui.InputTextWithHint("##Filter", "Filter...", ref _filterText, 256))
+            {
+                _filteredMacroList = null;
+            }
         }
 
         private void DrawMacroList()
         {
-            List<Macro> macros = World.Instance.Macros.GetAllMacros();
+            _cachedMacroList ??= World.Instance.Macros.GetAllMacros();
 
             // Apply filter
+            List<Macro> displayList;
             if (!string.IsNullOrWhiteSpace(_filterText))
             {
-                macros = macros.Where(m =>
+                _filteredMacroList ??= _cachedMacroList.Where(m =>
                     m.Name.Contains(_filterText, StringComparison.OrdinalIgnoreCase) ||
                     GetHotkeyString(m).Contains(_filterText, StringComparison.OrdinalIgnoreCase)
                 ).ToList();
+                displayList = _filteredMacroList;
+            }
+            else
+            {
+                _filteredMacroList = null;
+                displayList = _cachedMacroList;
             }
 
             if (ImGui.BeginChild("MacroListChild", new Vector2(0, 0), ImGuiChildFlags.Borders))
@@ -198,9 +241,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.TableSetupScrollFreeze(0, 1);
                     ImGui.TableHeadersRow();
 
-                    for (int i = 0; i < macros.Count; i++)
+                    for (int i = 0; i < displayList.Count; i++)
                     {
-                        Macro macro = macros[i];
+                        Macro macro = displayList[i];
                         ImGui.TableNextRow();
                         ImGui.PushID(i);
 
@@ -399,14 +442,22 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Text($"{index + 1}.");
             ImGui.SameLine();
 
-            // Main action type combo
+            // Main action type combo - use sorted/filtered mapping
             ImGui.SetNextItemWidth(150);
-            int currentType = (int)action.Code;
-            if (ImGui.Combo($"##ActionType{index}", ref currentType, MacroManager.MacroNames, MacroManager.MacroNames.Length))
+            int displayIndex = _macroTypeToDisplayIndex.TryGetValue(action.Code, out int idx) ? idx : 0;
+            if (ImGui.Combo($"##ActionType{index}", ref displayIndex, _sortedMacroTypeNames, _sortedMacroTypeNames.Length))
             {
-                action.Code = (MacroType)currentType;
-                action.SubCode = MacroSubType.MSC_NONE;
-                MarkDirty();
+                MacroType newType = _sortedMacroTypeValues[displayIndex];
+                if (newType != action.Code)
+                {
+                    // Create a new MacroObject with proper SubMenuType via Macro.Create()
+                    MacroObject newAction = Macro.Create(newType);
+                    macro.Insert(action, newAction);
+                    macro.Remove(action);
+                    MarkDirty();
+                    // Don't continue drawing - the action has been replaced
+                    return;
+                }
             }
 
             ImGui.SameLine();
@@ -414,12 +465,27 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // SubMenuType 1: Dropdown for sub-options
             if (action.SubMenuType == 1)
             {
-                ImGui.SetNextItemWidth(150);
-                string[] allSubNames = Enum.GetNames(typeof(MacroSubType));
-                int currentSubType = (int)action.SubCode;
-                if (ImGui.Combo($"##ActionSubType{index}", ref currentSubType, allSubNames, allSubNames.Length))
+                // Get the valid sub-options for this specific macro type
+                int count = 0;
+                int offset = 0;
+                Macro.GetBoundByCode(action.Code, ref count, ref offset);
+
+                // Build the names array for this specific action type
+                string[] subNames = new string[count];
+                for (int i = 0; i < count; i++)
                 {
-                    action.SubCode = (MacroSubType)currentSubType;
+                    subNames[i] = ((MacroSubType)(i + offset)).ToString();
+                }
+
+                // Find current selection index within this subset
+                int currentSubIndex = (int)action.SubCode - offset;
+                if (currentSubIndex < 0 || currentSubIndex >= count)
+                    currentSubIndex = 0;
+
+                ImGui.SetNextItemWidth(150);
+                if (ImGui.Combo($"##ActionSubType{index}", ref currentSubIndex, subNames, subNames.Length))
+                {
+                    action.SubCode = (MacroSubType)(currentSubIndex + offset);
                     MarkDirty();
                 }
                 ImGui.SameLine();
@@ -498,6 +564,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     World.Instance.Macros.Remove(_selectedMacro);
                     _selectedMacro = null;
                     _selectedMacroIndex = -1;
+                    InvalidateMacroCache();
                     MarkDirty();
                     ImGui.CloseCurrentPopup();
                 }
@@ -591,6 +658,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
         }
 
         private void MarkDirty() => _saveTimer = SAVE_DELAY;
+
+        private void InvalidateMacroCache()
+        {
+            _cachedMacroList = null;
+            _filteredMacroList = null;
+        }
 
         #endregion
 
