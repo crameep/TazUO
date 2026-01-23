@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `1/19/26`.*
+*This was generated on `1/23/26`.*
 
 ## Properties
 ### `JournalEntries`
@@ -2735,6 +2735,18 @@ You can now type `-updateapi` in game to download the latest API.py file.
  for friend in friends:
      API.FindMobile(friend)
  ```
+
+
+**Return Type:** `PythonList`
+
+---
+
+### GetPartyMemberSerials
+
+ Gets a list of serials for all current party members, excluding yourself.
+
+
+ Note that members may not always have an associated Mobile.
 
 
 **Return Type:** `PythonList`

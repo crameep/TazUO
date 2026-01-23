@@ -2343,6 +2343,13 @@ namespace ClassicUO.Game.Managers
                     ProfileManager.CurrentProfile.DisableHotkeys = !ProfileManager.CurrentProfile.DisableHotkeys;
                     GameActions.Print($"Hotkeys {(ProfileManager.CurrentProfile.DisableHotkeys ? "disabled" : "enabled")}.");
                     break;
+
+                    
+                case MacroType.CastMasterySpell:
+                    int mspell = (int)macro.SubCode + 459; //Inspire is enum #242 for backwards compat, we need to add 459 because 242 + 459 = 701 which is the spell index
+
+                    GameActions.CastSpell(mspell);
+                    break;
             }
 
             return result;
@@ -2751,7 +2758,7 @@ namespace ClassicUO.Game.Managers
                     offset = (int)MacroSubType.Clumsy;
                     int countInitial = MacroSubType.Hostile - MacroSubType.Clumsy;
                     //var countFinal = MacroSubType.DeathRay - MacroSubType.Boarding;
-                    count = countInitial + 33 + 43;
+                    count = countInitial;// + 33 + 43;
                     break;
 
                 case MacroType.SelectNext:
@@ -2785,6 +2792,10 @@ namespace ClassicUO.Game.Managers
                     count = 1 + MacroSubType.LookBackwards - MacroSubType.LookForwards;
 
                     break;
+                case MacroType.CastMasterySpell:
+                    offset = (int)MacroSubType.Inspire;
+                    count = 1 + (int)MacroSubType.Boarding - (int)MacroSubType.Inspire;
+                    break;
             }
         }
     }
@@ -2816,6 +2827,7 @@ namespace ClassicUO.Game.Managers
                 case MacroType.Zoom:
                 case MacroType.UseObject:
                 case MacroType.LookAtMouse:
+                case MacroType.CastMasterySpell:
 
                     if (sub == MacroSubType.MSC_NONE)
                     {
@@ -2977,6 +2989,7 @@ namespace ClassicUO.Game.Managers
         ClearHands,
         EquipHands,
         UseType,
+        CastMasterySpell
     }
 
     public enum MacroSubType
@@ -3181,12 +3194,12 @@ namespace ClassicUO.Game.Managers
         HailStorm,
         NetherCyclone,
         RisingColossus,
-        Inspire,
-        Invigorate,
-        Resilience,
-        Perseverance,
-        Tribulation,
-        Despair,
+        DEPRECATED, //Can't remove without breaking peoples setups
+        DEPRECATED0,
+        DEPRECATED1,
+        DEPRECATED2,
+        DEPRECATED3,
+        DEPRECATED4,
 
 
 
@@ -3234,6 +3247,12 @@ namespace ClassicUO.Game.Managers
         LookForwards,
         LookBackwards,
 
+        Inspire,
+        Invigorate,
+        Resilience,
+        Perseverance,
+        Tribulation,
+        Despair,
         DeathRay,
         EtherealBurst,
         NetherBlast,
@@ -3273,6 +3292,5 @@ namespace ClassicUO.Game.Managers
         Whispering,
         CombatTraining,
         Boarding,
-
     }
 }

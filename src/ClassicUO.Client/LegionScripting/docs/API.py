@@ -2706,6 +2706,16 @@ def GetAllFriends() -> "list":
     """
     pass
 
+def GetPartyMemberSerials() -> "list":
+    """
+     Gets a list of serials for all current party members, excluding yourself.
+    
+    
+     Note that members may not always have an associated Mobile.
+    
+    """
+    pass
+
 def CreateGump(acceptMouseInput: "bool" = True, canMove: "bool" = True, keepOpen: "bool" = False) -> "PyBaseGump":
     """
      Use API.Gumps.CreateGump instead
