@@ -2212,12 +2212,13 @@ def HasGump(ID: "int" = 1337) -> "int":
     """
     pass
 
-def ReplyGump(button: "int", gump: "int" = 1337) -> "bool":
+def ReplyGump(button: "int", gump: "int" = 1337, switches: "list[int]" = None) -> "bool":
     """
      Reply to a gump.
      Example:
      ```py
      API.ReplyGump(21)
+     API.ReplyGump(1, 0x555, [100])
      ```
     
     """

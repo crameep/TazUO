@@ -2355,12 +2355,14 @@ namespace ClassicUO.LegionScripting
         /// Example:
         /// ```py
         /// API.ReplyGump(21)
+        /// API.ReplyGump(1, 0x555, [100])
         /// ```
         /// </summary>
         /// <param name="button">Button ID</param>
         /// <param name="gump">Gump ID, leave blank to reply to last gump</param>
+        /// <param name="switches">Optional for some gump responses</param>
         /// <returns>True if gump was found, false if not</returns>
-        public bool ReplyGump(int button, uint gump = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
+        public bool ReplyGump(int button, uint gump = uint.MaxValue, IEnumerable<int> switches = null) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
                 if (World.Player == null)
@@ -2368,15 +2370,12 @@ namespace ClassicUO.LegionScripting
 
                 Gump g = UIManager.GetGumpServer(gump == uint.MaxValue ? World.Player.LastGumpID : gump);
 
-                if (g != null)
-                {
-                    GameActions.ReplyGump(World, g.LocalSerial, g.ServerSerial, button, new uint[0] { }, new Tuple<ushort, string>[0]);
-                    g.Dispose();
+                if (g == null) return false;
 
-                    return true;
-                }
+                GameActions.ReplyGump(World, g.LocalSerial, g.ServerSerial, button, switches == null ? [] : switches.ToUint().ToArray(), []);
+                g.Dispose();
 
-                return false;
+                return true;
             }
         );
 

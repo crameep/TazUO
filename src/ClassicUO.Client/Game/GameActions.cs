@@ -362,7 +362,7 @@ internal static class GameActions
         if (bandage != null)
         {
                 // Record action for script recording
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordBandageSelf();
+                ScriptRecorder.Instance.RecordBandageSelf();
 
             Socket.Send_TargetSelectedObject(bandage.Serial, world.Player.Serial);
             return true;
@@ -406,7 +406,7 @@ internal static class GameActions
 
     internal static void OpenWorldMapWebWindow()
     {
-        MapWebServerManager server = Managers.MapWebServerManager.Instance;
+        MapWebServerManager server = MapWebServerManager.Instance;
 
         if (!server.IsRunning)
             server.Start();
@@ -422,7 +422,7 @@ internal static class GameActions
         }
         catch (Exception ex)
         {
-            GameActions.Print(World.Instance, $"Failed to open browser: {ex.Message}", 0x21);
+            Print(World.Instance, $"Failed to open browser: {ex.Message}", 0x21);
         }
     }
 
@@ -509,7 +509,7 @@ internal static class GameActions
         }
 
             // Record action for script recording
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordCloseContainer(backpack.Serial, "backpack");
+            ScriptRecorder.Instance.RecordCloseContainer(backpack.Serial, "backpack");
 
         g = UIManager.GetGump<ContainerGump>(backpack);
         g ??= UIManager.GetGump<GridContainer>(backpack);
@@ -584,7 +584,7 @@ internal static class GameActions
         }
 
             // Record action for script recording
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordAttack(serial);
+            ScriptRecorder.Instance.RecordAttack(serial);
             ScriptingInfoGump.AddOrUpdateInfo("Last Attacked", $"0x{serial:X}");
 
         world.TargetManager.NewTargetSystemSerial = serial;
@@ -604,7 +604,7 @@ internal static class GameActions
     {
         // Record action for script recording (only for items)
         if (SerialHelper.IsItem(serial))
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordUseItem(serial);
+            ScriptRecorder.Instance.RecordUseItem(serial);
 
         ScriptingInfoGump.AddOrUpdateInfo("Last Object", $"0x{serial:X}");
         Entity obj = World.Instance.Get(serial);
@@ -661,25 +661,25 @@ internal static class GameActions
             switch (type)
             {
                 case MessageType.Regular:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordSay(message);
+                    ScriptRecorder.Instance.RecordSay(message);
                     break;
                 case MessageType.Emote:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordEmoteMsg(message);
+                    ScriptRecorder.Instance.RecordEmoteMsg(message);
                     break;
                 case MessageType.Whisper:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordWhisperMsg(message);
+                    ScriptRecorder.Instance.RecordWhisperMsg(message);
                     break;
                 case MessageType.Yell:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordYellMsg(message);
+                    ScriptRecorder.Instance.RecordYellMsg(message);
                     break;
                 case MessageType.Guild:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordGuildMsg(message);
+                    ScriptRecorder.Instance.RecordGuildMsg(message);
                     break;
                 case MessageType.Alliance:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordAllyMsg(message);
+                    ScriptRecorder.Instance.RecordAllyMsg(message);
                     break;
                 case MessageType.Party:
-                    ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordPartyMsg(message);
+                    ScriptRecorder.Instance.RecordPartyMsg(message);
                     break;
             }
 
@@ -764,7 +764,7 @@ internal static class GameActions
     internal static void SayParty(string message, uint serial = 0)
     {
             // Record action for script recording
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordPartyMsg(message);
+            ScriptRecorder.Instance.RecordPartyMsg(message);
         Socket.Send_PartyMessage(message, serial);
     }
 
@@ -863,7 +863,7 @@ internal static class GameActions
             // Record action for script recording
             uint sourceSerial = Client.Game.UO.GameCursor.ItemHold.Enabled ? Client.Game.UO.GameCursor.ItemHold.Serial : serial;
                 int amount = Client.Game.UO.GameCursor.ItemHold.Enabled ? Client.Game.UO.GameCursor.ItemHold.Amount : -1;
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordDragDrop(sourceSerial, container, amount, x, y);
+                ScriptRecorder.Instance.RecordDragDrop(sourceSerial, container, amount, x, y);
             if (Client.Game.UO.Version >= ClientVersion.CV_6017)
             {
                 Socket.Send_DropRequest(serial,
@@ -897,7 +897,7 @@ internal static class GameActions
             }
 
                 // Record action for script recording
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordEquipItem(Client.Game.UO.GameCursor.ItemHold.Serial, (Layer)Client.Game.UO.GameCursor.ItemHold.ItemData.Layer);
+                ScriptRecorder.Instance.RecordEquipItem(Client.Game.UO.GameCursor.ItemHold.Serial, (Layer)Client.Game.UO.GameCursor.ItemHold.ItemData.Layer);
 
             Socket.Send_EquipRequest(Client.Game.UO.GameCursor.ItemHold.Serial, (Layer)Client.Game.UO.GameCursor.ItemHold.ItemData.Layer, container);
 
@@ -909,9 +909,15 @@ internal static class GameActions
 
     internal static void ReplyGump(World world, uint local, uint server, int button, uint[] switches = null, Tuple<ushort, string>[] entries = null)
     {
-            // Record action for script recording
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordReplyGump(server, button, switches, entries);
-            ScriptingInfoGump.AddOrUpdateInfo("Last Gump Response", button);
+        ScriptRecorder.Instance.RecordReplyGump(server, button, switches, entries);
+        ScriptingInfoGump.AddOrUpdateInfo("Last Gump Button", button);
+
+        if (switches != null)
+            ScriptingInfoGump.AddOrUpdateInfo("Last Gump Switch", string.Join(", ", switches));
+
+        if (entries != null)
+            ScriptingInfoGump.AddOrUpdateInfo("Last Gump Entries", string.Join(", ", entries));
+
 
         Socket.Send_GumpResponse(world, local,
                                  server,
@@ -919,7 +925,7 @@ internal static class GameActions
                                  switches,
                                  entries);
         if (CUOEnviroment.Debug)
-            GameActions.Print(world, $"Gump Button: {button} for gump: {server}");
+            Print(world, $"Gump Button: {button} for gump: {server}");
     }
 
     internal static void RequestHelp() => Socket.Send_HelpRequest();
@@ -1091,7 +1097,7 @@ internal static class GameActions
                 string skillName = "";
                 if (index < World.Instance.Player.Skills.Length)
                     skillName = World.Instance.Player.Skills[index].Name;
-                ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordUseSkill(skillName);
+                ScriptRecorder.Instance.RecordUseSkill(skillName);
                 ScriptingInfoGump.AddOrUpdateInfo("Last Skill", skillName);
 
             LastSkillIndex = index;
@@ -1114,7 +1120,7 @@ internal static class GameActions
     internal static void ResponsePopupMenu(uint serial, ushort index)
     {
         // Record action for script recording
-        ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordContextMenu(serial, index);
+        ScriptRecorder.Instance.RecordContextMenu(serial, index);
         ScriptingInfoGump.AddOrUpdateInfo("Last Context Menu response", index);
 
         Socket.Send_PopupMenuSelection(serial, index);
@@ -1194,7 +1200,7 @@ internal static class GameActions
             SendAbility(world, 0, true);
         }
 
-            ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordAbility("primary");
+            ScriptRecorder.Instance.RecordAbility("primary");
 
         ability ^= (Ability)0x80;
     }
@@ -1217,17 +1223,17 @@ internal static class GameActions
             SendAbility(world, 0, true);
         }
 
-        ClassicUO.LegionScripting.ScriptRecorder.Instance.RecordAbility("secondary");
+        ScriptRecorder.Instance.RecordAbility("secondary");
 
         ability ^= (Ability)0x80;
     }
 
     // ===================================================
     [Obsolete("temporary workaround to not break assistants")]
-    internal static void UsePrimaryAbility() => UsePrimaryAbility(ClassicUO.Client.Game.UO.World);
+    internal static void UsePrimaryAbility() => UsePrimaryAbility(Client.Game.UO.World);
 
     [Obsolete("temporary workaround to not break assistants")]
-    internal static void UseSecondaryAbility() => UseSecondaryAbility(ClassicUO.Client.Game.UO.World);
+    internal static void UseSecondaryAbility() => UseSecondaryAbility(Client.Game.UO.World);
     // ===================================================
 
     internal static void QuestArrow(bool rightClick) => Socket.Send_ClickQuestArrow(rightClick);
@@ -1279,7 +1285,7 @@ internal static class GameActions
 
     public static void RequestEquippedOPL(World world)
     {
-        foreach (Layer layer in Enum.GetValues(typeof(Data.Layer)))
+        foreach (Layer layer in Enum.GetValues(typeof(Layer)))
         {
             Item item = world.Player.FindItemByLayer(layer);
             if(item == null) continue;

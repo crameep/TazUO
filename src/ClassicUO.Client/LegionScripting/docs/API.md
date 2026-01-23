@@ -1970,11 +1970,12 @@ You can now type `-updateapi` in game to download the latest API.py file.
 ---
 
 ### ReplyGump
-`(button, gump)`
+`(button, gump, switches)`
  Reply to a gump.
  Example:
  ```py
  API.ReplyGump(21)
+ API.ReplyGump(1, 0x555, [100])
  ```
 
 
@@ -1984,6 +1985,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | --- | --- | --- | --- |
 | `button` | `int` | ❌ No | Button ID |
 | `gump` | `uint` | ✅ Yes | Gump ID, leave blank to reply to last gump |
+| `switches` | `IEnumerable<int>` | ✅ Yes | Optional for some gump responses |
 
 **Return Type:** `bool`
 
