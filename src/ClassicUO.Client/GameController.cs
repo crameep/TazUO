@@ -91,6 +91,7 @@ namespace ClassicUO
         public GraphicsDeviceManager GraphicManager { get; }
         public readonly uint[] FrameDelay = new uint[2];
         public static int SupportedRefreshRate = 0;
+        public event EventHandler<float> ScaleChanged;
 
         private readonly List<(uint, Action)> _queuedActions = new();
 
@@ -307,7 +308,11 @@ namespace ClassicUO
 
         private void SetWindowPosition(int x, int y) => SDL_SetWindowPosition(Window.Handle, x, y);
 
-        public void SetScale(float scale) => RenderScale = Math.Max(scale, 0.1f);
+        public void SetScale(float scale)
+        {
+            RenderScale = Math.Max(scale, 0.1f);
+            ScaleChanged?.Invoke(this, RenderScale);
+        }
 
         public void SetWindowSize(int width, int height, bool bufferOnly = false)
         {

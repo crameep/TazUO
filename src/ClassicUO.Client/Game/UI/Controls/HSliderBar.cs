@@ -177,12 +177,13 @@ namespace ClassicUO.Game.UI.Controls
             {
                 ref readonly SpriteInfo gumpInfo = ref Client.Game.UO.Gumps.GetGump(idx: 0x845);
 
-                batcher.Draw(
-                    gumpInfo.Texture,
-                    new Vector2(x + _sliderX, y),
-                    gumpInfo.UV,
-                    hueVector
-                );
+                if(gumpInfo.Texture != null)
+                    batcher.Draw(
+                        gumpInfo.Texture,
+                        new Vector2(x + _sliderX, y),
+                        gumpInfo.UV,
+                        hueVector
+                    );
             }
 
             if (_text != null)
