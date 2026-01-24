@@ -671,6 +671,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         private static Dictionary<ImGuiKey, SDL.SDL_Keycode> _keyMap = new()
         {
+            { ImGuiKey.GraveAccent, SDL.SDL_Keycode.SDLK_GRAVE },
             { ImGuiKey.F1, SDL.SDL_Keycode.SDLK_F1 },
             { ImGuiKey.F2, SDL.SDL_Keycode.SDLK_F2 },
             { ImGuiKey.F3, SDL.SDL_Keycode.SDLK_F3 },
