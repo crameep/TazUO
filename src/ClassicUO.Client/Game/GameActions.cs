@@ -1071,6 +1071,8 @@ internal static class GameActions
 
     public static void Logout(World world)
     {
+        LastEquipmentManager.Save(world.Player.GetEquippedItems(), ProfileManager.CurrentProfile.ServerName, world.Player.Name, ProfileManager.CurrentProfile.Username, world.Player.Graphic, world.Player.Hue, world.Player.IsFemale);
+
         LoginHandshake.Reconnect = false;
         WorldMapGump.ClearMapCache();
 

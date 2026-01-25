@@ -643,8 +643,8 @@ namespace ClassicUO.Game.GameObjects
 
         public bool Walk(Direction direction, bool run)
         {
-            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules 
-                || Pathfinder.AutoWalking 
+            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules
+                || Pathfinder.AutoWalking
                 || (World.Instance.Player.Pathfinder.UseLongDistancePathfinding && !WalkableManager.Instance.IsMapGenerationComplete(World.Instance?.MapIndex ?? 0)))
             {
                 return WalkNotAvoid(direction, run);
@@ -1020,6 +1020,23 @@ namespace ClassicUO.Game.GameObjects
             GetGroupForAnimation(this, 0, true);
 
             return true;
+        }
+
+        public Item[] GetEquippedItems()
+        {
+            List<Item> items = new();
+
+            for (LinkedObject i = Items; i != null; i = i.Next)
+            {
+                var it = (Item) i;
+
+                if (!it.IsDestroyed)
+                {
+                    items.Add(it);
+                }
+            }
+
+            return items.ToArray();
         }
     }
 }

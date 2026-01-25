@@ -630,6 +630,12 @@ namespace ClassicUO.Game.UI.Controls
             Tooltip = entity;
         }
 
+        public void SetTooltip(Control c)
+        {
+            ClearTooltip();
+            Tooltip = c;
+        }
+
         public void ClearTooltip() => Tooltip = null;
 
         public void SetKeyboardFocus()

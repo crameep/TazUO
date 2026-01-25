@@ -10,6 +10,7 @@ using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI;
 using ClassicUO.Input;
 using ClassicUO.Assets;
+using ClassicUO.Game.UI.Controls;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using ImGuiNET;
@@ -589,6 +590,12 @@ namespace ClassicUO.Game
                             return;
                         }
                     }
+
+                    else if (UIManager.MouseOverControl != null && UIManager.MouseOverControl.Tooltip is Control c)
+                    {
+                        c.Draw(batcher, position.X, position.Y + 24);
+                        return;
+                    }
                 }
             }
 
@@ -606,6 +613,10 @@ namespace ClassicUO.Game
                     }
 
                     _tooltip.Draw(batcher, position.X, position.Y + 24);
+                }
+                else if (UIManager.MouseOverControl.Tooltip is Control c)
+                {
+                    c.Draw(batcher, position.X, position.Y + 24);
                 }
             }
             else if (!_tooltip.IsEmpty)
