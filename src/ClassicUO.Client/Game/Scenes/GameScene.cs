@@ -1494,12 +1494,6 @@ namespace ClassicUO.Game.Scenes
             selEnd.X -= Camera.Bounds.X;
             selEnd.Y -= Camera.Bounds.Y;
 
-            // Transform through zoom
-            selStart = Camera.ScreenToWorld(selStart);
-            selEnd = Camera.ScreenToWorld(selEnd);
-            selStart = Camera.WorldToScreen(selStart);
-            selEnd = Camera.WorldToScreen(selEnd);
-
             var selectionRect = new Rectangle(
                 selStart.X,
                 selStart.Y,

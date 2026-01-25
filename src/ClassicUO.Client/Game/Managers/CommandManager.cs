@@ -11,6 +11,8 @@ using System.Threading.Tasks;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Configuration;
+using ClassicUO.Game.UI;
+using ClassicUO.Game.UI.ImGuiControls;
 using ClassicUO.LegionScripting;
 
 namespace ClassicUO.Game.Managers
@@ -339,15 +341,9 @@ namespace ClassicUO.Game.Managers
 
 #if DEBUG
 
-            Register("testdiscord", (s) =>
+            Register("test", (s) =>
             {
-                string msg = "Test Discord Message";
-                if (s.Length > 1)
-                {
-                    msg = string.Join(" ", s, 1, s.Length - 1);
-                }
-
-                _world.MessageManager.HandleMessage(null, msg, "[Discord Test] TestUser", 88, MessageType.Discord, 255, TextType.GUILD_ALLY);
+                ImGuiManager.AddWindow(new TestWindow());
             });
 
 #endif

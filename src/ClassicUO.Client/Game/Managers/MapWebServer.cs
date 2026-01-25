@@ -469,74 +469,77 @@ namespace ClassicUO.Game.Managers
             var otherMobiles = new List<object>();
             var allyMobiles = new List<object>();
 
-            if (World.Instance?.Mobiles == null)
-            {
-                return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
-            }
+            return MainThreadQueue.InvokeOnMainThread(() => {
 
-            foreach (Mobile mob in World.Instance.Mobiles.Values)
-            {
-                // Skip the player
-                if (mob == World.Instance.Player)
-                    continue;
-
-                // Skip hidden mobiles
-                if (mob.IsHidden)
-                    continue;
-
-                // Skip party members (shown separately)
-                if (World.Instance.Party.Contains(mob.Serial))
-                    continue;
-
-                // Skip guild members (shown separately)
-                WMapEntity wme = World.Instance.WMapManager.GetEntity(mob.Serial);
-                if (wme != null && wme.IsGuild)
-                    continue;
-
-                // Classify by notoriety
-                if (mob.NotorietyFlag == NotorietyFlag.Ally)
+                if (World.Instance?.Mobiles == null)
                 {
-                    // Ally mobile (lime green) - only within view range
-                    if (mob.Distance <= World.Instance.ClientViewRange)
+                    return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
+                }
+
+                foreach (Mobile mob in World.Instance.Mobiles.Values)
+                {
+                    // Skip the player
+                    if (mob == World.Instance.Player)
+                        continue;
+
+                    // Skip hidden mobiles
+                    if (mob.IsHidden)
+                        continue;
+
+                    // Skip party members (shown separately)
+                    if (World.Instance.Party.Contains(mob.Serial))
+                        continue;
+
+                    // Skip guild members (shown separately)
+                    WMapEntity wme = World.Instance.WMapManager.GetEntity(mob.Serial);
+                    if (wme != null && wme.IsGuild)
+                        continue;
+
+                    // Classify by notoriety
+                    if (mob.NotorietyFlag == NotorietyFlag.Ally)
                     {
-                        allyMobiles.Add(new
+                        // Ally mobile (lime green) - only within view range
+                        if (mob.Distance <= World.Instance.ClientViewRange)
+                        {
+                            allyMobiles.Add(new
+                            {
+                                serial = mob.Serial,
+                                x = mob.X,
+                                y = mob.Y,
+                                name = mob.Name ?? ""
+                            });
+                        }
+                    }
+                    else if (mob.NotorietyFlag == NotorietyFlag.Enemy ||
+                             mob.NotorietyFlag == NotorietyFlag.Murderer ||
+                             mob.NotorietyFlag == NotorietyFlag.Criminal)
+                    {
+                        // Enemy/hostile mobile (red)
+                        enemyMobiles.Add(new
                         {
                             serial = mob.Serial,
                             x = mob.X,
                             y = mob.Y,
-                            name = mob.Name ?? ""
+                            name = mob.Name ?? "",
+                            notoriety = (byte)mob.NotorietyFlag
+                        });
+                    }
+                    else
+                    {
+                        // Other mobile (gray) - Unknown, Innocent, Gray, Invulnerable
+                        otherMobiles.Add(new
+                        {
+                            serial = mob.Serial,
+                            x = mob.X,
+                            y = mob.Y,
+                            name = mob.Name ?? "",
+                            notoriety = (byte)mob.NotorietyFlag
                         });
                     }
                 }
-                else if (mob.NotorietyFlag == NotorietyFlag.Enemy ||
-                         mob.NotorietyFlag == NotorietyFlag.Murderer ||
-                         mob.NotorietyFlag == NotorietyFlag.Criminal)
-                {
-                    // Enemy/hostile mobile (red)
-                    enemyMobiles.Add(new
-                    {
-                        serial = mob.Serial,
-                        x = mob.X,
-                        y = mob.Y,
-                        name = mob.Name ?? "",
-                        notoriety = (byte)mob.NotorietyFlag
-                    });
-                }
-                else
-                {
-                    // Other mobile (gray) - Unknown, Innocent, Gray, Invulnerable
-                    otherMobiles.Add(new
-                    {
-                        serial = mob.Serial,
-                        x = mob.X,
-                        y = mob.Y,
-                        name = mob.Name ?? "",
-                        notoriety = (byte)mob.NotorietyFlag
-                    });
-                }
-            }
 
-            return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
+                return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
+            });
         }
 
         private List<object> GetNewJournalEntries(ClientState clientState)
@@ -1442,6 +1445,7 @@ namespace ClassicUO.Game.Managers
                         mapData.party = data.party;
                         mapData.guild = data.guild;
                         mapData.markers = data.markers;
+                        mapData.mobiles = data.mobiles;
                         updateTitle();
 
                         // Clear the map image immediately to show blank screen
@@ -1456,6 +1460,7 @@ namespace ClassicUO.Game.Managers
                     mapData.party = data.party;
                     mapData.guild = data.guild;
                     mapData.markers = data.markers;
+                    mapData.mobiles = data.mobiles;
 
                     // Handle journal entries
                     if (data.journal && data.journal.length > 0) {
