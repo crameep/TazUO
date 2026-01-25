@@ -540,7 +540,7 @@ namespace ClassicUO.LegionScripting
                     case "waitforgump":
                         if (action.Parameters.TryGetValue("id", out object gumpid))
                         {
-                            script.AppendLine($"while not API.HasGump(\"{gumpid}\"):");
+                            script.AppendLine($"while not API.HasGump({gumpid}):");
                             script.AppendLine($"    API.Pause(0.1)");
                         }
                         break;
