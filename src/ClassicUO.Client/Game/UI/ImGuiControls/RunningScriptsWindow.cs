@@ -1,5 +1,4 @@
 using ImGuiNET;
-using System.Linq;
 using System.Numerics;
 using ClassicUO.LegionScripting;
 

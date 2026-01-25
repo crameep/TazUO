@@ -8,7 +8,7 @@ using System.Numerics;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class OrganizerWindow : SingletonImGuiWindow<OrganizerWindow>
+    public class OrganizerTabContent : TabContent
     {
         private int _selectedConfigIndex = -1;
         private OrganizerConfig _selectedConfig = null;
@@ -16,9 +16,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string _addItemHueInput = "";
         private bool _showAddItemManual = false;
 
-        private OrganizerWindow() : base("Organizer")
+        public OrganizerTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
         }
 
         public override void DrawContent()

@@ -5,7 +5,6 @@ using System.Linq;
 using System.Numerics;
 using ClassicUO.Configuration;
 using ClassicUO.LegionScripting;
-using ClassicUO.Game.Managers;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -15,10 +14,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string _filterText = "";
         private string _newKey = "";
         private string _newValue = "";
-        private string _editingKey = null;
+        private string _editingKey;
         private string _editingValue = "";
-        private bool _showAddDialog = false;
-        private string _deleteConfirmKey = null;
+        private bool _showAddDialog;
+        private string _deleteConfirmKey;
 
         private PersistentVarsWindow() : base("Persistent Variables Manager")
         {

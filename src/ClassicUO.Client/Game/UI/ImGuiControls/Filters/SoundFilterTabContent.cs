@@ -1,7 +1,6 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +9,7 @@ using System.Text.Json;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SoundFilterWindow : SingletonImGuiWindow<SoundFilterWindow>
+    public class SoundFilterTabContent : TabContent
     {
         private Profile profile;
         private int newSoundIdInput = 0;
@@ -18,9 +17,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private List<int> filterList;
         private Dictionary<int, int> filterInputs = new Dictionary<int, int>();
 
-        private SoundFilterWindow() : base("Sound Filter")
+        public SoundFilterTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             RefreshFilterList();
         }

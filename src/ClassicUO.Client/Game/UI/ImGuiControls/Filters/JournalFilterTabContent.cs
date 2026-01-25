@@ -1,17 +1,14 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
-using System;
-using System.IO;
 using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class JournalFilterWindow : SingletonImGuiWindow<JournalFilterWindow>
+    public class JournalFilterTabContent : TabContent
     {
         private Profile profile;
         private string newFilterInput = "";
@@ -19,9 +16,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> filterInputs = new Dictionary<string, string>();
         private List<string> filterList;
 
-        private JournalFilterWindow() : base("Journal Filter")
+        public JournalFilterTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             RefreshFilterList();
         }

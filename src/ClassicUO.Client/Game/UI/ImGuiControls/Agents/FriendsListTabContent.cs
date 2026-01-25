@@ -1,23 +1,19 @@
 using ImGuiNET;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.GameObjects;
-using ClassicUO.Game.UI.Gumps;
-using System;
 using System.Numerics;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class FriendsListWindow : SingletonImGuiWindow<FriendsListWindow>
+    public class FriendsListTabContent : TabContent
     {
         private List<FriendEntry> friendEntries;
         private bool showAddFriendPopup = false;
         private string newFriendName = "";
 
-        private FriendsListWindow() : base("Friends List")
+        public FriendsListTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             RefreshFriendsList();
         }
 

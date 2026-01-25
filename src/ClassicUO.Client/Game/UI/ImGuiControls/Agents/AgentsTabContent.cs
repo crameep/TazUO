@@ -1,23 +1,26 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
-using System.Numerics;
-using ClassicUO.Utility;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class AgentsWindow : SingletonImGuiWindow<AgentsWindow>
+    public class AgentsTabContent : TabContent
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
-        private AgentsWindow() : base("Agents Tab")
-        {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
 
+        private AutoLootTabContent _autoLootTab;
+        private DressAgentTabContent _dressAgentTab;
+        private AutoBuyTabContent _autoBuyTab;
+        private AutoSellTabContent _autoSellTab;
+        private BandageAgentTabContent _bandageAgentTab;
+
+        public AgentsTabContent()
+        {
+            _autoLootTab = new AutoLootTabContent();
+            _dressAgentTab = new DressAgentTabContent();
+            _autoBuyTab = new AutoBuyTabContent();
+            _autoSellTab = new AutoSellTabContent();
+            _bandageAgentTab = new BandageAgentTabContent();
         }
-        private void DrawAutoLoot() => AutoLootWindow.GetInstance()?.DrawContent();
-        private void DrawDressAgent() => DressAgentWindow.GetInstance()?.DrawContent();
-        private void DrawAutoSell() => AutoSellWindow.GetInstance()?.DrawContent();
-        private void DrawAutoBuy() => AutoBuyWindow.GetInstance()?.DrawContent();
-        private void DrawBandageAgent() => BandageAgentWindow.GetInstance()?.DrawContent();
 
         public override void DrawContent()
         {
@@ -33,34 +36,44 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 if (ImGui.BeginTabItem("Auto Loot"))
                 {
-                    DrawAutoLoot();
+                    _autoLootTab.DrawContent();
                     ImGui.EndTabItem();
                 }
                 if (ImGui.BeginTabItem("Dress Agent"))
                 {
-                    DrawDressAgent();
+                    _dressAgentTab.DrawContent();
                     ImGui.EndTabItem();
                 }
                 if (ImGui.BeginTabItem("Auto Buy"))
                 {
-                    DrawAutoBuy();
+                    _autoBuyTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Auto Sell"))
                 {
-                    DrawAutoSell();
+                    _autoSellTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Bandage"))
                 {
-                    DrawBandageAgent();
+                    _bandageAgentTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 ImGui.EndTabBar();
             }
+        }
+
+        public override void Dispose()
+        {
+            _autoLootTab?.Dispose();
+            _dressAgentTab?.Dispose();
+            _autoBuyTab?.Dispose();
+            _autoSellTab?.Dispose();
+            _bandageAgentTab?.Dispose();
+            base.Dispose();
         }
     }
 }

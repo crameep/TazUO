@@ -2,8 +2,6 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Data;
-using ClassicUO.Utility;
-using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Linq;
@@ -11,7 +9,7 @@ using ClassicUO.Game.Managers.SpellVisualRange;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SpellIndicatorWindow : SingletonImGuiWindow<SpellIndicatorWindow>
+    public class SpellIndicatorTabContent : TabContent
     {
         private Profile profile;
         private bool enableSpellIndicators;
@@ -28,9 +26,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string newSpellNameInput = "";
         private SpellRangeInfo spellToDelete = null;
 
-        private SpellIndicatorWindow() : base("Spell Indicators")
+        public SpellIndicatorTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             enableSpellIndicators = profile?.EnableSpellIndicators ?? false;
         }

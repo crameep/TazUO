@@ -1,13 +1,11 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game;
-using System;
 using System.Numerics;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SeasonFilterWindow : SingletonImGuiWindow<SeasonFilterWindow>
+    public class SeasonFilterTabContent : TabContent
     {
         private Profile profile;
         private readonly string[] seasonNames = { "Spring", "Summer", "Fall", "Winter", "Desolation" };
@@ -20,9 +18,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             Season.Desolation
         };
 
-        private SeasonFilterWindow() : base("Season Filter")
+        public SeasonFilterTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
         }
 
@@ -139,9 +136,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             // Info section
             ImGui.TextColored(new Vector4(0.7f, 0.9f, 1.0f, 1.0f), "Info:");
-            ImGui.TextWrapped("• Select 'None' to disable a filter and show the original season");
-            ImGui.TextWrapped("• Select a season to replace it with a different one");
-            ImGui.TextWrapped("• Example: Set Winter → Summer to never see winter graphics");
+            ImGui.TextWrapped("Select 'None' to disable a filter and show the original season");
+            ImGui.TextWrapped("Select a season to replace it with a different one");
+            ImGui.TextWrapped("Example: Set Winter -> Summer to never see winter graphics");
         }
     }
 }

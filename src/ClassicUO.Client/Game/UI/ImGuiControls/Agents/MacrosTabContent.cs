@@ -2,19 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Text;
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 using ClassicUO.Input;
-using ClassicUO.Game;
-using ClassicUO.Game.Data;
 using ClassicUO.Utility;
 using SDL3;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class MacrosWindow : SingletonImGuiWindow<MacrosWindow>
+    public class MacrosTabContent : TabContent
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
 
@@ -41,13 +38,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private static readonly string[] _sortedMacroTypeNames;
         private static readonly MacroType[] _sortedMacroTypeValues;
         private static readonly Dictionary<MacroType, int> _macroTypeToDisplayIndex;
+        private static Vector2 _macroSize = new(650, 500);
 
         private static readonly HashSet<MacroType> _filteredMacroTypes = new()
         {
             MacroType.INVALID
         };
 
-        static MacrosWindow()
+        static MacrosTabContent()
         {
             // Build sorted/filtered MacroType mapping
             MacroType[] macroTypes = Enum.GetValues<MacroType>()
@@ -64,9 +62,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
-        private MacrosWindow() : base("Macros Tab")
+        public MacrosTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
         }
 
         public override void DrawContent()
@@ -77,33 +74,35 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
-            // Handle hotkey capture during draw
-            if (_isListeningForHotkey)
+            if (ImGui.BeginChild("macros_children_area", _macroSize))
             {
-                CaptureCurrentInput();
+                // Handle hotkey capture during draw
+                if (_isListeningForHotkey) CaptureCurrentInput();
+
+                DrawToolbar();
+                ImGui.Separator();
+                ImGui.Spacing();
+
+                // Two-panel layout
+                if (ImGui.BeginTable("MacrosSplit", 2, ImGuiTableFlags.Resizable))
+                {
+                    ImGui.TableSetupColumn("MacroList", ImGuiTableColumnFlags.WidthFixed, 300);
+                    ImGui.TableSetupColumn("MacroEditor", ImGuiTableColumnFlags.WidthStretch, 300);
+
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    DrawMacroList();
+
+                    ImGui.TableSetColumnIndex(1);
+                    DrawMacroEditor();
+
+                    ImGui.EndTable();
+                }
+
+                DrawDialogs();
+
+                ImGui.EndChild();
             }
-
-            DrawToolbar();
-            ImGui.Separator();
-            ImGui.Spacing();
-
-            // Two-panel layout
-            if (ImGui.BeginTable("MacrosSplit", 2, ImGuiTableFlags.Resizable))
-            {
-                ImGui.TableSetupColumn("MacroList", ImGuiTableColumnFlags.WidthFixed, 300);
-                ImGui.TableSetupColumn("MacroEditor", ImGuiTableColumnFlags.WidthStretch, 300);
-
-                ImGui.TableNextRow();
-                ImGui.TableSetColumnIndex(0);
-                DrawMacroList();
-
-                ImGui.TableSetColumnIndex(1);
-                DrawMacroEditor();
-
-                ImGui.EndTable();
-            }
-
-            DrawDialogs();
         }
 
         public override void Update()
@@ -244,11 +243,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     for (int i = 0; i < displayList.Count; i++)
                     {
                         Macro macro = displayList[i];
+
+                        bool isSelected = _selectedMacro == macro;
+
                         ImGui.TableNextRow();
                         ImGui.PushID(i);
 
                         ImGui.TableSetColumnIndex(0);
-                        bool isSelected = _selectedMacro == macro;
+
                         if (ImGui.Selectable(macro.Name, isSelected,
                             ImGuiSelectableFlags.SpanAllColumns))
                         {
@@ -581,9 +583,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         public override void Dispose()
         {
-            base.Dispose();
             if (_isListeningForHotkey)
                 ProfileManager.CurrentProfile.DisableHotkeys = false;
+            base.Dispose();
         }
 
         #region Helper Methods

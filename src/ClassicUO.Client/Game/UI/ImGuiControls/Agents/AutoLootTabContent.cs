@@ -2,17 +2,14 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.GameObjects;
-using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
-using System;
-using System.IO;
 using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class AutoLootWindow : SingletonImGuiWindow<AutoLootWindow>
+    public class AutoLootTabContent : TabContent
     {
         private Profile profile;
         private bool enableAutoLoot;
@@ -33,9 +30,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool showCharacterImportPopup = false;
 
-        private AutoLootWindow() : base("Auto Loot")
+        public AutoLootTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             enableAutoLoot = profile.EnableAutoLoot;
@@ -421,7 +417,5 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.EndPopup();
             }
         }
-
-
     }
 }

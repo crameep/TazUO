@@ -10,7 +10,7 @@ using ClassicUO.Utility;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class GraphicReplacementWindow : SingletonImGuiWindow<GraphicReplacementWindow>
+    public class GraphicReplacementTabContent : TabContent
     {
         private string _newOriginalGraphicInput = "";
         private string _newReplacementGraphicInput = "";
@@ -24,9 +24,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<(ushort, byte), byte> _entryOriginalTypeSelections = new Dictionary<(ushort, byte), byte>();
         private Dictionary<(ushort, byte), ArtPointerStruct> _textureCache = new Dictionary<(ushort, byte), ArtPointerStruct>();
 
-        private GraphicReplacementWindow() : base("Graphic Replacement")
+        public GraphicReplacementTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
         }
 
         public override void DrawContent()
@@ -384,13 +383,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         }
                         else // Static (type 3) - use GetArt()
                         {
-                            drewOriginal = DrawArt(filter.OriginalGraphic, 32, false);
+                            drewOriginal = DrawArt(filter.OriginalGraphic, new Vector2(32, 32), false);
                             if (!drewOriginal)
                                 ImGui.TextDisabled($"0x{filter.OriginalGraphic:X4}");
 
                             ImGui.SameLine();
 
-                            drewReplacement = DrawArt(filter.ReplacementGraphic, 32, false);
+                            drewReplacement = DrawArt(filter.ReplacementGraphic, new Vector2(32, 32), false);
                             if (!drewReplacement)
                                 ImGui.TextDisabled($"0x{filter.ReplacementGraphic:X4}");
                         }
@@ -538,46 +537,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             return true;
         }
 
-        private bool DrawArt(ushort graphic, float maxSize, bool useSmallerIfGfxSmaller = true)
-        {
-            Vector2 size;
-            (ushort graphic, byte type) cacheKey = (graphic, 3); // Type 3 = Static/Art
-
-            // Check if we already have this cached
-            if (_textureCache.TryGetValue(cacheKey, out ArtPointerStruct cached))
-            {
-                // Calculate scaled size based on cached sprite dimensions
-                size = CalculateScaledSize(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height, maxSize);
-
-                if (useSmallerIfGfxSmaller && cached.SpriteInfo.UV.Width < maxSize && cached.SpriteInfo.UV.Height < maxSize)
-                    size = new Vector2(cached.SpriteInfo.UV.Width, cached.SpriteInfo.UV.Height);
-
-                ImGui.Image(cached.Pointer, size, cached.UV0, cached.UV1);
-                return true;
-            }
-
-            SpriteInfo artInfo = Client.Game.UO.Arts.GetArt(graphic);
-
-            if (artInfo.Texture == null)
-                return false;
-
-            size = CalculateScaledSize(artInfo.UV.Width, artInfo.UV.Height, maxSize);
-
-            if (useSmallerIfGfxSmaller && artInfo.UV.Width < maxSize && artInfo.UV.Height < maxSize)
-                size = new Vector2(artInfo.UV.Width, artInfo.UV.Height);
-
-            // Calculate UV coordinates and bind texture
-            var uv0 = new Vector2(artInfo.UV.X / (float)artInfo.Texture.Width, artInfo.UV.Y / (float)artInfo.Texture.Height);
-            var uv1 = new Vector2((artInfo.UV.X + artInfo.UV.Width) / (float)artInfo.Texture.Width, (artInfo.UV.Y + artInfo.UV.Height) / (float)artInfo.Texture.Height);
-            nint pnt = ImGuiManager.Renderer.BindTexture(artInfo.Texture);
-
-            // Cache it
-            _textureCache.Add(cacheKey, new ArtPointerStruct(pnt, artInfo, uv0, uv1, size));
-
-            ImGui.Image(pnt, size, uv0, uv1);
-            return true;
-        }
-
         private Vector2 CalculateScaledSize(int width, int height, float maxSize)
         {
             if (width <= 0 || height <= 0)
@@ -597,10 +556,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
-        protected override void OnWindowClosed()
+        public override void Dispose()
         {
-            base.OnWindowClosed();
-
             // Clean up texture cache
             foreach (KeyValuePair<(ushort, byte), ArtPointerStruct> item in _textureCache)
                 if (item.Value.Pointer != IntPtr.Zero)
@@ -612,7 +569,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _entryHueInputs = new Dictionary<(ushort, byte), string>();
             _entryOriginalTypeSelections = new Dictionary<(ushort, byte), byte>();
             _textureCache = new Dictionary<(ushort, byte), ArtPointerStruct>();
-        }
 
+            base.Dispose();
+        }
     }
 }

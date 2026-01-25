@@ -9,14 +9,13 @@ using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class HudWindow : SingletonImGuiWindow<HudWindow>
+    public class HudTabContent : TabContent
     {
         private Profile profile;
         private Dictionary<HideHudFlags, bool> hudFlagStates;
 
-        private HudWindow() : base("HUD Settings")
+        public HudTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             // Initialize HUD flag states
