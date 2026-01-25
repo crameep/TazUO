@@ -20,6 +20,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -639,6 +640,22 @@ namespace ClassicUO
         }
 
         protected override bool BeginDraw() => !_suppressedDraw && base.BeginDraw();
+
+        /// <summary>
+        /// Must be called during a batch, cannot call before batcher.Begin or after batcher.End
+        /// </summary>
+        /// <param name="batcher"></param>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        [Conditional("DEBUG")]
+        public static void DrawFlushCounts(UltimaBatcher2D batcher, int x, int y)
+        {
+            Vector3 hueVec = new(0, 1, 1);
+            string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}";
+            batcher.DrawString(Fonts.Bold, s, x, y, hueVec);
+            hueVec = Vector3.Zero;
+            batcher.DrawString(Fonts.Bold, s, x + 1, y - 1, hueVec);
+        }
 
         private void WindowOnClientSizeChanged(object sender, EventArgs e)
         {

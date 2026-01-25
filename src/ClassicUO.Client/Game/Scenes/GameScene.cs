@@ -1323,6 +1323,8 @@ namespace ClassicUO.Game.Scenes
                 _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
             }
 
+            //GameController.DrawFlushCounts(batcher, 200, 200);
+
             batcher.End();
 
             // Restore previous render target
@@ -1334,16 +1336,6 @@ namespace ClassicUO.Game.Scenes
             {
                 batcher.GraphicsDevice.SetRenderTarget(null);
             }
-
-            //batcher.Begin();
-            //hueVec.X = 0;
-            //hueVec.Y = 1;
-            //hueVec.Z = 1;
-            //string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}\nArt texture count: {TextureAtlas.Shared.TexturesCount}\nMaxZ: {_maxZ}\nMaxGround: {_maxGroundZ}";
-            //batcher.DrawString(Fonts.Bold, s, 200, 200, ref hueVec);
-            //hueVec = Vector3.Zero;
-            //batcher.DrawString(Fonts.Bold, s, 200 + 1, 200 - 1, ref hueVec);
-            //batcher.End();
         }
 
         private int DrawRenderList(UltimaBatcher2D batcher, List<GameObject> renderList)
