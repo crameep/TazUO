@@ -1,7 +1,6 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
-using System.Globalization;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
@@ -11,7 +10,6 @@ using ClassicUO.Network;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
-using ClassicUO.Game.Scenes;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -62,7 +60,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                     if (Client.Game.UO.Version >= ClientVersion.CV_704565)
                     {
-                        _myCoins[0].Text = FormatAsCurrency(_gold);
+                        _myCoins[0].Text = StringHelper.FormatAsCurrency((int)_gold);
                     }
                 }
             }
@@ -79,7 +77,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                     if (Client.Game.UO.Version >= ClientVersion.CV_704565)
                     {
-                        _myCoins[1].Text = FormatAsCurrency(_platinum);
+                        _myCoins[1].Text = StringHelper.FormatAsCurrency((int)_platinum);
                     }
                 }
             }
@@ -96,7 +94,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                     if (Client.Game.UO.Version >= ClientVersion.CV_704565)
                     {
-                        _hisCoins[0].Text = FormatAsCurrency(_hisGold);
+                        _hisCoins[0].Text = StringHelper.FormatAsCurrency((int)_hisGold);
                     }
                 }
             }
@@ -113,7 +111,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                     if (Client.Game.UO.Version >= ClientVersion.CV_704565)
                     {
-                        _hisCoins[1].Text = FormatAsCurrency(_hisPlatinum);
+                        _hisCoins[1].Text = StringHelper.FormatAsCurrency((int)_hisPlatinum);
                     }
                 }
             }
@@ -436,7 +434,7 @@ namespace ClassicUO.Game.UI.Gumps
                     Tag = 0
                 };
 
-                _myCoinsEntries[0].SetText("0");
+                _myCoinsEntries[0].SetText(0.ToString());
 
                 Add(_myCoinsEntries[0]);
 
@@ -450,7 +448,7 @@ namespace ClassicUO.Game.UI.Gumps
                     Tag = 1
                 };
 
-                _myCoinsEntries[1].SetText("0");
+                _myCoinsEntries[1].SetText(0.ToString());
 
                 Add(_myCoinsEntries[1]);
 
@@ -480,8 +478,9 @@ namespace ClassicUO.Game.UI.Gumps
                                 send = true;
                             }
                         }
-                        else if (uint.TryParse(entry.Text.Replace(",", ""), out uint value))
+                        else if (StringHelper.TryParseCurrency(entry.Text, out int val))
                         {
+                            uint value = (uint)val;
                             if ((int)entry.Tag == 0) // gold
                             {
                                 if (value > Gold)
@@ -596,7 +595,5 @@ namespace ClassicUO.Game.UI.Gumps
             ImAccepting = !ImAccepting;
             GameActions.AcceptTrade(ID1, ImAccepting);
         }
-
-        private static string FormatAsCurrency(uint amount, bool useComma = true) => amount.ToString("C0", CultureInfo.CurrentCulture);
     }
 }

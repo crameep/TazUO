@@ -1,19 +1,17 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using System.Numerics;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class TitleBarWindow : SingletonImGuiWindow<TitleBarWindow>
+    public class TitleBarTabContent : TabContent
     {
         private Profile profile;
         private bool enableTitleBarStats;
         private TitleBarStatsMode statsMode;
 
-        private TitleBarWindow() : base("Title Bar Settings")
+        public TitleBarTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             if (profile != null)
@@ -94,7 +92,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Spacing();
 
             // Note about Unicode characters
-            ImGui.TextWrapped("Note: Progress bars use Unicode block characters (█▓▒░) and may not display correctly on all systems.");
+            ImGui.TextWrapped("Note: Progress bars use Unicode block characters and may not display correctly on all systems.");
         }
     }
 }

@@ -1,18 +1,14 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game.UI.Gumps;
-using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using System.Numerics;
 using System.Collections.Generic;
-using System;
-using Microsoft.Xna.Framework.Input;
 using SDL3;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SpellBarWindow : SingletonImGuiWindow<SpellBarWindow>
+    public class SpellBarTabContent : TabContent
     {
         private Profile profile;
         private bool enableSpellBar;
@@ -28,9 +24,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private SDL.SDL_Keymod capturedMod = SDL.SDL_Keymod.SDL_KMOD_NONE;
         private List<SDL.SDL_GamepadButton> capturedButtons = new List<SDL.SDL_GamepadButton>();
 
-        private SpellBarWindow() : base("Spell Bar")
+        public SpellBarTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             enableSpellBar = SpellBarManager.IsEnabled();

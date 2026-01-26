@@ -246,7 +246,7 @@ namespace ClassicUO.Game.UI.Gumps.GridHighLight
                                                                                      }
                                                                                      catch (Exception ex)
                                                                                      {
-                                                                                         GameActions.Print(world, "Error importing highlight config", 32);
+                                                                                         GameActions.Print(world, "Error importing highlight config", Constants.HUE_ERROR);
                                                                                          Log.Error(ex.ToString());
                                                                                      }
                                                                                  });

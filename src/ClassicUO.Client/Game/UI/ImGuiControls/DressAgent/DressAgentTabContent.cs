@@ -2,13 +2,12 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.GameObjects;
 using ImGuiNET;
 using System;
-using System.Linq;
 using System.Numerics;
 using ClassicUO.Game.Data;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class DressAgentWindow : SingletonImGuiWindow<DressAgentWindow>
+    public class DressAgentTabContent : TabContent
     {
         private static readonly Vector4 DeleteButtonColor = new(0.8f, 0.2f, 0.2f, 1.0f);
         private static readonly Vector4 DefaultInfoColor = new(0.0f, 1.0f, 0.0f, 1.0f);
@@ -18,9 +17,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _editingName = false;
         private string _nameInput = "";
 
-        private DressAgentWindow() : base("Dress Agent")
+        public DressAgentTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
         }
 
         public override void DrawContent()
@@ -221,7 +219,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     }
 
                     DressAgentManager.Instance.SetUndressBag(_selectedConfig, entity.Serial);
-                    GameActions.Print($"Undress bag set to {entity.Serial:X}", 63);
+                    GameActions.Print($"Undress bag set to {entity.Serial:X}", Constants.HUE_SUCCESS);
                 });
             }
 

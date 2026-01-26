@@ -2,17 +2,14 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.GameObjects;
-using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
-using System;
-using System.IO;
 using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class AutoLootWindow : SingletonImGuiWindow<AutoLootWindow>
+    public class AutoLootTabContent : TabContent
     {
         private Profile profile;
         private bool enableAutoLoot;
@@ -33,9 +30,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool showCharacterImportPopup = false;
 
-        private AutoLootWindow() : base("Auto Loot")
+        public AutoLootTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             enableAutoLoot = profile.EnableAutoLoot;
@@ -100,33 +96,36 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             ImGuiComponents.Tooltip("Auto loots human corpses.");
 
-            // Buttons for grab bag and import/export
-            ImGui.SeparatorText("Import & Export:");
-            if (ImGui.Button("Export JSON"))
-            {
-                FileSelector.ShowFileBrowser(Client.Game.UO.World, FileSelectorType.Directory, null, null, (selectedPath) =>
-                {
-                    if (string.IsNullOrWhiteSpace(selectedPath)) return;
-                    string fileName = $"AutoLoot_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                    string fullPath = Path.Combine(selectedPath, fileName);
-                    AutoLootManager.Instance.ExportToFile(fullPath);
-                }, "Export Autoloot Configuration");
-            }
+            ImGui.SeparatorText("Entries:");
 
-            ImGui.SameLine();
-            if (ImGui.Button("Import JSON"))
+            if (ImGui.Button("Import"))
             {
-                FileSelector.ShowFileBrowser(Client.Game.UO.World, FileSelectorType.File, null, new[] { "json" }, (selectedFile) =>
+                string json = Clipboard.GetClipboardText();
+
+                if(json.NotNullNotEmpty() && AutoLootManager.Instance.ImportFromJson(json))
                 {
-                    if (string.IsNullOrWhiteSpace(selectedFile)) return;
-                    AutoLootManager.Instance.ImportFromFile(selectedFile);
-                    // Clear input dictionaries to refresh with new data
+                    GameActions.Print("Imported loot list!", Constants.HUE_SUCCESS);
                     entryGraphicInputs.Clear();
                     entryHueInputs.Clear();
                     entryRegexInputs.Clear();
                     entryDestinationInputs.Clear();
                     lootEntries = AutoLootManager.Instance.AutoLootList;
-                }, "Import Autoloot Configuration");
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+
+            if (lootEntries.Count > 0)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Export"))
+                {
+                    AutoLootManager.Instance.GetJsonExport()?.CopyToClipboard();
+                    GameActions.Print("Exported loot list to your clipboard!", Constants.HUE_SUCCESS);
+                }
+                ImGuiComponents.Tooltip("Export your list to your clipboard.");
             }
 
             ImGui.SameLine();
@@ -134,9 +133,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 showCharacterImportPopup = true;
             }
-
-            // Add entry section
-            ImGui.SeparatorText("Entries:");
+            ImGuiComponents.Tooltip("Import autoloot configuration from another character.");
 
             if (ImGui.Button("Add Manual Entry"))
             {
@@ -420,7 +417,5 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.EndPopup();
             }
         }
-
-
     }
 }

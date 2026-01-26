@@ -216,7 +216,8 @@ namespace ClassicUO.Game.Managers
                 },
                 party = GetPartyData(),
                 guild = GetGuildData(),
-                markers = GetMarkersData()
+                markers = GetMarkersData(),
+                mobiles = GetMobilesData()
             };
 
             string json = JsonSerializer.Serialize(data);
@@ -319,6 +320,7 @@ namespace ClassicUO.Game.Managers
                         party = GetPartyData(),
                         guild = GetGuildData(),
                         markers = GetMarkersData(),
+                        mobiles = GetMobilesData(),
                         journal = MainThreadQueue.InvokeOnMainThread(() => GetNewJournalEntries(clientState))
                     };
 
@@ -459,6 +461,85 @@ namespace ClassicUO.Game.Managers
             }
 
             return markers;
+        }
+
+        private object GetMobilesData()
+        {
+            var enemyMobiles = new List<object>();
+            var otherMobiles = new List<object>();
+            var allyMobiles = new List<object>();
+
+            return MainThreadQueue.InvokeOnMainThread(() => {
+
+                if (World.Instance?.Mobiles == null)
+                {
+                    return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
+                }
+
+                foreach (Mobile mob in World.Instance.Mobiles.Values)
+                {
+                    // Skip the player
+                    if (mob == World.Instance.Player)
+                        continue;
+
+                    // Skip hidden mobiles
+                    if (mob.IsHidden)
+                        continue;
+
+                    // Skip party members (shown separately)
+                    if (World.Instance.Party.Contains(mob.Serial))
+                        continue;
+
+                    // Skip guild members (shown separately)
+                    WMapEntity wme = World.Instance.WMapManager.GetEntity(mob.Serial);
+                    if (wme != null && wme.IsGuild)
+                        continue;
+
+                    // Classify by notoriety
+                    if (mob.NotorietyFlag == NotorietyFlag.Ally)
+                    {
+                        // Ally mobile (lime green) - only within view range
+                        if (mob.Distance <= World.Instance.ClientViewRange)
+                        {
+                            allyMobiles.Add(new
+                            {
+                                serial = mob.Serial,
+                                x = mob.X,
+                                y = mob.Y,
+                                name = mob.Name ?? ""
+                            });
+                        }
+                    }
+                    else if (mob.NotorietyFlag == NotorietyFlag.Enemy ||
+                             mob.NotorietyFlag == NotorietyFlag.Murderer ||
+                             mob.NotorietyFlag == NotorietyFlag.Criminal)
+                    {
+                        // Enemy/hostile mobile (red)
+                        enemyMobiles.Add(new
+                        {
+                            serial = mob.Serial,
+                            x = mob.X,
+                            y = mob.Y,
+                            name = mob.Name ?? "",
+                            notoriety = (byte)mob.NotorietyFlag
+                        });
+                    }
+                    else
+                    {
+                        // Other mobile (gray) - Unknown, Innocent, Gray, Invulnerable
+                        otherMobiles.Add(new
+                        {
+                            serial = mob.Serial,
+                            x = mob.X,
+                            y = mob.Y,
+                            name = mob.Name ?? "",
+                            notoriety = (byte)mob.NotorietyFlag
+                        });
+                    }
+                }
+
+                return new { enemies = enemyMobiles, others = otherMobiles, allies = allyMobiles };
+            });
         }
 
         private List<object> GetNewJournalEntries(ClientState clientState)
@@ -916,6 +997,10 @@ namespace ClassicUO.Game.Managers
             <label><input type=""checkbox"" id=""showParty"" checked> Show Party</label>
             <label><input type=""checkbox"" id=""showGuild"" checked> Show Guild</label>
             <label><input type=""checkbox"" id=""showMarkers"" checked> Show Markers</label>
+            <label><input type=""checkbox"" id=""showMobiles"" checked> Show Mobiles</label>
+            <label style=""margin-left: 20px;""><input type=""checkbox"" id=""showEnemies"" checked> Enemies</label>
+            <label style=""margin-left: 20px;""><input type=""checkbox"" id=""showOthers"" checked> Other</label>
+            <label style=""margin-left: 20px;""><input type=""checkbox"" id=""showAllies"" checked> Allies</label>
             <label><input type=""checkbox"" id=""showNames"" checked> Show Names</label>
             <label><input type=""checkbox"" id=""showGrid"" checked> Show Grid</label>
         </div>
@@ -1360,6 +1445,7 @@ namespace ClassicUO.Game.Managers
                         mapData.party = data.party;
                         mapData.guild = data.guild;
                         mapData.markers = data.markers;
+                        mapData.mobiles = data.mobiles;
                         updateTitle();
 
                         // Clear the map image immediately to show blank screen
@@ -1374,6 +1460,7 @@ namespace ClassicUO.Game.Managers
                     mapData.party = data.party;
                     mapData.guild = data.guild;
                     mapData.markers = data.markers;
+                    mapData.mobiles = data.mobiles;
 
                     // Handle journal entries
                     if (data.journal && data.journal.length > 0) {
@@ -1549,6 +1636,135 @@ namespace ClassicUO.Game.Managers
                         // Draw text
                         ctx.fillStyle = markerColor;
                         ctx.fillText(marker.name, 0, -6);
+                    }
+
+                    ctx.restore();
+                });
+            }
+
+            // Draw enemy mobiles (red)
+            if (document.getElementById('showMobiles').checked &&
+                document.getElementById('showEnemies').checked &&
+                mapData.mobiles &&
+                mapData.mobiles.enemies) {
+                const showNames = document.getElementById('showNames').checked;
+                mapData.mobiles.enemies.forEach(mobile => {
+                    ctx.save();
+                    ctx.translate(mobile.x, mobile.y);
+                    if (isRotated) ctx.rotate(-rotationAngle);
+                    ctx.scale(1 / zoom, 1 / zoom);
+
+                    // Draw red circle
+                    ctx.fillStyle = '#ff0000';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Draw name if enabled
+                    if (showNames && mobile.name) {
+                        ctx.font = '14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(mobile.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 14;
+                        const padding = 3;
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding,
+                                    textWidth + padding * 2, textHeight + padding * 2);
+
+                        ctx.fillStyle = '#ff0000';
+                        ctx.fillText(mobile.name, 0, -6);
+                    }
+
+                    ctx.restore();
+                });
+            }
+
+            // Draw other mobiles (gray)
+            if (document.getElementById('showMobiles').checked &&
+                document.getElementById('showOthers').checked &&
+                mapData.mobiles &&
+                mapData.mobiles.others) {
+                const showNames = document.getElementById('showNames').checked;
+                mapData.mobiles.others.forEach(mobile => {
+                    ctx.save();
+                    ctx.translate(mobile.x, mobile.y);
+                    if (isRotated) ctx.rotate(-rotationAngle);
+                    ctx.scale(1 / zoom, 1 / zoom);
+
+                    // Draw gray circle
+                    ctx.fillStyle = '#808080';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Draw name if enabled
+                    if (showNames && mobile.name) {
+                        ctx.font = '14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(mobile.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 14;
+                        const padding = 3;
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding,
+                                    textWidth + padding * 2, textHeight + padding * 2);
+
+                        ctx.fillStyle = '#808080';
+                        ctx.fillText(mobile.name, 0, -6);
+                    }
+
+                    ctx.restore();
+                });
+            }
+
+            // Draw ally mobiles (lime green)
+            if (document.getElementById('showMobiles').checked &&
+                document.getElementById('showAllies').checked &&
+                mapData.mobiles &&
+                mapData.mobiles.allies) {
+                const showNames = document.getElementById('showNames').checked;
+                mapData.mobiles.allies.forEach(mobile => {
+                    ctx.save();
+                    ctx.translate(mobile.x, mobile.y);
+                    if (isRotated) ctx.rotate(-rotationAngle);
+                    ctx.scale(1 / zoom, 1 / zoom);
+
+                    // Draw lime circle
+                    ctx.fillStyle = '#00ff00';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Draw name if enabled
+                    if (showNames && mobile.name) {
+                        ctx.font = '14px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const metrics = ctx.measureText(mobile.name);
+                        const textWidth = metrics.width;
+                        const textHeight = 14;
+                        const padding = 3;
+
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(-textWidth / 2 - padding, -textHeight - 6 - padding,
+                                    textWidth + padding * 2, textHeight + padding * 2);
+
+                        ctx.fillStyle = '#00ff00';
+                        ctx.fillText(mobile.name, 0, -6);
                     }
 
                     ctx.restore();
@@ -1853,6 +2069,10 @@ namespace ClassicUO.Game.Managers
         document.getElementById('showParty').addEventListener('change', draw);
         document.getElementById('showGuild').addEventListener('change', draw);
         document.getElementById('showMarkers').addEventListener('change', draw);
+        document.getElementById('showMobiles').addEventListener('change', draw);
+        document.getElementById('showEnemies').addEventListener('change', draw);
+        document.getElementById('showOthers').addEventListener('change', draw);
+        document.getElementById('showAllies').addEventListener('change', draw);
         document.getElementById('showNames').addEventListener('change', draw);
         document.getElementById('showGrid').addEventListener('change', draw);
 

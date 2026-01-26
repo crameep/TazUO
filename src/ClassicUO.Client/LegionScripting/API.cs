@@ -593,7 +593,7 @@ namespace ClassicUO.LegionScripting
                 return true;
             }
         );
-        
+
         /// <summary>
         /// Retrieve the current open menu's (uses the latest MenuGump) menu item descriptions.
         /// Useful when menu IDs change every time (e.g., Tracking skill).
@@ -861,7 +861,7 @@ namespace ClassicUO.LegionScripting
                 DressAgentManager.Instance.DressFromConfig(config);
             }
         });
-        
+
         /// <summary>
         /// Undress from a saved dress configuration.
         /// Example:
@@ -932,7 +932,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(name))
             {
-                GameActions.Print("Invalid organizer name", 32);
+                GameActions.Print("Invalid organizer name", Constants.HUE_ERROR);
                 return;
             }
 
@@ -947,7 +947,7 @@ namespace ClassicUO.LegionScripting
         {
             if (string.IsNullOrEmpty(command))
             {
-                GameActions.Print("Command can't be empty", 32);
+                GameActions.Print("Command can't be empty", Constants.HUE_ERROR);
                 return;
             }
 
@@ -2221,7 +2221,9 @@ namespace ClassicUO.LegionScripting
                 {
                     if (World.Player.Skills[i].Name.ToLower().Contains(skill))
                     {
-                        World.Player.Skills[i].Lock = status;
+                        Skill skill = World.Player.Skills[i];
+                        skill.Lock = status;
+                        GameActions.ChangeSkillLockStatus((ushort)skill.Index, (byte)skill.Lock);
 
                         break;
                     }
@@ -2353,12 +2355,14 @@ namespace ClassicUO.LegionScripting
         /// Example:
         /// ```py
         /// API.ReplyGump(21)
+        /// API.ReplyGump(1, 0x555, [100])
         /// ```
         /// </summary>
         /// <param name="button">Button ID</param>
         /// <param name="gump">Gump ID, leave blank to reply to last gump</param>
+        /// <param name="switches">Optional for some gump responses</param>
         /// <returns>True if gump was found, false if not</returns>
-        public bool ReplyGump(int button, uint gump = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
+        public bool ReplyGump(int button, uint gump = uint.MaxValue, IEnumerable<int> switches = null) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
                 if (World.Player == null)
@@ -2366,15 +2370,12 @@ namespace ClassicUO.LegionScripting
 
                 Gump g = UIManager.GetGumpServer(gump == uint.MaxValue ? World.Player.LastGumpID : gump);
 
-                if (g != null)
-                {
-                    GameActions.ReplyGump(World, g.LocalSerial, g.ServerSerial, button, new uint[0] { }, new Tuple<ushort, string>[0]);
-                    g.Dispose();
+                if (g == null) return false;
 
-                    return true;
-                }
+                GameActions.ReplyGump(World, g.LocalSerial, g.ServerSerial, button, switches == null ? [] : switches.ToUint().ToArray(), []);
+                g.Dispose();
 
-                return false;
+                return true;
             }
         );
 
@@ -2386,31 +2387,30 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <param name="ID">Gump ID</param>
-        public void CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
+        public bool CloseGump(uint ID = uint.MaxValue) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
                 if (World.Player == null || ID == 0) //0 Prevents weird behaviour closing system chat gump
-                    return;
+                    return false;
 
                 uint gumpId = ID != uint.MaxValue ? ID : World.Player.LastGumpID;
                 Gump gump = UIManager.GetGumpServer(gumpId);
-                DisposeGump(gump);
+                return DisposeGump(gump);
             }
         );
 
-        private void DisposeGump(Gump gump)
+        private bool DisposeGump(Gump gump)
         {
-            if (gump == null)
-            {
-                return;
-            }
+            if (gump == null) return false;
 
             if (gump.CanCloseWithRightClick)
             {
                 gump.InvokeMouseCloseGumpWithRClick();
-                return;
+                return true;
             }
+
             gump.Dispose();
+            return true;
         }
 
         /// <summary>
@@ -2706,6 +2706,20 @@ namespace ClassicUO.LegionScripting
         /// </summary>
         /// <returns>true/false</returns>
         public bool SecondaryAbilityActive() => World.Player != null && ((byte)World.Player.SecondaryAbility & 0x80) != 0;
+
+        /// <summary>
+        /// Gets your currently available ability names.
+        ///
+        /// The full list of known abilities can be obtained via the `KnownAbilityNames` API
+        /// </summary>
+        /// <returns>The returned array will be [PrimaryAbility, SecondaryAbility] or an empty array if no ability is available</returns>
+        public string[] CurrentAbilityNames() => World.Player != null?[Enum.GetName(World.Player.PrimaryAbility), Enum.GetName(World.Player.SecondaryAbility)] : [];
+
+        /// <summary>
+        /// Gets an array of all known ability names
+        /// </summary>
+        /// <returns>A list of all known ability names, as defined by the `Ability` enumeration</returns>
+        public string[] KnownAbilityNames() => Enum.GetNames<Ability>();
 
         /// <summary>
         /// Check if your journal contains a message.
@@ -3392,6 +3406,29 @@ namespace ClassicUO.LegionScripting
         /// </summary>
         /// <returns>Array of serials representing all friends</returns>
         public PythonList GetAllFriends() => MainThreadQueue.InvokeOnMainThread(() => FriendsListManager.Instance.GetAllFriends());
+
+        #endregion
+
+        #region Party
+
+        /// <summary>
+        /// Gets a list of serials for all current party members, excluding yourself.
+        ///
+        ///
+        /// Note that members may not always have an associated Mobile.
+        /// </summary>
+        /// <returns>A list of party member serials</returns>
+        public PythonList GetPartyMemberSerials() => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            PythonList members = [];
+            foreach (PartyMember member in World?.Party?.Members ?? [])
+            {
+                if (member != null && member.Serial != 0 && member.Serial != World?.Player?.Serial)
+                    members.Add(member.Serial);
+            }
+
+            return members;
+        });
 
         #endregion
 

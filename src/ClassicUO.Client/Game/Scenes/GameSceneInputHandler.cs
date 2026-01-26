@@ -239,8 +239,6 @@ namespace ClassicUO.Game.Scenes
                 rect = Client.Game.UO.Gumps.GetGump(0x0804).UV;
             }
 
-
-
             foreach (Mobile mobile in _world.Mobiles.Values)
             {
                 if ((

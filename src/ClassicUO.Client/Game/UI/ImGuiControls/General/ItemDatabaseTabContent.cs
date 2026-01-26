@@ -8,7 +8,7 @@ using System.Numerics;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class ItemDatabaseSearchWindow : SingletonImGuiWindow<ItemDatabaseSearchWindow>
+    public class ItemDatabaseTabContent : TabContent
     {
 
         // Search parameters
@@ -44,9 +44,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private int _clearOlderThanDays = 120;
         private bool _clearInProgress = false;
 
-        private ItemDatabaseSearchWindow() : base("Item Database Search")
+        public ItemDatabaseTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             _enabled = ProfileManager.CurrentProfile.ItemDatabaseEnabled;
         }
 

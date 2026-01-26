@@ -1,17 +1,14 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Utility;
-using System;
-using System.IO;
 using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class JournalFilterWindow : SingletonImGuiWindow<JournalFilterWindow>
+    public class JournalFilterTabContent : TabContent
     {
         private Profile profile;
         private string newFilterInput = "";
@@ -19,9 +16,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> filterInputs = new Dictionary<string, string>();
         private List<string> filterList;
 
-        private JournalFilterWindow() : base("Journal Filter")
+        public JournalFilterTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             RefreshFilterList();
         }
@@ -57,43 +53,37 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 Utility.Platforms.PlatformHelper.LaunchBrowser("https://github.com/PlayTazUO/TazUO/wiki/Journal-Filters");
             }
 
-            ImGui.SeparatorText("Import & Export:");
-
-            if (ImGui.Button("Export JSON"))
-            {
-                FileSelector.ShowFileBrowser(Client.Game.UO.World, FileSelectorType.Directory, null, null, (selectedPath) =>
-                {
-                    if (string.IsNullOrWhiteSpace(selectedPath)) return;
-                    string fileName = $"JournalFilters_{DateTime.Now:yyyyMMdd_HHmmss}.json";
-                    string fullPath = Path.Combine(selectedPath, fileName);
-                    JsonHelper.SaveAndBackup(JournalFilterManager.Instance.Filters, fullPath, HashSetContext.Default.HashSetString);
-                }, "Export Journal Filter Configuration");
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Import JSON"))
-            {
-                FileSelector.ShowFileBrowser(Client.Game.UO.World, FileSelectorType.File, null, new[] { "json" }, (selectedFile) =>
-                {
-                    if (string.IsNullOrWhiteSpace(selectedFile)) return;
-                    if (JsonHelper.Load(selectedFile, HashSetContext.Default.HashSetString, out HashSet<string> importedFilters))
-                    {
-                        foreach (string filter in importedFilters)
-                        {
-                            JournalFilterManager.Instance.AddFilter(filter);
-                        }
-                        JournalFilterManager.Instance.Save(false);
-                        RefreshFilterList();
-                    }
-                }, "Import Journal Filter Configuration");
-            }
-
-            // Add filter section
             ImGui.SeparatorText("Filters:");
 
             if (ImGui.Button("Add Filter Entry"))
             {
                 showAddFilter = !showAddFilter;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Import"))
+            {
+                string json = Clipboard.GetClipboardText();
+
+                if(json.NotNullNotEmpty() && JournalFilterManager.Instance.ImportFromJson(json))
+                {
+                    RefreshFilterList();
+                    return;
+                }
+
+                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+
+            if (filterList.Count > 0)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Export"))
+                {
+                    JournalFilterManager.Instance.GetJsonExport()?.CopyToClipboard();
+                    GameActions.Print("Exported journal filters to your clipboard!", Constants.HUE_SUCCESS);
+                }
+                ImGuiComponents.Tooltip("Export your filters to your clipboard.");
             }
 
             if (showAddFilter)

@@ -4,19 +4,18 @@ using System;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class BandageAgentWindow : SingletonImGuiWindow<BandageAgentWindow>
+    public class BandageAgentTabContent : TabContent
     {
         private Profile profile;
-        private string _bandageDelayInput ;
+        private string _bandageDelayInput;
         private string _bandageGraphicInput;
 
         private bool enabled;
         private int hpPercentage;
         private bool checkForBuff, useNewPacket, checkPoisoned, checkHidden, checkInvul, healfriends, dexFormula, disableSelfHeal;
 
-        private BandageAgentWindow() : base("Bandage Agent")
+        public BandageAgentTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
 
             // Initialize input fields with current values

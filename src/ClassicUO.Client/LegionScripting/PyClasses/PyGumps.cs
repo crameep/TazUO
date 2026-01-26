@@ -469,7 +469,7 @@ public class PyGumps(API api)
                     }
                     catch (Exception ex)
                     {
-                        GameActions.Print($"Script callback error: {ex}", 32);
+                        GameActions.Print($"Script callback error: {ex}", Constants.HUE_ERROR);
                     }
                 }
             );

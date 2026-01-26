@@ -2212,18 +2212,19 @@ def HasGump(ID: "int" = 1337) -> "int":
     """
     pass
 
-def ReplyGump(button: "int", gump: "int" = 1337) -> "bool":
+def ReplyGump(button: "int", gump: "int" = 1337, switches: "list[int]" = None) -> "bool":
     """
      Reply to a gump.
      Example:
      ```py
      API.ReplyGump(21)
+     API.ReplyGump(1, 0x555, [100])
      ```
     
     """
     pass
 
-def CloseGump(ID: "int" = 1337) -> None:
+def CloseGump(ID: "int" = 1337) -> "bool":
     """
      Close the last gump open, or a specific gump.
      Example:
@@ -2361,6 +2362,22 @@ def SecondaryAbilityActive() -> "bool":
      if API.SecondaryAbilityActive():
        API.SysMsg("Secondary ability is active!")
      ```
+    
+    """
+    pass
+
+def CurrentAbilityNames() -> "list[str]":
+    """
+     Gets your currently available ability names.
+    
+     The full list of known abilities can be obtained via the `KnownAbilityNames` API
+    
+    """
+    pass
+
+def KnownAbilityNames() -> "list[str]":
+    """
+     Gets an array of all known ability names
     
     """
     pass
@@ -2686,6 +2703,16 @@ def GetAllFriends() -> "list":
      for friend in friends:
          API.FindMobile(friend)
      ```
+    
+    """
+    pass
+
+def GetPartyMemberSerials() -> "list":
+    """
+     Gets a list of serials for all current party members, excluding yourself.
+    
+    
+     Note that members may not always have an associated Mobile.
     
     """
     pass

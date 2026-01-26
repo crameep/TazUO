@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `12/14/25`.*
+*This was generated on `1/25/26`.*
 
 ## Properties
 ### `JournalEntries`
@@ -1970,11 +1970,12 @@ You can now type `-updateapi` in game to download the latest API.py file.
 ---
 
 ### ReplyGump
-`(button, gump)`
+`(button, gump, switches)`
  Reply to a gump.
  Example:
  ```py
  API.ReplyGump(21)
+ API.ReplyGump(1, 0x555, [100])
  ```
 
 
@@ -1984,6 +1985,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | --- | --- | --- | --- |
 | `button` | `int` | ❌ No | Button ID |
 | `gump` | `uint` | ✅ Yes | Gump ID, leave blank to reply to last gump |
+| `switches` | `IEnumerable<int>` | ✅ Yes | Optional for some gump responses |
 
 **Return Type:** `bool`
 
@@ -2004,7 +2006,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | --- | --- | --- | --- |
 | `ID` | `uint` | ✅ Yes | Gump ID |
 
-**Return Type:** `void` *(Does not return anything)*
+**Return Type:** `bool`
 
 ---
 
@@ -2202,6 +2204,26 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 
 **Return Type:** `bool`
+
+---
+
+### CurrentAbilityNames
+
+ Gets your currently available ability names.
+
+ The full list of known abilities can be obtained via the `KnownAbilityNames` API
+
+
+**Return Type:** `string[]`
+
+---
+
+### KnownAbilityNames
+
+ Gets an array of all known ability names
+
+
+**Return Type:** `string[]`
 
 ---
 
@@ -2715,6 +2737,18 @@ You can now type `-updateapi` in game to download the latest API.py file.
  for friend in friends:
      API.FindMobile(friend)
  ```
+
+
+**Return Type:** `PythonList`
+
+---
+
+### GetPartyMemberSerials
+
+ Gets a list of serials for all current party members, excluding yourself.
+
+
+ Note that members may not always have an associated Mobile.
 
 
 **Return Type:** `PythonList`

@@ -20,6 +20,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -63,7 +64,6 @@ namespace ClassicUO
             };
 
             GraphicManager.PreferredDepthStencilFormat = DepthFormat.Depth24Stencil8;
-            SetVSync(false);
 
             Window.ClientSizeChanged += WindowOnClientSizeChanged;
             Window.AllowUserResizing = true;
@@ -92,6 +92,7 @@ namespace ClassicUO
         public GraphicsDeviceManager GraphicManager { get; }
         public readonly uint[] FrameDelay = new uint[2];
         public static int SupportedRefreshRate = 0;
+        public event EventHandler<float> ScaleChanged;
 
         private readonly List<(uint, Action)> _queuedActions = new();
 
@@ -170,6 +171,7 @@ namespace ClassicUO
             byte[] bytes = Loader.GetBackgroundImage().ToArray();
             using var ms = new MemoryStream(bytes);
             _background = Texture2D.FromStream(GraphicsDevice, ms);
+            SetWindowPositionBySettings();
 
 #if false
             SetScene(new MainScene(this));
@@ -180,7 +182,7 @@ namespace ClassicUO
             PNGLoader.Instance.LoadResourceAssets(Client.Game.UO.Gumps.GetGumpsLoader);
 
             Audio.Initialize();
-            // TODO: temporary fix to avoid crash when laoding plugins
+
             Settings.GlobalSettings.Encryption = (byte)AsyncNetClient.Load(UO.FileManager.Version, (EncryptionType)Settings.GlobalSettings.Encryption);
 
             LoadPlugins();
@@ -189,7 +191,6 @@ namespace ClassicUO
 
             SetScene(new LoginScene(UO.World));
 #endif
-            SetWindowPositionBySettings();
             new DiscordManager(UO.World); //Instance is set inside the constructor
             DiscordManager.Instance.FromSavedToken();
         }
@@ -308,7 +309,11 @@ namespace ClassicUO
 
         private void SetWindowPosition(int x, int y) => SDL_SetWindowPosition(Window.Handle, x, y);
 
-        public void SetScale(float scale) => RenderScale = Math.Max(scale, 0.1f);
+        public void SetScale(float scale)
+        {
+            RenderScale = Math.Max(scale, 0.1f);
+            ScaleChanged?.Invoke(this, RenderScale);
+        }
 
         public void SetWindowSize(int width, int height, bool bufferOnly = false)
         {
@@ -635,6 +640,22 @@ namespace ClassicUO
         }
 
         protected override bool BeginDraw() => !_suppressedDraw && base.BeginDraw();
+
+        /// <summary>
+        /// Must be called during a batch, cannot call before batcher.Begin or after batcher.End
+        /// </summary>
+        /// <param name="batcher"></param>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        [Conditional("DEBUG")]
+        public static void DrawFlushCounts(UltimaBatcher2D batcher, int x, int y)
+        {
+            Vector3 hueVec = new(0, 1, 1);
+            string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}";
+            batcher.DrawString(Fonts.Bold, s, x, y, hueVec);
+            hueVec = Vector3.Zero;
+            batcher.DrawString(Fonts.Bold, s, x + 1, y - 1, hueVec);
+        }
 
         private void WindowOnClientSizeChanged(object sender, EventArgs e)
         {
@@ -1035,7 +1056,7 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP:
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }
@@ -1061,7 +1082,7 @@ namespace ClassicUO
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION: //Work around because sdl doesn't see trigger buttons as buttons, they are axis probably for pressure support
                                                                   //GameActions.Print(typeof(SDL_GamepadButton).GetEnumName((SDL_GamepadButton)sdlEvent->gbutton.button));
-                    if (!IsActive)
+                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }

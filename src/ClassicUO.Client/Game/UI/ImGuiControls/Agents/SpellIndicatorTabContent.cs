@@ -2,8 +2,6 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Data;
-using ClassicUO.Utility;
-using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Linq;
@@ -11,7 +9,7 @@ using ClassicUO.Game.Managers.SpellVisualRange;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SpellIndicatorWindow : SingletonImGuiWindow<SpellIndicatorWindow>
+    public class SpellIndicatorTabContent : TabContent
     {
         private Profile profile;
         private bool enableSpellIndicators;
@@ -26,10 +24,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool showAddNewSpell = false;
         private string newSpellIdInput = "";
         private string newSpellNameInput = "";
+        private SpellRangeInfo spellToDelete = null;
 
-        private SpellIndicatorWindow() : base("Spell Indicators")
+        public SpellIndicatorTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             enableSpellIndicators = profile?.EnableSpellIndicators ?? false;
         }
@@ -70,14 +68,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
                 else
                 {
-                    selectedSpell = null;
+                    // Fall back to searching directly in SpellRangeCache for custom spells
+                    selectedSpell = SpellVisualRangeManager.Instance.SpellRangeCache.Values
+                        .FirstOrDefault(s => s.Name.ToLower().Contains(spellSearchInput.ToLower()));
+                    if (selectedSpell != null)
+                    {
+                        InitializeInputs(selectedSpell);
+                    }
                 }
             }
             ImGui.SameLine();
             if (ImGui.Button("Clear"))
             {
-                spellSearchInput = "";
-                selectedSpell = null;
+                ClearSelection();
             }
             ImGuiComponents.Tooltip("Type a spell name to search and edit its spell indicator settings.");
 
@@ -87,8 +90,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 showAddNewSpell = !showAddNewSpell;
                 if (showAddNewSpell)
                 {
-                    selectedSpell = null;
-                    spellSearchInput = "";
+                    ClearSelection();
                 }
             }
             ImGuiComponents.Tooltip("Create a new spell indicator configuration.");
@@ -134,6 +136,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 200);
                 ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+
+                // Spell ID
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.Text("Spell ID:");
+                ImGui.TableNextColumn();
+                ImGui.Text(spell.ID.ToString());
 
                 // Name
                 ImGui.TableNextRow();
@@ -315,6 +324,38 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndTable();
             }
+
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            if (ImGui.Button($"Delete Spell##{spell.ID}"))
+            {
+                spellToDelete = spell;
+                ImGui.OpenPopup("DeleteConfirmation");
+            }
+            ImGuiComponents.Tooltip("Delete this spell indicator configuration.");
+
+            // Delete confirmation popup
+            if (ImGui.BeginPopupModal("DeleteConfirmation", ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                ImGui.Text($"Are you sure you want to delete '{spellToDelete?.Name}'?");
+                ImGui.Text("This action cannot be undone.");
+                ImGui.Spacing();
+
+                if (ImGui.Button("Delete", new Vector2(120, 0)))
+                {
+                    DeleteSpell(spellToDelete);
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Cancel", new Vector2(120, 0)))
+                {
+                    spellToDelete = null;
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
         }
 
         private void DrawSpellTable()
@@ -327,8 +368,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
-            if (ImGui.BeginTable("SpellIndicatorTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+            if (ImGui.BeginTable("SpellIndicatorTable", 7, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
             {
+                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 50);
                 ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Power Words", ImGuiTableColumnFlags.WidthFixed, 120);
                 ImGui.TableSetupColumn("Cast Range", ImGuiTableColumnFlags.WidthFixed, 80);
@@ -340,6 +382,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 foreach (SpellRangeInfo spell in spells)
                 {
                     ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    ImGui.Text(spell.ID.ToString());
 
                     ImGui.TableNextColumn();
                     ImGui.Text(spell.Name);
@@ -492,6 +537,38 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
                 ImGui.EndPopup();
             }
+        }
+
+        private void DeleteSpell(SpellRangeInfo spell)
+        {
+            if (spell == null)
+                return;
+
+            SpellVisualRangeManager.Instance.SpellRangeCache.Remove(spell.ID);
+
+            // Clear the input caches for this spell
+            spellNameInputs.Remove(spell.ID);
+            spellPowerWordsInputs.Remove(spell.ID);
+            spellCursorSizeInputs.Remove(spell.ID);
+            spellCastRangeInputs.Remove(spell.ID);
+            spellCastTimeInputs.Remove(spell.ID);
+            spellMaxDurationInputs.Remove(spell.ID);
+
+            SaveSpell();
+
+            // Clear selection if we deleted the selected spell
+            if (selectedSpell == spell)
+            {
+                ClearSelection();
+            }
+
+            spellToDelete = null;
+        }
+
+        private void ClearSelection()
+        {
+            spellSearchInput = "";
+            selectedSpell = null;
         }
 
         private void SaveSpell() => SpellVisualRangeManager.Instance.DelayedSave();

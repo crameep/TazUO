@@ -390,5 +390,16 @@ namespace ClassicUO.Utility
 
             return int.TryParse(text, out graphic);
         }
+
+        public static string FormatAsCurrency(int amount) => amount.ToString("N0", CultureInfo.CurrentCulture);
+
+        public static bool TryParseCurrency(string text, out int result)
+        {
+            result = 0;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            return int.TryParse(text, NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out result);
+        }
     }
 }

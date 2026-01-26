@@ -13,7 +13,8 @@ using ClassicUO.Resources;
 using ClassicUO.Utility;
 using SDL3;
 using System.Collections.Generic;
-using ClassicUO.Utility.Logging;
+using ClassicUO.Network;
+using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Game.UI.Gumps.Login
 {
@@ -94,8 +95,10 @@ namespace ClassicUO.Game.UI.Gumps.Login
             {
                 string character = loginScene.Characters[i];
 
-                if (!string.IsNullOrEmpty(character))
+                if (character.NotNullNotEmpty())
                 {
+                    LemCharData? LEMData = LastEquipmentManager.Load(LoginHandshake.Instance.LastServerName, character, LoginHandshake.Account);
+
                     valid++;
 
                     if (valid > World.ClientFeatures.MaxChars)
@@ -117,6 +120,25 @@ namespace ClassicUO.Game.UI.Gumps.Login
                         1
                     );
                     gumps.Add(g);
+
+                    if (LEMData.HasValue)
+                    {
+                        var equipment = new Dictionary<Layer, StaticPaperDollView.EquipmentEntry>();
+                        foreach (KeyValuePair<Layer, LemEquipmentEntry> kvp in LEMData.Value.Equipment)
+                        {
+                            equipment[kvp.Key] = new StaticPaperDollView.EquipmentEntry(
+                                kvp.Value.AnimID, kvp.Value.Hue, kvp.Value.IsPartialHue);
+                        }
+
+                        var view = new StaticPaperDollView(
+                            LEMData.Value.PlayerGraphic,
+                            LEMData.Value.BodyHue,
+                            LEMData.Value.IsFemale,
+                            equipment,
+                            new Vector2(200, 300));
+
+                        g.SetTooltip(view);
+                    }
 
                     posInList++;
                 }
@@ -352,7 +374,8 @@ namespace ClassicUO.Game.UI.Gumps.Login
                         X = 0,
                         Y = 0,
                         Width = 280,
-                        Height = 30
+                        Height = 30,
+                        AcceptMouseInput = false
                     }
                 );
 
@@ -369,7 +392,8 @@ namespace ClassicUO.Game.UI.Gumps.Login
                         align: TEXT_ALIGN_TYPE.TS_CENTER
                     )
                     {
-                        X = 0
+                        X = 0,
+                        AcceptMouseInput = false
                     }
                 );
 

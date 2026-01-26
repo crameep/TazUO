@@ -250,6 +250,7 @@ namespace ClassicUO.Game.UI.Gumps
             submenu.Add(new ContextMenuItemEntry("Spell quick cast", () => { UIManager.Add(new SpellQuickSearch(World, 200, 200, (sp) => {if (sp != null) GameActions.CastSpell(sp.ID);})); }));
             submenu.Add(new ContextMenuItemEntry("Open boat control", () => { UIManager.Add(new BoatControl(World) { X = 200, Y = 200 }); }));
             submenu.Add(new ContextMenuItemEntry("Nearby loot", () => { UIManager.Add(new NearbyLootGump(World)); }));
+            submenu.Add(new ContextMenuItemEntry("Healthbar Collector", () => { UIManager.Add(new HealthbarCollectorGump(World) { X = 100, Y = 100 }); }));
             submenu.Add(new ContextMenuItemEntry("Retrieve gumps", () =>
             {
                 for (LinkedListNode<Gump> last = UIManager.Gumps.Last; last != null; last = last.Previous)

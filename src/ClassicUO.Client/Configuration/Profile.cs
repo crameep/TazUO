@@ -678,11 +678,11 @@ namespace ClassicUO.Configuration
         [JsonIgnore]
         public bool DisableWeather
         {
-            get => field;
+            get;
             set
             {
                 if (field != value)
-                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, value);
+                    _ =Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, value);
 
                 field = value;
             }
@@ -691,10 +691,11 @@ namespace ClassicUO.Configuration
         [JsonIgnore]
         public bool EnablePetScaling
         {
-            get => field;
-            set {
+            get;
+            set
+            {
                 if (field != value)
-                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
+                    _ = Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, value);
 
                 field = value;
             }
@@ -703,11 +704,11 @@ namespace ClassicUO.Configuration
         [JsonIgnore]
         public bool AutoUnequipForActions
         {
-            get => field;
+            get;
             set
             {
                 if (field != value)
-                    Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, value);
+                    _ =Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, value);
 
                 field = value;
             }
@@ -716,15 +717,41 @@ namespace ClassicUO.Configuration
         [JsonIgnore]
         public int MinGumpMoveDistance
         {
-            get => field;
+            get;
             set
             {
                 if (field != value)
-                    Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, value);
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, value);
 
                 field = value;
             }
         } = 5;
+
+        [JsonIgnore]
+        public int QuickHealSpell
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    _ = Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.QUICK_HEAL_SPELL, value);
+
+                field = value;
+            }
+        } = 29;
+
+        [JsonIgnore]
+        public int QuickCureSpell
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    _ = Client.Settings.SetAsync(SettingsScope.Char, Constants.SqlSettings.QUICK_CURE_SPELL, value);
+
+                field = value;
+            }
+        } = 11;
 
         private long lastSave;
 
@@ -735,15 +762,15 @@ namespace ClassicUO.Configuration
                 Log.Error("Warning, SQL settings failed to load!");
                 return;
             }
-            //These are fine if we continue without loading them yet (non-Char scoped)
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, (b) => { MinGumpMoveDistance = b; });
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, false, (b) => { DisableWeather = b; });
 
+            //These are fine if we continue without loading them yet (non-Char scoped)
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, b => { MinGumpMoveDistance = b; });
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, false, b => { DisableWeather = b; });
 
             //These must be waited before continue for various purposes elsewhere
             Task[] mustWait = [
-                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, false, (b) => WebMapAutoStart = b),
-                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, (p) => WebMapServerPort = p)
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, false, b => WebMapAutoStart = b),
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, p => WebMapServerPort = p)
             ];
 
             Task.WaitAll(mustWait, 5000);
@@ -758,8 +785,10 @@ namespace ClassicUO.Configuration
             }
 
             // Load Char-scoped settings after player is created (when serial is available)
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, (b) => { EnablePetScaling = b; });
-            Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, false, (b) => { AutoUnequipForActions = b; });
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.SCALE_PETS_ENABLED, false, b => { EnablePetScaling = b; });
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.AUTO_UNEQUIP_FOR_ACTIONS, false, b => { AutoUnequipForActions = b; });
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.QUICK_HEAL_SPELL, 29, b => { QuickHealSpell = b; });
+            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Char, Constants.SqlSettings.QUICK_CURE_SPELL, 11, b => { QuickCureSpell = b; });
         }
 
         internal void Save(World world, string path, bool saveGumps = true)
@@ -1185,6 +1214,7 @@ namespace ClassicUO.Configuration
                                     NameOverHeadHandlerGump.LastPosition = new Point(x, y);
                                     // Gump gets opened by NameOverHeadManager, we just want to save the last position from profile
                                     break;
+
                                 case GumpType.GridContainer:
                                     ushort ogContainer = ushort.Parse(xml.GetAttribute("ogContainer"));
                                     gump = new GridContainer(world, serial, ogContainer);
@@ -1194,11 +1224,13 @@ namespace ClassicUO.Configuration
                                         y = ProfileManager.CurrentProfile.BackpackGridPosition.Y;
                                     }
                                     break;
+
                                 case GumpType.DurabilityGump:
                                     gump = new DurabilitysGump(world);
                                     break;
-                                case GumpType.ScriptManager:
-                                    // ScriptManagerGump removed - use ScriptManagerWindow instead
+
+                                case GumpType.HealthBarCollector:
+                                    gump = new HealthbarCollectorGump(world);
                                     break;
                             }
 

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Xml;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Game.Managers
@@ -165,8 +166,8 @@ namespace ClassicUO.Game.Managers
 
         private (Point?, AnchorableGump) GetAnchorDirection(AnchorableGump draggedControl, AnchorableGump host)
         {
-            int xdistancescale = Math.Abs(draggedControl.X - host.X) * 100 / host.Width;
-            int ydistancescale = Math.Abs(draggedControl.Y - host.Y) * 100 / host.Height;
+            int xdistancescale = Math.Abs(draggedControl.X - host.X) * 100 / host.Width.NotZero;
+            int ydistancescale = Math.Abs(draggedControl.Y - host.Y) * 100 / host.Height.NotZero;
 
             if (xdistancescale > ydistancescale)
             {

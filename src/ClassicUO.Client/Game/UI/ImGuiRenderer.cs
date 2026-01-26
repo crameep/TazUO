@@ -36,6 +36,9 @@ namespace ClassicUO.Game.UI
         private int _textureId;
         private IntPtr? _fontTextureId;
 
+        // ImGui Context
+        private readonly IntPtr _imguiContext;
+
         // Input
         private int _scrollWheelValue;
         private readonly float WHEEL_DELTA = 120;
@@ -44,8 +47,8 @@ namespace ClassicUO.Game.UI
 
         public ImGuiRenderer(Microsoft.Xna.Framework.Game game)
         {
-            nint context = ImGui.CreateContext();
-            ImGui.SetCurrentContext(context);
+            _imguiContext = ImGui.CreateContext();
+            ImGui.SetCurrentContext(_imguiContext);
 
             _game = game ?? throw new ArgumentNullException(nameof(game));
             _graphicsDevice = game.GraphicsDevice;
@@ -84,6 +87,11 @@ namespace ClassicUO.Game.UI
         {
             TextInputEXT.TextInput -= TextInput;
             Client.Game.Window.ClientSizeChanged -= WindowOnClientSizeChanged;
+
+            _loadedTextures?.Clear();
+            _vertexBuffer?.Dispose();
+            _indexBuffer?.Dispose();
+            _effect?.Dispose();
         }
 
         /// <summary>

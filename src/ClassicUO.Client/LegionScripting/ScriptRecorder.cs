@@ -470,8 +470,13 @@ namespace ClassicUO.LegionScripting
                     case "replygump":
                         if (action.Parameters.TryGetValue("button", out object gumpButton))
                         {
+                            string switches = "";
+
+                            if (action.Parameters.TryGetValue("switches", out object switchesValue))
+                                switches = ", [" + switchesValue + "]";
+
                             if (action.Parameters.TryGetValue("gumpid", out object gumpId))
-                                script.AppendLine($"API.ReplyGump({gumpButton}, 0x{gumpId:X8})");
+                                script.AppendLine($"API.ReplyGump({gumpButton}, 0x{gumpId:X8}{switches})");
                             else
                                 script.AppendLine($"API.ReplyGump({gumpButton})");
                         }
@@ -535,7 +540,7 @@ namespace ClassicUO.LegionScripting
                     case "waitforgump":
                         if (action.Parameters.TryGetValue("id", out object gumpid))
                         {
-                            script.AppendLine($"while not API.HasGump(\"{gumpid}\"):");
+                            script.AppendLine($"while not API.HasGump({gumpid}):");
                             script.AppendLine($"    API.Pause(0.1)");
                         }
                         break;

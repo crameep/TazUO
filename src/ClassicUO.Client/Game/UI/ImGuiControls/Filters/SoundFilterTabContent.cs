@@ -1,15 +1,15 @@
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
-using ClassicUO.Game;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Text.Json;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class SoundFilterWindow : SingletonImGuiWindow<SoundFilterWindow>
+    public class SoundFilterTabContent : TabContent
     {
         private Profile profile;
         private int newSoundIdInput = 0;
@@ -17,9 +17,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private List<int> filterList;
         private Dictionary<int, int> filterInputs = new Dictionary<int, int>();
 
-        private SoundFilterWindow() : base("Sound Filter")
+        public SoundFilterTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             profile = ProfileManager.CurrentProfile;
             RefreshFilterList();
         }
@@ -32,6 +31,87 @@ namespace ClassicUO.Game.UI.ImGuiControls
             foreach (int soundId in filterList)
                 if (!filterInputs.ContainsKey(soundId))
                     filterInputs[soundId] = soundId;
+        }
+
+        private void ExportToClipboard()
+        {
+            try
+            {
+                string json = JsonSerializer.Serialize(
+                    SoundFilterManager.Instance.FilteredSounds,
+                    HashSetIntContext.Default.HashSetInt32);
+
+                SDL3.SDL.SDL_SetClipboardText(json);
+
+                int count = SoundFilterManager.Instance.FilteredSounds.Count;
+                GameActions.Print($"Exported {count} sound filter(s) to clipboard", Constants.HUE_SUCCESS);
+            }
+            catch (Exception ex)
+            {
+                GameActions.Print($"Export failed: {ex.Message}", Constants.HUE_ERROR);
+            }
+        }
+
+        private void ImportFromClipboard()
+        {
+            try
+            {
+                string json = SDL3.SDL.SDL_GetClipboardText();
+
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    GameActions.Print("Clipboard is empty", Constants.HUE_ERROR);
+                    return;
+                }
+
+                HashSet<int> importedFilters = JsonSerializer.Deserialize(
+                    json,
+                    HashSetIntContext.Default.HashSetInt32);
+
+                if (importedFilters == null)
+                {
+                    GameActions.Print("Failed to parse clipboard data", Constants.HUE_ERROR);
+                    return;
+                }
+
+                // Validate and add sound IDs to existing filters
+                int clampedCount = 0;
+                int addedCount = 0;
+
+                foreach (int soundId in importedFilters)
+                {
+                    int validId = soundId;
+                    if (soundId < 0 || soundId > 65535)
+                    {
+                        validId = Math.Clamp(soundId, 0, 65535);
+                        clampedCount++;
+                    }
+
+                    // Add to existing filters (HashSet automatically handles duplicates)
+                    if (SoundFilterManager.Instance.FilteredSounds.Add(validId))
+                    {
+                        addedCount++;
+                    }
+                }
+
+                SoundFilterManager.Instance.Save();
+                RefreshFilterList();
+
+                GameActions.Print($"Added {addedCount} sound filter(s) from clipboard", Constants.HUE_SUCCESS);
+
+                if (clampedCount > 0)
+                {
+                    GameActions.Print($"Warning: {clampedCount} sound ID(s) were out of range and clamped to 0-65535", 946);
+                }
+            }
+            catch (JsonException ex)
+            {
+                GameActions.Print($"Invalid JSON format: {ex.Message}", Constants.HUE_ERROR);
+            }
+            catch (Exception ex)
+            {
+                GameActions.Print($"Import failed: {ex.Message}", Constants.HUE_ERROR);
+            }
         }
 
         public override void DrawContent()
@@ -114,6 +194,22 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
 
             ImGui.SeparatorText("Filtered Sounds:");
+
+            if (ImGui.Button("Export to Clipboard"))
+            {
+                ExportToClipboard();
+            }
+            ImGuiComponents.Tooltip("Export all filtered sounds as JSON to clipboard");
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Import from Clipboard"))
+            {
+                ImportFromClipboard();
+            }
+            ImGuiComponents.Tooltip("Import filtered sounds from clipboard JSON (adds to current filters)");
+
+            ImGui.Spacing();
 
             if (filterList.Count == 0)
                 ImGui.Text("No sounds filtered");

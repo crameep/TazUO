@@ -6,11 +6,10 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Network;
-using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
-    public class GeneralWindow : SingletonImGuiWindow<GeneralWindow>
+    public class GeneralTabContent : TabContent
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
         private int _objectMoveDelay;
@@ -26,9 +25,21 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private int _currentThemeIndex, _minGumpMoveDist, _gameScale, _minScale, _maxScale;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
-        private GeneralWindow() : base("General Tab")
+
+        // Child tab contents
+        private HudTabContent _hudTab;
+        private SpellBarTabContent _spellBarTab;
+        private TitleBarTabContent _titleBarTab;
+        private SpellIndicatorTabContent _spellIndicatorTab;
+        private FriendsListTabContent _friendsListTab;
+
+        // Info tab cached values
+        private readonly string _version = "TazUO Version: " + CUOEnviroment.Version;
+        private uint _lastObject = 0;
+        private string _lastObjectString = "Last Object: 0x00000000";
+
+        public GeneralTabContent()
         {
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
             _objectMoveDelay = _profile.MoveMultiObjectDelay;
             _highlightObjects = _profile.HighlightGameObjects;
             _showNames = _profile.NameOverheadToggled;
@@ -51,6 +62,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             string currentTheme = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_THEME, "Default");
             _currentThemeIndex = Array.IndexOf(_themeNames, currentTheme);
             if (_currentThemeIndex < 0) _currentThemeIndex = 0;
+
+            // Initialize child tabs
+            _hudTab = new HudTabContent();
+            _spellBarTab = new SpellBarTabContent();
+            _titleBarTab = new TitleBarTabContent();
+            _spellIndicatorTab = new SpellIndicatorTabContent();
+            _friendsListTab = new FriendsListTabContent();
         }
 
         public override void DrawContent()
@@ -79,31 +97,31 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if (ImGui.BeginTabItem("HUD"))
                 {
-                    HudWindow.GetInstance()?.DrawContent();
+                    _hudTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Spell Bar"))
                 {
-                    SpellBarWindow.GetInstance()?.DrawContent();
+                    _spellBarTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Title Bar"))
                 {
-                    TitleBarWindow.GetInstance()?.DrawContent();
+                    _titleBarTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Spell Indicators"))
                 {
-                    SpellIndicatorWindow.GetInstance()?.DrawContent();
+                    _spellIndicatorTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Friends List"))
                 {
-                    FriendsListWindow.GetInstance()?.DrawContent();
+                    _friendsListTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
@@ -310,9 +328,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.EndGroup();
         }
 
-        private readonly string _version = "TazUO Version: " + CUOEnviroment.Version; //Pre-cache to prevent reading var and string concatenation every frame
-        private uint _lastObject = 0;
-        private string _lastObjectString = "Last Object: 0x00000000";
         private void DrawInfoTab()
         {
             if (World.Instance != null)
@@ -334,5 +349,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Text(_version);
         }
 
+        public override void Dispose()
+        {
+            _hudTab?.Dispose();
+            _spellBarTab?.Dispose();
+            _titleBarTab?.Dispose();
+            _spellIndicatorTab?.Dispose();
+            _friendsListTab?.Dispose();
+            base.Dispose();
+        }
     }
 }

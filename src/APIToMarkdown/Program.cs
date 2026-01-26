@@ -638,7 +638,7 @@ class Program
 
         foreach (string? filePath in args.Skip(1))
         {
-            Console.WriteLine("Processing file: " + filePath);
+            //Console.WriteLine("Processing file: " + filePath);
 
             if (string.IsNullOrEmpty(filePath))
                 continue;
@@ -647,7 +647,7 @@ class Program
                 continue;
 
             Dictionary<string, Tuple<StringBuilder, StringBuilder>> gen = GenDoc.GenerateMarkdown(filePath);
-            Console.WriteLine($"Generation complete for [{filePath}].");
+            //Console.WriteLine($"Generation complete for [{filePath}].");
 
             string path = Path.GetDirectoryName(filePath)!;
 
@@ -668,7 +668,7 @@ public static class SbExtensions
     {
         if (value == null)
             value = string.Empty;
-            
+
         return sb.Append(value).Append('\n');
     }
 }

@@ -297,13 +297,28 @@ public class GridContainerEntry
 
     [JsonPropertyName("y")] public int Y { get; set; }
 
-    [JsonPropertyName("og")] public bool UseOriginalContainer { get; set; }
+    [JsonPropertyName("mx")] public int MaximizedX { get; set; }
+
+    [JsonPropertyName("my")] public int MaximizedY { get; set; }
+
+    [JsonPropertyName("mnx")] public int MinimizedX { get; set; }
+
+    [JsonPropertyName("mny")] public int MinimizedY { get; set; }
+
+    /// <summary>
+    /// The container's gump style preference.
+    /// <br/>
+    /// When null, the container should be opened in accordance to the <see cref="Profile.GridContainersDefaultToOldStyleView"/> setting
+    /// </summary>
+    [JsonPropertyName("og")] public bool? UseOriginalContainer { get; set; }
 
     [JsonPropertyName("as")] public bool AutoSort { get; set; }
 
     [JsonPropertyName("vs")] public bool VisuallyStackNonStackables { get; set; }
 
     [JsonPropertyName("sm")] public int SortMode { get; set; }
+
+    [JsonPropertyName("m")] public bool IsMinimized { get; set; }
 
     [JsonPropertyName("ls")] public Dictionary<uint, GridContainerSlotEntry> Slots { get; set; } = new();
 
@@ -321,19 +336,48 @@ public class GridContainerEntry
 
     public Point GetSize() => new Point(Width, Height);
 
+    public Point GetPositionForState(bool isMinimized)
+    {
+        if (isMinimized)
+            return new Point(MinimizedX != 0 ? MinimizedX : X, MinimizedY != 0 ? MinimizedY : Y);
+        else
+            return new Point(MaximizedX != 0 ? MaximizedX : X, MaximizedY != 0 ? MaximizedY : Y);
+    }
+
+    public void SetPositionForState(int x, int y, bool isMinimized)
+    {
+        if (isMinimized)
+        {
+            MinimizedX = x;
+            MinimizedY = y;
+        }
+        else
+        {
+            MaximizedX = x;
+            MaximizedY = y;
+        }
+
+        // Also update legacy X/Y for backward compatibility
+        X = x;
+        Y = y;
+    }
+
     public void UpdateSaveDataEntry(GridContainer container) => GridContainerSaveData.Instance.AddOrReplaceContainer(container);
 
     public GridContainerEntry UpdateFromContainer(GridContainer container)
     {
         Serial = container.LocalSerial;
         Width = container.Width;
-        Height = container.Height;
-        X = container.X;
-        Y = container.Y;
-        UseOriginalContainer = container.UseOldContainerStyle ?? false;
+        // Store the full height, not the minimized height
+        Height = container.IsMinimized ? container.HeightBeforeMinimize : container.Height;
+        SetPositionForState(container.X, container.Y, container.IsMinimized);
+        // If the container was given a new explicit preference, use it, otherwise, use whatever we already have stored.
+        // Null is also fine here and indicates a 'default', ergo, go with the profile's `GridContainersDefaultToOldStyleView` settings
+        UseOriginalContainer = container.UseOldContainerStyle ?? container.GridContainerEntry.UseOriginalContainer;
         AutoSort = container.AutoSortContainer;
         VisuallyStackNonStackables = container.StackNonStackableItems;
         SortMode = (int)container.SortMode;
+        IsMinimized = container.IsMinimized;
 
         // Sync all item positions from GridSlotManager to Slots
         // First, remove any entries for items no longer in ItemPositions (they were removed/moved)
