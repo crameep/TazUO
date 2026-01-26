@@ -5,6 +5,8 @@ namespace ClassicUO.Game.UI.ImGuiControls;
 
 public class TestWindow : SingletonImGuiWindow<TestWindow>
 {
+    public static string TestMessage = string.Empty;
+
     private int _currency = 0;
     private string _formattedCurrency = string.Empty;
     private string _formattedAsInt = string.Empty;
@@ -17,6 +19,8 @@ public class TestWindow : SingletonImGuiWindow<TestWindow>
 
     public override void DrawContent()
     {
+        ImGui.Text(TestMessage);
+
         if (ImGui.InputInt("Currency Test", ref _currency))
         {
             _formattedCurrency = StringHelper.FormatAsCurrency(_currency);

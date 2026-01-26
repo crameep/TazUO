@@ -597,7 +597,10 @@ internal static class GameActions
     internal static void DoubleClickQueued(uint serial, bool ignoreWarMode)
     {
         if (World.Instance != null)
-            GlobalPriorityQueue.Instance.Enqueue(() => { DoubleClick(World.Instance, serial, ignoreWarMode); });
+            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
+            {
+                DoubleClick(World.Instance, serial, ignoreWarMode);
+            }), ActionPriority.UseItem);
     }
 
     internal static void DoubleClick(World world, uint serial, bool ignoreWarMode = false)
@@ -1202,7 +1205,7 @@ internal static class GameActions
             SendAbility(world, 0, true);
         }
 
-            ScriptRecorder.Instance.RecordAbility("primary");
+        ScriptRecorder.Instance.RecordAbility("primary");
 
         ability ^= (Ability)0x80;
     }

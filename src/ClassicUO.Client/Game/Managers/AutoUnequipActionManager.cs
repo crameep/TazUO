@@ -1,6 +1,7 @@
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.UI.ImGuiControls;
 
 namespace ClassicUO.Game.Managers
 {
@@ -50,7 +51,8 @@ namespace ClassicUO.Game.Managers
                     _pendingSpellIndex = spellIndex;
                     return true;
                 }
-                else if (_sequenceState == SequenceState.Casting)
+
+                if (_sequenceState == SequenceState.Casting)
                 {
                     // Hands already free, cast new spell directly and skip reequip
                     GameActions.CastSpellDirect(spellIndex);
@@ -94,7 +96,7 @@ namespace ClassicUO.Game.Managers
             // Action 1: Unequip one-handed weapon (if equipped)
             if (_oneHandedSerial != 0)
             {
-                GlobalPriorityQueue.Instance.Enqueue(() =>
+                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
                 {
                     Item item = _world.Items.Get(_oneHandedSerial);
                     if (item != null && item.Container == _world.Player.Serial && item.Layer == Layer.OneHanded)
@@ -105,13 +107,13 @@ namespace ClassicUO.Game.Managers
                             MoveItemQueue.Instance.Enqueue(_oneHandedSerial, bp.Serial, item.Amount);
                         }
                     }
-                });
+                }), ActionPriority.EquipItem);
             }
 
             // Action 2: Unequip two-handed weapon (if equipped)
             if (_twoHandedSerial != 0)
             {
-                GlobalPriorityQueue.Instance.Enqueue(() =>
+                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
                 {
                     Item item = _world.Items.Get(_twoHandedSerial);
                     if (item != null && item.Container == _world.Player.Serial && item.Layer == Layer.TwoHanded)
@@ -122,23 +124,23 @@ namespace ClassicUO.Game.Managers
                             MoveItemQueue.Instance.Enqueue(_twoHandedSerial, bp.Serial, item.Amount);
                         }
                     }
-                });
+                }), ActionPriority.EquipItem);
             }
 
             // Action 3: Cast the spell (after unequipping)
-            GlobalPriorityQueue.Instance.Enqueue(() =>
+            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
             {
                 if (_pendingSpellIndex >= 0)
                 {
                     GameActions.CastSpellDirect(_pendingSpellIndex);
                 }
                 _sequenceState = SequenceState.Casting;
-            });
+            }), ActionPriority.EquipItem);
 
             // Action 4: Reequip one-handed weapon (check state first)
             if (_oneHandedSerial != 0)
             {
-                GlobalPriorityQueue.Instance.Enqueue(() =>
+                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
                 {
                     // If state changed, skip reequip
                     if (_sequenceState != SequenceState.Casting)
@@ -153,22 +155,22 @@ namespace ClassicUO.Game.Managers
                     {
                         MoveItemQueue.Instance.EnqueueEquipSingle(_oneHandedSerial, Layer.OneHanded);
                     }
-                });
+                }), ActionPriority.EquipItem);
             }
             else
             {
                 // No one-handed weapon, but still transition state
-                GlobalPriorityQueue.Instance.Enqueue(() =>
+                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
                 {
                     if (_sequenceState == SequenceState.Casting)
                         _sequenceState = SequenceState.Reequipping;
-                });
+                }), ActionPriority.EquipItem);
             }
 
             // Action 5: Reequip two-handed weapon (check state first)
             if (_twoHandedSerial != 0)
             {
-                GlobalPriorityQueue.Instance.Enqueue(() =>
+                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
                 {
                     // If state changed or not reequipping, skip
                     if (_sequenceState != SequenceState.Reequipping)
@@ -181,14 +183,11 @@ namespace ClassicUO.Game.Managers
                     {
                         MoveItemQueue.Instance.EnqueueEquipSingle(_twoHandedSerial, Layer.TwoHanded);
                     }
-                });
+                }), ActionPriority.EquipItem);
             }
 
             // Action 6: Cleanup
-            GlobalPriorityQueue.Instance.Enqueue(() =>
-            {
-                Reset();
-            });
+            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(Reset), ActionPriority.EquipItem);
         }
 
         private void Reset()

@@ -219,7 +219,7 @@ namespace ClassicUO.Game.Managers
             bool shouldEnqueue;
             lock (_queueLock) shouldEnqueue = _enqueuedInGlobalQueue.Add(mobile.Serial);
 
-            if (shouldEnqueue) GlobalPriorityQueue.Instance.Enqueue(() => ExecuteHealMobile(mobile));
+            if (shouldEnqueue) ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() => ExecuteHealMobile(mobile)), ActionPriority.Immediate);
         }
 
         private void ExecuteHealMobile(Mobile mobile)
