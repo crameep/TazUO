@@ -1272,6 +1272,13 @@ namespace ClassicUO.Network
         {
             const byte ID = 0xB1;
 
+            // Switches are "what radios and checkboxes are checked?"
+            switches ??= [];
+
+            // Entries are responses for text inputs, from the user,
+            // i.e., a user input some arbitrary string into a gump
+            entries ??= [];
+
             int length = AsyncNetClient.PacketsTable.GetPacketLength(ID);
 
             var writer = new StackDataWriter(length < 0 ? 64 : length);
