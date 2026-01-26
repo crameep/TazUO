@@ -11,6 +11,11 @@ internal class VersionHistory : NineSliceGump
     private static readonly string[] _updateTexts =
     [
         """
+        /c[white][4.16.0]/cd
+
+        """,
+
+        """
         /c[white][4.15.0]/cd
         # Misc
         - Change grid highlight to use min/max weight instead of a set 50 stone limit
@@ -409,61 +414,6 @@ internal class VersionHistory : NineSliceGump
         "- Extended python api\n" +
         "- Other small changes" +
         "\n",
-        "/c[white][4.0.0]/cd\n" +
-        "- Prevent autoloot, move item queue from moving items while you are holding something.\n" +
-        "- Change multi item move to use shared move item queue\n" +
-        "- Prevent closing containers when changing facets\n" +
-        "- Added Create macro button for legion scripts\n" +
-        "- Potential Crash fix from CUO\n" +
-        "- Python API changes\n" +
-        "- Change how skill message frequency option works - fuzzlecutter\n" +
-        "- Added an option to default to old container style with the option to switch to grid container style\n" +
-        "- Added option to remove System prefix in journal\n" +
-        "- Minor bug fixes\n" +
-        "- Spellbar!\n" +
-        "- Implemented Async networking\n",
-        "/c[white][3.32.0]/cd\n" +
-        "- Added simple progress bar control for Python API gumps.\n" +
-        "- Generate user friendly html crash logs and open them on crash\n" +
-        "- Some fixes for nearby corpse loot gump\n" +
-        "- Very slightly increased minimum distance to start dragging a gump. Hopefully it should prevent accidental drags instead of clicks\n" +
-        "- Nearby loot gump now stays open after relogging\n" +
-        "- Moved some assistant-like options to their own menu.\n" +
-        "- XML Gumps save locked status now(Ctrl + Alt + Click to lock)\n" +
-        "- Python API created gumps will automatically close when the script stops, unless marked keep open." +
-        "- Various bug fixes\n",
-        "/c[white][3.31.0]/cd\n" +
-        "- Fix for Python API EquipItem\n" +
-        "- Fix for legion scripting useability commands\n" +
-        "- Added basic scavenger agent(Uses autoloot)\n" +
-        "- Nearby item gump and grid container quick loot now use move item queue\n" +
-        "- Combine duplicate system messages\n" +
-        "- Default visual spell indicator setup embedded now\n" +
-        "- Various bug fixes\n",
-        "/c[white][3.30.0]/cd\n" +
-        "- Implementing Discord Social features\n" +
-        "- Added more python API methods\n" +
-        "- Better python API error handling\n" +
-        "- Other minor bug fixes",
-        "/c[white][3.29.0]/cd\n" +
-        "- Moved tooltip override options into main menu\n" +
-        "- Expanded Python API\n" +
-        "- Prevent moving gumps outside the client window\n" +
-        "- Reworked internal TTF fonts for better performance\n" +
-        "- Fixed a bug in tooltips, likely not noticable but should be a significant performance boost while a tooltip is shown.\n" +
-        "- Added -artbrowser and -animbrowser commands\n" +
-        "- Added option to disable targeting grid containers directly\n" +
-        "- Added some new fonts in\n" +
-        "- Added option to disable controller\n" +
-        "- Added some standard python libs in for python scripting\n" +
-        "- Various bug fixes\n",
-        "/c[white][3.28.0]/cd\n" +
-        "- Added auto buy and sell agents\n" +
-        "- Added Python scripting language support to legion scripting\n" +
-        "- Added graphic replacement option\n" +
-        "- Better item stacking in original containers while using grid containers \n" +
-        "- Added a hotkeys page in options\n" +
-        "- Improved autolooting\n",
 
         "\n\n/c[white]For further history please visit our discord."
     ];
