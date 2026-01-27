@@ -11,6 +11,7 @@ using ClassicUO.Game;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
@@ -464,7 +465,7 @@ namespace ClassicUO.LegionScripting
                 if (i != null)
                 {
                     Item bp = World.Player.Backpack;
-                    MoveItemQueue.Instance.Enqueue(i, bp);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).FromMoveRequest(), ActionPriority.MoveItem);
                     Found = i.Serial;
                     return new PyItem(i);
                 }
@@ -493,7 +494,7 @@ namespace ClassicUO.LegionScripting
                 if (i != null)
                 {
                     Item bp = World.Player.Backpack;
-                    MoveItemQueue.Instance.Enqueue(i, bp);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).FromMoveRequest(), ActionPriority.MoveItem);
                     Found = i.Serial;
                     return new PyItem(i);
                 }
@@ -655,7 +656,7 @@ namespace ClassicUO.LegionScripting
         /// <summary>
         /// Clear the move item que of all items.
         /// </summary>
-        public void ClearMoveQueue() => MainThreadQueue.InvokeOnMainThread(() => Client.Game.GetScene<GameScene>()?.MoveItemQueue.Clear());
+        public void ClearMoveQueue() => MainThreadQueue.InvokeOnMainThread(() => ObjectActionQueue.Instance.ClearByPriority(ActionPriority.MoveItem));
 
         /// <summary>
         /// Move an item to another container.
@@ -683,7 +684,7 @@ namespace ClassicUO.LegionScripting
         public void QueueMoveItem(uint serial, uint destination, ushort amt = 0, int x = 0xFFFF, int y = 0xFFFF) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
-                Client.Game.GetScene<GameScene>()?.MoveItemQueue.Enqueue(serial, destination, amt, x, y);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, destination, amt, x, y).FromMoveRequest(), ActionPriority.MoveItem);
             }
         );
 
@@ -755,7 +756,7 @@ namespace ClassicUO.LegionScripting
                 if (!useCalculatedZ)
                     z = World.Player.Z + z;
 
-                Client.Game.GetScene<GameScene>()?.MoveItemQueue.Enqueue(serial, OSI ? uint.MaxValue : 0, amt, World.Player.X + x, World.Player.Y + y, z);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, OSI ? uint.MaxValue : 0, amt, World.Player.X + x, World.Player.Y + y, z).FromMoveRequest(), ActionPriority.MoveItem);
             }
         );
 
@@ -3705,7 +3706,7 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <returns></returns>
-        public bool IsProcessingMoveQueue() => MainThreadQueue.InvokeOnMainThread(() => !MoveItemQueue.Instance.IsEmpty);
+        public bool IsProcessingMoveQueue() => MainThreadQueue.InvokeOnMainThread(() => !ObjectActionQueue.Instance.IsEmpty); //Todo: check if any items of MoveItem priority exist
 
         /// <summary>
         /// Check if the use item queue is being processed. You can use this to prevent actions if the queue is being processed.

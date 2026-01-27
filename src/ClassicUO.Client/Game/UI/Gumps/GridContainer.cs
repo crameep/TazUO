@@ -1393,7 +1393,7 @@ namespace ClassicUO.Game.UI.Gumps
                         {
                             if ((_gridContainer.isCorpse && _profile.CorpseSingleClickLoot) || _gridContainer.quickLootThisContainer)
                             {
-                                Client.Game.GetScene<GameScene>()?.MoveItemQueue.EnqueueQuick(_item);
+                                ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.QuickLoot(_item), ActionPriority.MoveItem);
                                 Mouse.CancelDoubleClick = true;
                             }
                             else

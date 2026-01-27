@@ -1,6 +1,7 @@
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.UI.ImGuiControls;
 
 namespace ClassicUO.Game.Managers
@@ -104,7 +105,7 @@ namespace ClassicUO.Game.Managers
                         Item bp = _world.Player.Backpack;
                         if (bp != null)
                         {
-                            MoveItemQueue.Instance.Enqueue(_oneHandedSerial, bp.Serial, item.Amount);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_oneHandedSerial, bp.Serial, item.Amount).FromMoveRequest(), ActionPriority.MoveItem);
                         }
                     }
                 }), ActionPriority.EquipItem);
@@ -121,7 +122,7 @@ namespace ClassicUO.Game.Managers
                         Item bp = _world.Player.Backpack;
                         if (bp != null)
                         {
-                            MoveItemQueue.Instance.Enqueue(_twoHandedSerial, bp.Serial, item.Amount);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_twoHandedSerial, bp.Serial, item.Amount).FromMoveRequest(), ActionPriority.MoveItem);
                         }
                     }
                 }), ActionPriority.EquipItem);
@@ -153,7 +154,7 @@ namespace ClassicUO.Game.Managers
 
                     if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
                     {
-                        MoveItemQueue.Instance.EnqueueEquipSingle(_oneHandedSerial, Layer.OneHanded);
+                        ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(_oneHandedSerial, Layer.OneHanded), ActionPriority.EquipItem);
                     }
                 }), ActionPriority.EquipItem);
             }
@@ -181,7 +182,7 @@ namespace ClassicUO.Game.Managers
 
                     if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
                     {
-                        MoveItemQueue.Instance.EnqueueEquipSingle(_twoHandedSerial, Layer.TwoHanded);
+                        ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(_twoHandedSerial, Layer.TwoHanded), ActionPriority.EquipItem);
                     }
                 }), ActionPriority.EquipItem);
             }

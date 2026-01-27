@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Timers;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using ClassicUO.Network;
@@ -312,7 +313,7 @@ namespace ClassicUO.Game.Managers
 
                     itemsToEquip.Add(dressItem.Serial);
                 }
-                
+
                 if (itemsToEquip.Count > 0)
                     // Send KR equip packet for all items at once
                     AsyncNetClient.Socket.Send_EquipMacroKR(itemsToEquip.ToArray().AsSpan());
@@ -349,7 +350,7 @@ namespace ClassicUO.Game.Managers
                     Item item = World.Instance.Items.Get(dressItem.Serial);
                     if (item != null && item.Container == World.Instance.Player?.Serial) continue;
 
-                    MoveItemQueue.Instance.EnqueueEquipSingle(dressItem.Serial, (Layer)dressItem.Layer);
+                    ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(dressItem.Serial, (Layer)dressItem.Layer), ActionPriority.EquipItem);
                 }
             }
         }
@@ -409,7 +410,7 @@ namespace ClassicUO.Game.Managers
 
                 Item currentlyEquipped = World.Instance.Player?.FindItemByLayer((Layer)layer);
                 if (currentlyEquipped != null && !config.Contains(currentlyEquipped.Serial))
-                    MoveItemQueue.Instance.Enqueue(currentlyEquipped, undressBag);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).FromMoveRequest(), ActionPriority.MoveItem);
             }
         }
 
@@ -420,7 +421,7 @@ namespace ClassicUO.Game.Managers
             if (item != null && item.Container == World.Instance.Player?.Serial)
             {
                 uint undressBag = GetUndressBag(config);
-                MoveItemQueue.Instance.Enqueue(item, undressBag);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item, undressBag).FromMoveRequest(), ActionPriority.MoveItem);
             }
         }
 
@@ -437,7 +438,7 @@ namespace ClassicUO.Game.Managers
                 if (currentlyEquipped == null) continue;
 
                 if(!kr)
-                    MoveItemQueue.Instance.Enqueue(currentlyEquipped, undressBag);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).FromMoveRequest(), ActionPriority.MoveItem);
                 else
                     toUnequip.Add((Layer)layer);
             }

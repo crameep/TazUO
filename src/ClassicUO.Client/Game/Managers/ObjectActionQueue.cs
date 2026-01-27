@@ -1,5 +1,7 @@
 ﻿using System;
-using ClassicUO.Game.UI.ImGuiControls;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Utility;
 
 namespace ClassicUO.Game.Managers;
@@ -14,12 +16,18 @@ public class ObjectActionQueue : ConcurrentPriorityQueue<ObjectActionQueueItem, 
     {
         if (IsEmpty || GlobalActionCooldown.IsOnCooldown) return; //Quick bool return if empty to avoid checking the queue when unnecessary
 
-        while (TryDequeue(out ObjectActionQueueItem item, out ActionPriority _))
+        while (TryDequeue(out ObjectActionQueueItem item, out ActionPriority priority, out long sequence))
         {
             if (item.Canceled)
             {
                 item.AfterInvoked?.Invoke(item);
                 continue;
+            }
+
+            if (priority == ActionPriority.MoveItem && Client.Game.UO.GameCursor.ItemHold.Enabled)
+            {
+                Enqueue(item,  priority, sequence); //Return to queue to retry again when not holding an item
+                return;
             }
 
             item.Action?.Invoke();
@@ -44,6 +52,35 @@ public class ObjectActionQueueItem(Action action, Action<ObjectActionQueueItem> 
     public bool Canceled { get; private set; }
 
     public void SetCanceled(bool canceled = true) => Canceled = canceled;
+
+    private static ObjectActionQueueItem FromMoveRequest(MoveRequest moveRequest) =>
+        new(() =>
+        {
+            moveRequest.Execute();
+        });
+
+    public static ObjectActionQueueItem? QuickLoot(uint serial) => World.Instance.Items.TryGetValue(serial, out Item item) ? QuickLoot(item) : null;
+
+    public static ObjectActionQueueItem? QuickLoot(Item item)
+    {
+        if (item == null) return null;
+        MoveRequest? moveRequest = item.ToLootBag();
+
+        if(moveRequest.HasValue)
+            return FromMoveRequest(moveRequest.Value);
+
+        return null;
+    }
+
+    public static ObjectActionQueueItem? EquipItem(uint serial, Layer layer)
+    {
+        MoveRequest? moveRequest = MoveRequest.EquipItem(serial, layer);
+
+        if(moveRequest.HasValue)
+            return FromMoveRequest(moveRequest.Value);
+
+        return null;
+    }
 }
 
 public enum ActionPriority

@@ -80,7 +80,6 @@ namespace ClassicUO.Game.Scenes
         private Effect _postFx;
         private SamplerState _postSampler = SamplerState.PointClamp;
         private readonly UseItemQueue _useItemQueue;
-        private readonly MoveItemQueue _moveItemQueue;
         private readonly AutoUnequipActionManager _autoUnequipActionManager;
         private bool _useObjectHandles;
         private RenderTarget2D _worldRenderTarget, _lightRenderTarget;
@@ -92,7 +91,6 @@ namespace ClassicUO.Game.Scenes
         {
             _world = world;
             _useItemQueue = new UseItemQueue(world);
-            _moveItemQueue = new MoveItemQueue(_world);
             _autoUnequipActionManager = new AutoUnequipActionManager(_world);
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
@@ -162,7 +160,6 @@ namespace ClassicUO.Game.Scenes
         }
         private long _nextProfileSave = Time.Ticks + 1000*60*60;
 
-        public MoveItemQueue MoveItemQueue => _moveItemQueue;
         public bool UpdateDrawPosition { get; set; }
         public bool DisconnectionRequested { get; set; }
 
@@ -398,7 +395,6 @@ namespace ClassicUO.Game.Scenes
             JournalFilterManager.Instance.Save();
 
             SpellBarManager.Unload();
-            _moveItemQueue.Clear();
             _autoUnequipActionManager?.Clear();
             ObjectActionQueue.Instance.Clear();
 
@@ -978,7 +974,6 @@ namespace ClassicUO.Game.Scenes
             _useItemQueue.Update();
 
             AutoLootManager.Instance.Update();
-            _moveItemQueue.ProcessQueue();
             GridHighlightData.ProcessQueue(_world);
 
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn && !MoveCharByController())

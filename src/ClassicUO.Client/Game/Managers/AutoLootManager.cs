@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers
@@ -334,7 +335,7 @@ namespace ClassicUO.Game.Managers
             }
 
             if (destinationSerial != 0)
-                MoveItemQueue.Instance?.Enqueue(moveItem.Serial, destinationSerial, moveItem.Amount, 0xFFFF, 0xFFFF);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).FromMoveRequest(), ActionPriority.MoveItem);
             else
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
 
