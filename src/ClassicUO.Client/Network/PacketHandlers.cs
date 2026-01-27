@@ -6664,7 +6664,6 @@ sealed class PacketHandlers
         if (mobile != null)
         {
             mobile.SetInWorldTile(mobile.X, mobile.Y, mobile.Z);
-            HealthbarCollectorGump.CheckAndAddMobile(world, mobile);
 
             if (created)
             {
@@ -6672,6 +6671,7 @@ sealed class PacketHandlers
                 // Real UO client does it only when LastAttack == serial.
                 // We force to close suddenly.
                 GameActions.RequestMobileStatus(world, serial);
+                EventSink.InvokeMobileCreated(mobile);
 
                 //if (TargetManager.LastAttack != serial)
                 //{

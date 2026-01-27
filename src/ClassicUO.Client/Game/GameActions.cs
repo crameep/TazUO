@@ -47,18 +47,7 @@ internal static class GameActions
     ///
     /// </summary>
     /// <returns>False if no durability gump was open</returns>
-    internal static bool CloseDurabilityGump()
-    {
-        Gump g = UIManager.GetGump<DurabilitysGump>();
-
-        if (g != null)
-        {
-            g.Dispose();
-            return true;
-        }
-
-        return false;
-    }
+    internal static bool CloseDurabilityGump() => GumpInstanceTracker.ForEach<DurabilitysGump>(g => g.Dispose());
 
     internal static void OpenDurabilityGump(World world) => UIManager.Add(new DurabilitysGump(world));
 

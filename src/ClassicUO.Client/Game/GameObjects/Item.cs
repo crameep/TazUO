@@ -272,20 +272,16 @@ namespace ClassicUO.Game.GameObjects
 
             if (Opened)
             {
-                UIManager.GetGump<ContainerGump>(Serial)?.Dispose();
-                #region GridContainer
-                UIManager.GetGump<GridContainer>(Serial)?.Dispose();
-                #endregion
-                UIManager.GetGump<SpellbookGump>(Serial)?.Dispose();
-                UIManager.GetGump<MapGump>(Serial)?.Dispose();
+                GumpInstanceTracker.ForEach<ContainerGump>(g => g.Dispose(), Serial);
+                GumpInstanceTracker.ForEach<GridContainer>(g => g.Dispose(), Serial);
+                GumpInstanceTracker.ForEach<SpellbookGump>(g => g.Dispose(), Serial);
+                GumpInstanceTracker.ForEach<MapGump>(g => g.Dispose(), Serial);
 
                 if (IsCorpse)
-                {
-                    UIManager.GetGump<GridLootGump>(Serial)?.Dispose();
-                }
+                    GumpInstanceTracker.ForEach<GridLootGump>(g => g.Dispose(), Serial);
 
-                UIManager.GetGump<BulletinBoardGump>(Serial)?.Dispose();
-                UIManager.GetGump<SplitMenuGump>(Serial)?.Dispose();
+                GumpInstanceTracker.ForEach<BulletinBoardGump>(g => g.Dispose(), Serial);
+                GumpInstanceTracker.ForEach<SplitMenuGump>(g => g.Dispose(), Serial);
 
                 Opened = false;
             }
@@ -397,12 +393,9 @@ namespace ClassicUO.Game.GameObjects
 
             house.Bounds = MultiInfo.Value;
 
-            UIManager.GetGump<MiniMapGump>()?.RequestUpdateContents();
+            GumpInstanceTracker.ForEach<MiniMapGump>(g => g.RequestUpdateContents());
 
-            if (World.HouseManager.EntityIntoHouse(Serial, World.Player))
-            {
-                Client.Game.GetScene<GameScene>()?.UpdateMaxDrawZ(true);
-            }
+            if (World.HouseManager.EntityIntoHouse(Serial, World.Player)) GameScene.Instance?.UpdateMaxDrawZ(true);
 
             World.BoatMovingManager.ClearSteps(Serial);
         }

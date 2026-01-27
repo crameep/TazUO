@@ -25,6 +25,7 @@ namespace ClassicUO.Game.UI.Gumps
             ServerSerial = server;
             AcceptMouseInput = false;
             AcceptKeyboardInput = false;
+            GumpInstanceTracker.Register(this);
         }
 
         public string PacketGumpText { get; set; } = string.Empty;
@@ -117,6 +118,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             base.Dispose();
+            GumpInstanceTracker.Unregister(this);
         }
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
