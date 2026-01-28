@@ -13,6 +13,9 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using ClassicUO.Game.UI.ImGuiControls;
 using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers
@@ -312,45 +315,44 @@ namespace ClassicUO.Game.Managers
 
         public static T GetGump<T>(uint? serial = null) where T : Control
         {
-            if (serial.HasValue)
-            {
-                for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
-                {
-                    Control c = last.Value;
+            // if (serial.HasValue)
+            // {
+            //     for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
+            //     {
+            //         Control c = last.Value;
+            //
+            //         if (!c.IsDisposed && c.LocalSerial == serial.Value && c is T t)
+            //         {
+            //             return t;
+            //         }
+            //     }
+            // }
+            // else
+            // {
+            //     for (LinkedListNode<Gump> first = Gumps.First; first != null; first = first.Next)
+            //     {
+            //         Control c = first.Value;
+            //
+            //         if (!c.IsDisposed && c is T t)
+            //         {
+            //             return t;
+            //         }
+            //     }
+            // }
 
-                    if (!c.IsDisposed && c.LocalSerial == serial.Value && c is T t)
-                    {
-                        return t;
-                    }
-                }
-            }
-            else
-            {
-                for (LinkedListNode<Gump> first = Gumps.First; first != null; first = first.Next)
-                {
-                    Control c = first.Value;
+            if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
+                return null;
 
-                    if (!c.IsDisposed && c is T t)
-                    {
-                        return t;
-                    }
-                }
-            }
+            list.RemoveAll(i => i.IsDisposed);
 
-            // Reverting back to old way for now until we can handle base classes like GetGump<BaseHealthBarGump>
-            // if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
-            //     return null;
-            //
-            // list.RemoveAll(i => i.IsDisposed);
-            //
-            // if (list.Count <= 0) return null;
-            //
-            // if(!serial.HasValue)
-            //     return list[0] as T;
-            //
-            // foreach(Gump gump in list)
-            //     if (gump.LocalSerial == serial.Value)
-            //         return gump as T;
+            if (list.Count <= 0) return null;
+
+            if(!serial.HasValue)
+                return list[0] as T;
+
+            foreach(Gump gump in list)
+                if (gump.LocalSerial == serial.Value)
+                    return gump as T;
 
             return null;
         }
@@ -509,28 +511,45 @@ namespace ClassicUO.Game.Managers
         }
 
         /// <summary>
-        /// Register gump to it's correct list via Type
+        /// Register gump to it's correct list(s) via Type
         /// </summary>
         /// <param name="item"></param>
         private static void RegisterGump(Gump item)
         {
-            Type type = item.GetType();
-            if (!_gumpTypeList.TryGetValue(type, out List<Gump> list))
+            Type t = item.GetType();
+
+            while (t != null)
             {
-                list = new List<Gump>();
-                _gumpTypeList[type] = list;
+                if (t == typeof(Control)) break; //break early at control ( XX <- Gump <- Control -< Object )
+
+                if (!_gumpTypeList.TryGetValue(t, out List<Gump> list))
+                {
+                    list = new List<Gump>();
+                    _gumpTypeList[t] = list;
+                }
+                list.Add(item);
+
+                t = t.BaseType;
             }
-            list.Add(item);
         }
 
         /// <summary>
-        /// Remove a gump from it's correct Type list
+        /// Remove a gump from it's correct Type list(s)
         /// </summary>
         /// <param name="item"></param>
         private static void UnregisterGump(Gump item)
         {
-            if (_gumpTypeList.TryGetValue(item.GetType(), out List<Gump> list))
-                list.Remove(item);
+            Type t = item.GetType();
+
+            while (t != null)
+            {
+                if (t == typeof(Control)) break;
+
+                if (_gumpTypeList.TryGetValue(t, out List<Gump> list))
+                    list.Remove(item);
+
+                t = t.BaseType;
+            }
         }
 
         /// <summary>
