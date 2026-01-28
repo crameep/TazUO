@@ -42,11 +42,10 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Xml;
-using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
-using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -2041,7 +2040,7 @@ namespace ClassicUO.Game.UI.Gumps
                 {
                     if (sortMode == GridSortMode.Name) // Sort by name
                     {
-                        return contents.OrderBy(item => GetItemName(item)).ThenBy((x) => x.Graphic).ThenBy((x) => x.Hue).ToList();
+                        return contents.OrderBy(GetItemName).ThenBy(((x) => x.Amount)).ToList();
                     }
                     else // Default: Sort by graphic + hue
                     {
@@ -2054,11 +2053,18 @@ namespace ClassicUO.Game.UI.Gumps
 
             private static string GetItemName(Item item)
             {
-                if (World.Instance != null && World.Instance.OPL.TryGetNameAndData(item.Serial, out string name, out string data))
-                {
-                    return !string.IsNullOrEmpty(name) ? name : item.ItemData.Name;
-                }
-                return !string.IsNullOrEmpty(item.Name) ? item.Name : item.ItemData.Name;
+                if (World.Instance?.OPL?.TryGetNameAndData(item.Serial, out string name, out string _) != true)
+                    return !string.IsNullOrEmpty(item.Name) ? item.Name : item.ItemData.Name;
+
+                // OPL has a cached name for the item
+                if (string.IsNullOrEmpty(name))
+                    return item.ItemData.Name;
+
+                // The stack-size, including a space
+                string itemAmountStr = $"{item.Amount.ToString(CultureInfo.InvariantCulture)} ";
+                return name.StartsWith(itemAmountStr, StringComparison.Ordinal)
+                    ? name[itemAmountStr.Length..] // Trim the stack-size and trailing space
+                    : name;
             }
 
             private void SetupGridItemControls()
