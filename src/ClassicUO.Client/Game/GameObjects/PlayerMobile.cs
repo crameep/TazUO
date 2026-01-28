@@ -301,7 +301,7 @@ namespace ClassicUO.Game.GameObjects
             _buffIcons[type] = new BuffIcon(type, graphic, time, text, title);
 
             if (ProfileManager.CurrentProfile.UseImprovedBuffBar)
-                GumpInstanceTracker.ForEach<ImprovedBuffGump>(g => g.AddBuff(new BuffIcon(type, graphic, time, text, title)));
+                UIManager.ForEach<ImprovedBuffGump>(g => g.AddBuff(new BuffIcon(type, graphic, time, text, title)));
 
             EventSink.InvokeOnBuffAdded(null, new BuffEventArgs(_buffIcons[type]));
         }
@@ -317,7 +317,7 @@ namespace ClassicUO.Game.GameObjects
             }
 
             if (ProfileManager.CurrentProfile.UseImprovedBuffBar)
-                GumpInstanceTracker.ForEach<ImprovedBuffGump>(g => g.RemoveBuff(graphic));
+                UIManager.ForEach<ImprovedBuffGump>(g => g.RemoveBuff(graphic));
         }
 
         public void UpdateAbilities()
@@ -348,8 +348,8 @@ namespace ClassicUO.Game.GameObjects
                 }
             }
 
-            GumpInstanceTracker.ForEach<CombatBookGump>(g => g.RequestUpdateContents());
-            GumpInstanceTracker.ForEach<UseAbilityButtonGump>(g => g.RequestUpdateContents());
+            UIManager.ForEach<CombatBookGump>(g => g.RequestUpdateContents());
+            UIManager.ForEach<UseAbilityButtonGump>(g => g.RequestUpdateContents());
         }
 
         protected override void OnPositionChanged()
@@ -471,8 +471,8 @@ namespace ClassicUO.Game.GameObjects
                     bank.Items = null;
                 }
 
-                GumpInstanceTracker.ForEach<ContainerGump>(g=> g.Dispose(), bank.Serial);
-                GumpInstanceTracker.ForEach<GridContainer>(g=> g.Dispose(), bank.Serial);
+                UIManager.ForEach<ContainerGump>(g=> g.Dispose(), bank.Serial);
+                UIManager.ForEach<GridContainer>(g=> g.Dispose(), bank.Serial);
 
                 bank.Opened = false;
             }

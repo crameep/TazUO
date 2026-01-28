@@ -1091,8 +1091,8 @@ namespace ClassicUO.Game.GameObjects
 
             if (!(this is PlayerMobile))
             {
-                GumpInstanceTracker.ForEach<PaperDollGump>(g => g.Dispose(), serial);
-                GumpInstanceTracker.ForEach<ModernPaperdoll>(g => g.Dispose(), serial);
+                UIManager.ForEach<PaperDollGump>(g => g.Dispose(), serial);
+                UIManager.ForEach<ModernPaperdoll>(g => g.Dispose(), serial);
 
                 //_pool.ReturnOne(this);
             }

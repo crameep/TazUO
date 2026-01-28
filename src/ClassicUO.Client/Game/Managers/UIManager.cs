@@ -9,6 +9,7 @@ using ClassicUO.Input;
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,6 +19,7 @@ namespace ClassicUO.Game.Managers
 {
     internal static class UIManager
     {
+        private static readonly Dictionary<Type, List<Gump>> _gumpTypeList = new();
         private static readonly ConcurrentDictionary<uint, Point> _gumpPositionCache = new();
         private static readonly Control[] _mouseDownControls = new Control[0xFF];
 
@@ -310,30 +312,19 @@ namespace ClassicUO.Game.Managers
 
         public static T GetGump<T>(uint? serial = null) where T : Control
         {
-            if (serial.HasValue)
-            {
-                for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
-                {
-                    Control c = last.Value;
+            if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
+                return null;
 
-                    if (!c.IsDisposed && c.LocalSerial == serial.Value && c is T t)
-                    {
-                        return t;
-                    }
-                }
-            }
-            else
-            {
-                for (LinkedListNode<Gump> first = Gumps.First; first != null; first = first.Next)
-                {
-                    Control c = first.Value;
+            list.RemoveAll(i => i.IsDisposed);
 
-                    if (!c.IsDisposed && c is T t)
-                    {
-                        return t;
-                    }
-                }
-            }
+            if (list.Count <= 0) return null;
+
+            if(!serial.HasValue)
+                return list[0] as T;
+
+            foreach(Gump gump in list)
+                if (gump.LocalSerial == serial.Value)
+                    return gump as T;
 
             return null;
         }
@@ -391,7 +382,7 @@ namespace ClassicUO.Game.Managers
             {
                 LinkedListNode<Gump> next = first.Next;
 
-                Control g = first.Value;
+                Gump g = first.Value;
                 if (updateTimerEnabled)
                 {
                     updateTimer.Restart();
@@ -414,6 +405,7 @@ namespace ClassicUO.Game.Managers
                 if (g.IsDisposed)
                 {
                     Gumps.Remove(first);
+                    UnregisterGump(g);
                 }
 
                 first = next;
@@ -440,6 +432,7 @@ namespace ClassicUO.Game.Managers
                 if (g.IsDisposed)
                 {
                     Gumps.Remove(first);
+                    UnregisterGump(g);
                 }
 
                 first = next;
@@ -474,6 +467,8 @@ namespace ClassicUO.Game.Managers
                 }
 
                 _needSort = Gumps.Count > 1;
+
+                RegisterGump(gump);
             }
         }
 
@@ -483,8 +478,76 @@ namespace ClassicUO.Game.Managers
             {
                 s.Dispose();
             }
+
+            _gumpTypeList.Clear();
         }
 
+        /// <summary>
+        /// Register gump to it's correct list via Type
+        /// </summary>
+        /// <param name="item"></param>
+        private static void RegisterGump(Gump item)
+        {
+            Type type = item.GetType();
+            if (!_gumpTypeList.TryGetValue(type, out List<Gump> list))
+            {
+                list = new List<Gump>();
+                _gumpTypeList[type] = list;
+            }
+            list.Add(item);
+        }
+
+        /// <summary>
+        /// Remove a gump from it's correct Type list
+        /// </summary>
+        /// <param name="item"></param>
+        private static void UnregisterGump(Gump item)
+        {
+            if (_gumpTypeList.TryGetValue(item.GetType(), out List<Gump> list))
+                list.Remove(item);
+        }
+
+        /// <summary>
+        /// Iterate through a snapshot of all live instances of the given type.
+        /// Disposed instances are pruned automatically before this iteration.
+        /// </summary>
+        /// <returns>True if any instances existed</returns>
+        public static bool ForEach<T>(Action<T> action, uint? serial = null) where T : Gump
+        {
+            Gump[] snapshot;
+            int count;
+
+            if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
+                return false;
+
+            list.RemoveAll(i => i.IsDisposed);
+            count = list.Count;
+            if (count == 0) return false;
+
+            snapshot = ArrayPool<Gump>.Shared.Rent(count);
+            list.CopyTo(snapshot, 0);
+
+            int c = 0;
+
+            try
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    if(!serial.HasValue || serial.Value == snapshot[i].LocalSerial)
+                    {
+                        action((T)snapshot[i]);
+                        c++;
+                    }
+                }
+            }
+            finally
+            {
+                Array.Clear(snapshot, 0, count);
+                ArrayPool<Gump>.Shared.Return(snapshot);
+            }
+
+            return c != 0;
+        }
 
         private static void HandleKeyboardInput()
         {

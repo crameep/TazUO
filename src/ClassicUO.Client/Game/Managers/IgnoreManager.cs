@@ -46,7 +46,7 @@ namespace ClassicUO.Game.Managers
 
                 IgnoredCharsList.Add(charName);
                 // Redraw list of chars
-                GumpInstanceTracker.ForEach<IgnoreManagerGump>(g => g.Redraw());
+                UIManager.ForEach<IgnoreManagerGump>(g => g.Redraw());
 
                 GameActions.Print(_world,string.Format(ResGumps.AddToIgnoreListSuccess, charName));
                 return;

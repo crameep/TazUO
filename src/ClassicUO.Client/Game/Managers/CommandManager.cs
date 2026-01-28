@@ -221,7 +221,7 @@ namespace ClassicUO.Game.Managers
 
             Register("optlink", (s) =>
             {
-                ModernOptionsGump g = GumpInstanceTracker.GetFirst<ModernOptionsGump>();
+                ModernOptionsGump g = UIManager.GetGump<ModernOptionsGump>();
                 if (s.Length > 1)
                 {
                     if (g != null)
@@ -296,7 +296,7 @@ namespace ClassicUO.Game.Managers
                 }
 
                 // First, try to use the active Discord channel if the gump is open
-                DiscordGump discordGump = GumpInstanceTracker.GetFirst<DiscordGump>();
+                DiscordGump discordGump = UIManager.GetGump<DiscordGump>();
                 if (discordGump != null && discordGump.ActiveChannel != 0)
                 {
                     ulong activeChannel = discordGump.ActiveChannel;

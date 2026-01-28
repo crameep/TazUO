@@ -611,7 +611,7 @@ namespace ClassicUO.Game.Managers
             // apply a minor offset for roof tiles
             int zOffset = -3;
 
-            HouseCustomizationGump gump = GumpInstanceTracker.GetFirst<HouseCustomizationGump>(Serial);
+            HouseCustomizationGump gump = UIManager.GetGump<HouseCustomizationGump>(Serial);
 
             if (CurrentFloor == 1)
             {
@@ -838,7 +838,7 @@ namespace ClassicUO.Game.Managers
             if (res1 != -1 && res2 != -1)
             {
                 State = state;
-                HouseCustomizationGump gump = GumpInstanceTracker.GetFirst<HouseCustomizationGump>(Serial);
+                HouseCustomizationGump gump = UIManager.GetGump<HouseCustomizationGump>(Serial);
 
                 if (State == CUSTOM_HOUSE_GUMP_STATE.CHGS_WALL || State == CUSTOM_HOUSE_GUMP_STATE.CHGS_ROOF || State == CUSTOM_HOUSE_GUMP_STATE.CHGS_MISC)
                 {

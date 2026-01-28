@@ -85,8 +85,8 @@ namespace ClassicUO.Game.Managers
                 _itemLayerSlots.Remove(item.Serial);
             }
 
-            GumpInstanceTracker.ForEach<DurabilitysGump>(g => g.RequestUpdateContents());
-            GumpInstanceTracker.ForEach<ModernPaperdoll>(g => g.RequestUpdateContents());
+            UIManager.ForEach<DurabilitysGump>(g => g.RequestUpdateContents());
+            UIManager.ForEach<ModernPaperdoll>(g => g.RequestUpdateContents());
 
             HasDurabilityData = _itemLayerSlots.Count > 0;
         }

@@ -222,7 +222,7 @@ namespace ClassicUO.Game.Managers
             else
             {
                 // in a container, open near the container
-                ContainerGump parentContainer = GumpInstanceTracker.GetFirst<ContainerGump>(item.Container);
+                ContainerGump parentContainer = UIManager.GetGump<ContainerGump>(item.Container);
 
                 if (parentContainer != null)
                 {
