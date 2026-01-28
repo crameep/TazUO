@@ -312,19 +312,45 @@ namespace ClassicUO.Game.Managers
 
         public static T GetGump<T>(uint? serial = null) where T : Control
         {
-            if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
-                return null;
+            if (serial.HasValue)
+            {
+                for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
+                {
+                    Control c = last.Value;
 
-            list.RemoveAll(i => i.IsDisposed);
+                    if (!c.IsDisposed && c.LocalSerial == serial.Value && c is T t)
+                    {
+                        return t;
+                    }
+                }
+            }
+            else
+            {
+                for (LinkedListNode<Gump> first = Gumps.First; first != null; first = first.Next)
+                {
+                    Control c = first.Value;
 
-            if (list.Count <= 0) return null;
+                    if (!c.IsDisposed && c is T t)
+                    {
+                        return t;
+                    }
+                }
+            }
 
-            if(!serial.HasValue)
-                return list[0] as T;
-
-            foreach(Gump gump in list)
-                if (gump.LocalSerial == serial.Value)
-                    return gump as T;
+            // Reverting back to old way for now until we can handle base classes like GetGump<BaseHealthBarGump>
+            // if (!_gumpTypeList.TryGetValue(typeof(T), out List<Gump> list))
+            //     return null;
+            //
+            // list.RemoveAll(i => i.IsDisposed);
+            //
+            // if (list.Count <= 0) return null;
+            //
+            // if(!serial.HasValue)
+            //     return list[0] as T;
+            //
+            // foreach(Gump gump in list)
+            //     if (gump.LocalSerial == serial.Value)
+            //         return gump as T;
 
             return null;
         }
