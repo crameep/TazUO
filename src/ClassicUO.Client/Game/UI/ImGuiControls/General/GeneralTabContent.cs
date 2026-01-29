@@ -13,12 +13,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
         private int _objectMoveDelay;
-        private bool _highlightObjects, _petScaling;
-        private bool _showNames;
-        private bool _autoOpenOwnCorpse;
-        private bool _autoUnequipForActions;
-        private bool _disableWeather;
-        private bool _useLongDistancePathing;
+        private bool _highlightObjects, _petScaling, _disableWeather, _useLongDistancePathing, _showNames, _autoOpenOwnCorpse, _autoUnequipForActions, _queueManualMoves;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
@@ -56,6 +51,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _gameScale = (int)(100 * Client.Game.RenderScale);
             _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
             _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
+            _queueManualMoves = _profile.QueueManualItemMoves;
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -255,6 +251,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Spacing();
             ImGui.AlignTextToFramePadding();
             ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc");
+
+            if (ImGui.Checkbox("Queue item moves", ref _queueManualMoves))
+            {
+                _profile.QueueManualItemMoves = _queueManualMoves;
+            }
+            ImGuiComponents.Tooltip("Instead of instantly moving an item, put it in a queue to prevent \"You must wait\" messages.");
 
             if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
             {

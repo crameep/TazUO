@@ -4,6 +4,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps;
@@ -832,7 +833,10 @@ internal static class GameActions
         Client.Game.UO.GameCursor.ItemHold.Clear();
         Client.Game.UO.GameCursor.ItemHold.Set(item, (ushort)amount, offset);
         Client.Game.UO.GameCursor.ItemHold.IsGumpTexture = is_gump;
-        Socket.Send_PickUpRequest(item, (ushort)amount);
+
+        if (!ProfileManager.CurrentProfile.QueueManualItemMoves)
+            Socket.Send_PickUpRequest(item, (ushort)amount);
+
         ScriptingInfoGump.AddOrUpdateInfo("Last Picked Up Item", $"0x{item.Serial:X}");
         ScriptingInfoGump.AddOrUpdateInfo("Last Object Graphic", $"0x{item.Graphic:X}");
 
@@ -854,8 +858,19 @@ internal static class GameActions
         {
             // Record action for script recording
             uint sourceSerial = Client.Game.UO.GameCursor.ItemHold.Enabled ? Client.Game.UO.GameCursor.ItemHold.Serial : serial;
-                int amount = Client.Game.UO.GameCursor.ItemHold.Enabled ? Client.Game.UO.GameCursor.ItemHold.Amount : -1;
-                ScriptRecorder.Instance.RecordDragDrop(sourceSerial, container, amount, x, y);
+            int amount = Client.Game.UO.GameCursor.ItemHold.Enabled ? Client.Game.UO.GameCursor.ItemHold.Amount : -1;
+            ScriptRecorder.Instance.RecordDragDrop(sourceSerial, container, amount, x, y);
+
+            Client.Game.UO.GameCursor.ItemHold.Enabled = false;
+            Client.Game.UO.GameCursor.ItemHold.Dropped = true;
+
+            if (ProfileManager.CurrentProfile.QueueManualItemMoves && !force)
+            {
+                Client.Game.UO.GameCursor.ItemHold.Clear();
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, container, (ushort)amount, x, y, z).FromMoveRequest(), ActionPriority.MoveItem);
+                return;
+            }
+
             if (Client.Game.UO.Version >= ClientVersion.CV_6017)
             {
                 Socket.Send_DropRequest(serial,
@@ -873,9 +888,6 @@ internal static class GameActions
                                             (sbyte)z,
                                             container);
             }
-
-            Client.Game.UO.GameCursor.ItemHold.Enabled = false;
-            Client.Game.UO.GameCursor.ItemHold.Dropped = true;
         }
     }
 
