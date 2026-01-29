@@ -617,10 +617,15 @@ namespace ClassicUO
 
                 // Source and destination rectangles (full render target to full back buffer)
                 var srcRect = new Rectangle(0, 0, _screenRenderTarget.Width, _screenRenderTarget.Height);
-                var destRect = new Rectangle(0, 0, (int)(_screenRenderTarget.Width * RenderScale), (int)(_screenRenderTarget.Height * RenderScale));
+                Rectangle destRect = srcRect;
 
                 _uoSpriteBatch.Begin();
                 // Match GameScene's composite pattern - use source rectangle overload
+                if(RenderScale != 1.0f)
+                {
+                    destRect = new Rectangle(0, 0, (int)(_screenRenderTarget.Width * RenderScale), (int)(_screenRenderTarget.Height * RenderScale));
+                    _uoSpriteBatch.SetSampler(SamplerState.AnisotropicClamp);
+                }
                 _uoSpriteBatch.Draw(_screenRenderTarget, destRect, srcRect, new Vector3(0, 0, 1f));
                 _uoSpriteBatch.End();
             }
