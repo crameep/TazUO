@@ -2,7 +2,6 @@
 
 
 using ClassicUO.Configuration;
-using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
@@ -13,10 +12,6 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using ClassicUO.Game.UI.ImGuiControls;
-using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers
 {
@@ -58,9 +53,9 @@ namespace ClassicUO.Game.Managers
 
         public static float ContainerScale { get; set; } = 1f;
 
-        public static AnchorManager AnchorManager { get; } = new AnchorManager();
+        public static AnchorManager AnchorManager { get; } = new();
 
-        public static LinkedList<Gump> Gumps { get; } = new LinkedList<Gump>();
+        public static LinkedList<Gump> Gumps { get; } = new();
 
         public static Control MouseOverControl { get; private set; }
 
