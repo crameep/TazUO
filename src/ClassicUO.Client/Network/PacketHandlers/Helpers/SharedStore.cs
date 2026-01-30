@@ -1,4 +1,4 @@
-namespace ClassicUO.Network.PacketHandlers;
+namespace ClassicUO.Network.PacketHandlers.Helpers;
 
 internal static class SharedStore
 {
