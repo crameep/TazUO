@@ -10,7 +10,9 @@ namespace ClassicUO.Network.PacketHandlers;
 
 internal sealed class PacketParser
 {
-    private static readonly PacketHandler[] _handlers = new PacketHandler[0x100];
+    #region Members
+
+    private readonly PacketHandler[] _handlers = new PacketHandler[0x100];
 
     // Increased from 4096 to 65536 (64KB) to reduce Array.Resize frequency during packet processing
     private byte[] _readingBuffer = new byte[65536];
@@ -18,11 +20,21 @@ internal sealed class PacketParser
     private readonly CircularBuffer _buffer = new();
     private readonly CircularBuffer _pluginsBuffer = new();
 
-    static PacketParser()
+    #endregion
+
+    #region Singleton
+
+    public static readonly PacketParser Instance = new();
+
+    #endregion
+
+    public PacketParser()
     {
         foreach ((uint id, PacketHandler handler) in PacketHandlerRegistry.GetHandlers())
             AddHandler(id, handler, false);
     }
+
+    #region Publics
 
     public int ParsePackets(World world, Span<byte> data)
     {
@@ -45,13 +57,31 @@ internal sealed class PacketParser
         return c;
     }
 
-    public static void AddHandler(uint id, PacketHandler handler, bool allowOverride = true)
+    public void AddHandler(uint id, PacketHandler handler, bool allowOverride = true)
     {
         if (!allowOverride && _handlers[id] != null)
             throw new InvalidOperationException($"Handler {id} is already registered");
 
         _handlers[id] = handler;
     }
+
+    /// <summary>
+    /// Appends data to the internal reader buffer
+    /// Can be used to 'inject' network traffic
+    /// </summary>
+    /// <param name="data"></param>
+    /// <param name="fromPlugins"></param>
+    public void Append(Span<byte> data, bool fromPlugins)
+    {
+        if (data.IsEmpty)
+            return;
+
+        (fromPlugins ? _pluginsBuffer : _buffer).Enqueue(data);
+    }
+
+    #endregion
+
+    #region Privates
 
     private int ParsePackets(World world, CircularBuffer stream, bool allowPlugins)
     {
@@ -119,14 +149,6 @@ internal sealed class PacketParser
         return packetsCount;
     }
 
-    public void Append(Span<byte> data, bool fromPlugins)
-    {
-        if (data.IsEmpty)
-            return;
-
-        (fromPlugins ? _pluginsBuffer : _buffer).Enqueue(data);
-    }
-
     private void AnalyzePacket(World world, ReadOnlySpan<byte> data, int offset)
     {
         if (data.IsEmpty)
@@ -177,4 +199,6 @@ internal sealed class PacketParser
 
         return true;
     }
+
+    #endregion
 }
