@@ -1,4 +1,3 @@
-using System;
 using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
@@ -12,7 +11,7 @@ namespace ClassicUO.Network.PacketHandlers.Helpers;
 
 internal static class ItemHelpers
 {
-        public static void AddItemToContainer(
+    public static void AddItemToContainer(
         World world,
         uint serial,
         ushort graphic,
@@ -24,20 +23,8 @@ internal static class ItemHelpers
     )
     {
         if (Client.Game.UO.GameCursor.ItemHold.Serial == serial)
-        {
             if (Client.Game.UO.GameCursor.ItemHold.Dropped)
-            {
-                Console.WriteLine("ADD ITEM TO CONTAINER -- CLEAR HOLD");
                 Client.Game.UO.GameCursor.ItemHold.Clear();
-            }
-
-            //else if (ItemHold.Graphic == graphic && ItemHold.Amount == amount &&
-            //         ItemHold.Container == containerSerial)
-            //{
-            //    ItemHold.Enabled = false;
-            //    ItemHold.Dropped = false;
-            //}
-        }
 
         Entity container = world.Get(containerSerial);
 
@@ -57,11 +44,10 @@ internal static class ItemHelpers
             Log.Warn("AddItemToContainer function adds mobile as Item");
         }
 
-            //Added item.Container != containerSerial to prevent closing containers when changing facets
-        if (item != null && item.Container != containerSerial && (container.Graphic != 0x2006 || item.Layer == Layer.Invalid))
-        {
+        //Added item.Container != containerSerial to prevent closing containers when changing facets
+        if (item != null && item.Container != containerSerial &&
+            (container.Graphic != 0x2006 || item.Layer == Layer.Invalid))
             world.RemoveItem(item, true);
-        }
 
         // Track if item is newly created
         bool itemWasCreated = item == null || item.IsDestroyed;
@@ -97,9 +83,7 @@ internal static class ItemHelpers
             Item secureBox = m?.GetSecureTradeBox();
 
             if (secureBox != null)
-            {
                 UIManager.GetTradingGump(secureBox)?.RequestUpdateContents();
-            }
             else
             {
                 UIManager.GetGump<PaperDollGump>(containerSerial)?.RequestUpdateContents();
@@ -113,12 +97,10 @@ internal static class ItemHelpers
             Gump gump = UIManager.GetGump<BulletinBoardGump>(containerSerial);
 
             if (gump != null)
-            {
                 AsyncNetClient.Socket.Send_BulletinBoardRequestMessageSummary(
                     containerSerial,
                     serial
                 );
-            }
             else
             {
                 gump = UIManager.GetGump<SpellbookGump>(containerSerial);
@@ -128,16 +110,14 @@ internal static class ItemHelpers
                     gump = UIManager.GetGump<ContainerGump>(containerSerial);
 
                     if (gump != null)
-                    {
                         ((ContainerGump)gump).CheckItemControlPosition(item);
-                    }
 
                     #region GridContainer
+
                     GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
                     if (gridGump != null)
-                    {
                         gridGump.RequestUpdateContents();
-                    }
+
                     #endregion
 
                     if (ProfileManager.CurrentProfile.GridLootType > 0)
@@ -166,9 +146,7 @@ internal static class ItemHelpers
                 if (gump != null)
                 {
                     if (SerialHelper.IsItem(containerSerial))
-                    {
                         ((Item)container).Opened = true;
-                    }
 
                     gump.RequestUpdateContents();
                 }
