@@ -105,7 +105,7 @@ namespace ClassicUO.Game.Managers
                         Item bp = _world.Player.Backpack;
                         if (bp != null)
                         {
-                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_oneHandedSerial, bp.Serial, item.Amount).FromMoveRequest(), ActionPriority.MoveItem);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_oneHandedSerial, bp.Serial, item.Amount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                         }
                     }
                 }), ActionPriority.EquipItem);
@@ -122,7 +122,7 @@ namespace ClassicUO.Game.Managers
                         Item bp = _world.Player.Backpack;
                         if (bp != null)
                         {
-                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_twoHandedSerial, bp.Serial, item.Amount).FromMoveRequest(), ActionPriority.MoveItem);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_twoHandedSerial, bp.Serial, item.Amount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                         }
                     }
                 }), ActionPriority.EquipItem);

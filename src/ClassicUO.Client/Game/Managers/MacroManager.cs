@@ -1539,11 +1539,13 @@ namespace ClassicUO.Game.Managers
 
                     if (_itemsInHand[handIndex] != 0)
                     {
-                        GameActions.PickUp(_world, _itemsInHand[handIndex], 0, 0, 1);
-                        GameActions.Equip(_world);
+                        if(_world.Items.TryGetValue(_itemsInHand[handIndex], out Item item))
+                        {
+                            ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(item, (Layer)item.ItemData.Layer), ActionPriority.EquipItem);
 
-                        _itemsInHand[handIndex] = 0;
-                        _nextTimer = Time.Ticks + 1000;
+                            _itemsInHand[handIndex] = 0;
+                            _nextTimer = Time.Ticks + 1000;
+                        }
                     }
                     else
                     {

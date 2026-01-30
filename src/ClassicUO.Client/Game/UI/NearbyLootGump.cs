@@ -243,7 +243,7 @@ namespace ClassicUO.Game.UI
             if(ProfileManager.CurrentProfile.NearbyLootConcealsContainerOnOpen)
                 _corpsesRequested.Add(corpse.Serial);
 
-            GameActions.DoubleClickQueued(corpse.Serial);
+            GameActions.QueueOpenCorpse(corpse.Serial);
         }
         private void LootSelectedIndex()
         {

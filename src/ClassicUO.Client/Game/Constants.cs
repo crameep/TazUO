@@ -124,6 +124,8 @@ namespace ClassicUO.Game
             public const string ENABLE_ENHANCED_PACKETS = "enhanced_packets_enabled";
             public const string QUICK_HEAL_SPELL = "quick_heal_spell";
             public const string QUICK_CURE_SPELL = "quick_cure_spell";
+            public const string QUEUE_MANUAL_ITEM_MOVES = "queue_manual_item_moves";
+            public const string QUEUE_MANUAL_ITEM_USES = "queue_manual_item_uses";
         }
     }
 }

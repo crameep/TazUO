@@ -25,7 +25,7 @@ internal static class LoginComplete
             AsyncNetClient.Socket.Send_OpenChat("");
 
             AsyncNetClient.Socket.Send_SkillsRequest(world.Player);
-            scene.DoubleClickDelayed(world.Player | 0x8000_0000);
+            ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(world.Player | 0x8000_0000), ActionPriority.UseItem);
 
             if (Client.Game.UO.Version >= ClassicUO.Utility.ClientVersion.CV_306E)
                 AsyncNetClient.Socket.Send_ClientType();

@@ -372,10 +372,7 @@ namespace ClassicUO.Game.GameObjects
         public void TryOpenCorpses()
         {
             // Early return if both auto-open settings are disabled
-            if (!ProfileManager.CurrentProfile.AutoOpenCorpses && !ProfileManager.CurrentProfile.AutoOpenOwnCorpse)
-            {
-                return;
-            }
+            if (!ProfileManager.CurrentProfile.AutoOpenCorpses && !ProfileManager.CurrentProfile.AutoOpenOwnCorpse) return;
 
             // Use the optimized corpse collection instead of iterating all items
             Item[] corpses = World.GetCorpseSnapshot();
@@ -410,7 +407,7 @@ namespace ClassicUO.Game.GameObjects
                         }
 
                         AutoOpenedCorpses.Add(item.Serial);
-                        GameActions.DoubleClickQueued(item.Serial);
+                        GameActions.QueueOpenCorpse(item.Serial);
                     }
                 }
             }

@@ -5,6 +5,7 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Processes;
 using ClassicUO.Network;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -13,12 +14,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
         private int _objectMoveDelay;
-        private bool _highlightObjects, _petScaling;
-        private bool _showNames;
-        private bool _autoOpenOwnCorpse;
-        private bool _autoUnequipForActions;
-        private bool _disableWeather;
-        private bool _useLongDistancePathing;
+        private bool _highlightObjects, _petScaling, _disableWeather, _useLongDistancePathing, _showNames, _autoOpenOwnCorpse, _autoUnequipForActions;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
@@ -40,7 +36,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         public GeneralTabContent()
         {
-            _objectMoveDelay = _profile.MoveMultiObjectDelay;
             _highlightObjects = _profile.HighlightGameObjects;
             _showNames = _profile.NameOverheadToggled;
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
@@ -244,6 +239,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.TurnDelay = _turnDelay;
             }
             ImGui.SetNextItemWidth(150);
+            _objectMoveDelay = ProfileManager.CurrentProfile.MoveMultiObjectDelay;
             if (ImGui.InputInt("Object Delay", ref _objectMoveDelay, 50, 100))
             {
                 _objectMoveDelay = Math.Clamp(_objectMoveDelay, 0, 3000);
@@ -251,10 +247,30 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
 
+            if (ImGui.Button("Automated delay checker"))
+            {
+                AutomatedObjectDelay.Begin();
+            }
+            ImGuiComponents.Tooltip("Run a small test to try to determine the best object delay time.\nThis is an experimental feature, if it doesn't work for you just adjust your delay manually.");
+
             ImGui.Spacing();
             ImGui.Spacing();
             ImGui.AlignTextToFramePadding();
             ImGui.TextColored(ImGuiTheme.Current.BaseContent, "Misc");
+
+            bool queueManualMoves = _profile.QueueManualItemMoves;
+            if (ImGui.Checkbox("Queue item moves", ref queueManualMoves))
+            {
+                _profile.QueueManualItemMoves = queueManualMoves;
+            }
+            ImGuiComponents.Tooltip("Instead of instantly moving an item, put it in a queue to prevent \"You must wait\" messages.");
+
+            bool queueManualUses = _profile.QueueManualItemUses;
+            if (ImGui.Checkbox("Queue object uses", ref queueManualUses))
+            {
+                _profile.QueueManualItemUses = queueManualUses;
+            }
+            ImGuiComponents.Tooltip("Instead of instantly double clicking an item or mobile, put it in a queue to prevent \"You must wait\" messages.");
 
             if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
             {
@@ -289,7 +305,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Checkbox("Long-Distance Pathfinding", ref _useLongDistancePathing))
             {
                 World.Instance.Player.Pathfinder.UseLongDistancePathfinding = _useLongDistancePathing;
-                Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
+                Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
             }
             ImGuiComponents.Tooltip("This is currently in beta.");
 

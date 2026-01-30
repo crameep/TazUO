@@ -36,8 +36,6 @@ public class ObjectActionQueue : ConcurrentPriorityQueue<ObjectActionQueueItem, 
             break;
         }
     }
-
-    public void Reset() => Clear();
 }
 
 /// <summary>
@@ -81,12 +79,22 @@ public class ObjectActionQueueItem(Action action, Action<ObjectActionQueueItem> 
 
         return null;
     }
+
+    public static ObjectActionQueueItem? DoubleClick(uint serial, bool ignoreWarMode = false)
+    {
+        if(serial == 0) return null;
+
+        return new ObjectActionQueueItem(() => GameActions.DoubleClick(World.Instance, serial, ignoreWarMode, true));
+    }
 }
 
 public enum ActionPriority
 {
     Immediate,
+    ManualUseItem, //Higher priority than regular useitem which may occur in scripts
     UseItem,
+    OpenCorpse,
     EquipItem,
     MoveItem,
+    LootItem, //Same as Moveitem, but lower priority in case user tries to manually move an item, it will happen before auto loot continues
 }

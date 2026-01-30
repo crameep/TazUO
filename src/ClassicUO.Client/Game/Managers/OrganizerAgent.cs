@@ -279,7 +279,7 @@ namespace ClassicUO.Game.Managers
                         if (!item.ItemData.IsStackable) continue; // non-stackable items can't be organized in the same container
 
                         ushort amountToMove = itemConfig.Amount > 0 ? itemConfig.Amount : ushort.MaxValue;
-                        ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, amountToMove).FromMoveRequest(), ActionPriority.MoveItem);
+                        ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, amountToMove).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                         totalItemsMoved++;
                     }
                 }
@@ -302,7 +302,7 @@ namespace ClassicUO.Game.Managers
                         if (itemConfig.Amount == 0)
                         {
                             // Move all items of this type
-                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, ushort.MaxValue).FromMoveRequest(), ActionPriority.MoveItem);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, ushort.MaxValue).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                             totalItemsMoved++;
                         }
                         else
@@ -313,7 +313,7 @@ namespace ClassicUO.Game.Managers
                             if (toMove > 0)
                             {
                                 ushort actualAmount = (ushort)Math.Min(toMove, item.Amount);
-                                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, actualAmount).FromMoveRequest(), ActionPriority.MoveItem);
+                                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, actualAmount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                                 // Update the count to avoid over-moving if multiple stacks exist in source
                                 destItemCounts[(item.Graphic, item.Hue)] = existingCount + actualAmount;
                                 totalItemsMoved++;
