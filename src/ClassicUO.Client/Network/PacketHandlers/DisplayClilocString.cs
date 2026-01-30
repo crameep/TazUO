@@ -9,6 +9,14 @@ using ClassicUO.IO;
 
 namespace ClassicUO.Network.PacketHandlers;
 
+[Flags]
+internal enum AffixType
+{
+    Append = 0x00,
+    Prepend = 0x01,
+    System = 0x02
+}
+
 internal static class DisplayClilocString
 {
     public static void Receive(World world, ref StackDataReader p)
