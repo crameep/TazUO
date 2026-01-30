@@ -116,7 +116,7 @@ internal static class UpdateObject
                     //       When the character dies, this packet trigger a "reset" and
                     //       somehow it messes up the packet reading server side
                     //NetClient.Socket.Send_DeathScreen();
-                    world.ChangeSeason(Season.Desolation, 42);
+                    world.ChangeSeason(ClassicUO.Game.Managers.Season.Desolation, 42);
                 else
                     world.ChangeSeason(world.OldSeason, world.OldMusicIndex);
             }

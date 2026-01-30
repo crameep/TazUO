@@ -59,7 +59,7 @@ internal static class EnterWorld
         AsyncNetClient.Socket.Send_SkillsRequest(world.Player.Serial);
 
         if (world.Player.IsDead)
-            world.ChangeSeason(Season.Desolation, 42);
+            world.ChangeSeason(ClassicUO.Game.Managers.Season.Desolation, 42);
 
         if (
             Client.Game.UO.Version >= ClassicUO.Utility.ClientVersion.CV_70796

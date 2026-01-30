@@ -1,10 +1,6 @@
-using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
-using ClassicUO.Game.GameObjects;
-using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
-using ClassicUO.Game.UI.Gumps;
 
 namespace ClassicUO.Network.PacketHandlers.Helpers;
 
@@ -60,7 +56,7 @@ internal static class PlayerHelpers
             if (olddead != world.Player.IsDead)
             {
                 if (world.Player.IsDead)
-                    world.ChangeSeason(Season.Desolation, 42);
+                    world.ChangeSeason(Game.Managers.Season.Desolation, 42);
                 else
                     world.ChangeSeason(world.OldSeason, world.OldMusicIndex);
             }

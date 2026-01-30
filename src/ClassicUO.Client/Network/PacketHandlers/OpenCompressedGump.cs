@@ -104,7 +104,7 @@ internal static class OpenCompressedGump
                 return;
             }
 
-            CreateGump(world, sender, gumpID, (int)x, (int)y, layout, lines);
+            Helpers.GumpHelpers.CreateGump(world, sender, gumpID, (int)x, (int)y, layout, lines);
         }
         catch (Exception e)
         {
