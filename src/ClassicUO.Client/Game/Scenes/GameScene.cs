@@ -79,7 +79,6 @@ namespace ClassicUO.Game.Scenes
         private PostProcessingType _currentFilter;
         private Effect _postFx;
         private SamplerState _postSampler = SamplerState.PointClamp;
-        private readonly UseItemQueue _useItemQueue;
         private readonly AutoUnequipActionManager _autoUnequipActionManager;
         private bool _useObjectHandles;
         private RenderTarget2D _worldRenderTarget, _lightRenderTarget;
@@ -90,7 +89,6 @@ namespace ClassicUO.Game.Scenes
         public GameScene(World world)
         {
             _world = world;
-            _useItemQueue = new UseItemQueue(world);
             _autoUnequipActionManager = new AutoUnequipActionManager(_world);
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
@@ -175,12 +173,6 @@ namespace ClassicUO.Game.Scenes
 
         private uint _lastResync = Time.Ticks;
         private Matrix _worldRtMatrix;
-
-        public GameScene()
-        {
-        }
-
-        public void DoubleClickDelayed(uint serial) => _useItemQueue.Add(serial);
 
         public override void Load()
         {
@@ -472,7 +464,6 @@ namespace ClassicUO.Game.Scenes
             _world.ChatManager.Clear();
             _world.DelayedObjectClickManager.Clear();
 
-            _useItemQueue?.Clear();
             EventSink.MessageReceived -= ChatOnMessageReceived;
 
             Settings.GlobalSettings.WindowSize = new Point(
@@ -966,13 +957,10 @@ namespace ClassicUO.Game.Scenes
                     && _world.Player.IsHidden
             )
             {
-                _useItemQueue.ClearCorpses();
+                ObjectActionQueue.Instance.ClearByPriority(ActionPriority.OpenCorpse);
             }
 
             ObjectActionQueue.Instance.Update();
-
-            _useItemQueue.Update();
-
             AutoLootManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);
 

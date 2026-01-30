@@ -583,7 +583,9 @@ internal static class GameActions
         Socket.Send_AttackRequest(serial);
     }
 
-    internal static void DoubleClickQueued(uint serial) => Client.Game.GetScene<GameScene>()?.DoubleClickDelayed(serial);
+    internal static void QueueOpenCorpse(uint serial) => ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.OpenCorpse);
+
+    internal static void DoubleClickQueued(uint serial) => ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.UseItem);
 
     internal static void DoubleClickQueued(uint serial, bool ignoreWarMode)
     {
@@ -594,7 +596,7 @@ internal static class GameActions
             }), ActionPriority.UseItem);
     }
 
-    internal static void DoubleClick(World world, uint serial, bool ignoreWarMode = false)
+    internal static void DoubleClick(World world, uint serial, bool ignoreWarMode = false, bool ignoreQueue = false)
     {
         // Record action for script recording (only for items)
         if (SerialHelper.IsItem(serial))
@@ -620,8 +622,10 @@ internal static class GameActions
                     g.SetInScreen();
                     g.BringOnTop();
                 }
-                Socket.Send_DoubleClick(serial);
             }
+
+            if (ProfileManager.CurrentProfile.QueueManualItemUses && !ignoreQueue)
+                ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.ManualUseItem);
             else
                 Socket.Send_DoubleClick(serial);
         }
@@ -1051,15 +1055,15 @@ internal static class GameActions
     ///
     /// </summary>
     /// <param name="name">Can be a partial match</param>
-    internal static bool CastSpellByName(string name)
+    internal static bool CastSpellByName(string name, bool partialMatch = true)
     {
         name = name.Trim();
 
-        if (!string.IsNullOrEmpty(name) && SpellDefinition.TryGetSpellFromName(name, out SpellDefinition spellDef))
+        if (!string.IsNullOrEmpty(name) && SpellDefinition.TryGetSpellFromName(name, out SpellDefinition spellDef, partialMatch))
         {
-                // Record action for script recording
-                ScriptRecorder.Instance.RecordCastSpell(name);
-                ScriptingInfoGump.AddOrUpdateInfo("Last Spell", name);
+            // Record action for script recording
+            ScriptRecorder.Instance.RecordCastSpell(name);
+            ScriptingInfoGump.AddOrUpdateInfo("Last Spell", name);
 
             CastSpell(spellDef.ID);
             return true;

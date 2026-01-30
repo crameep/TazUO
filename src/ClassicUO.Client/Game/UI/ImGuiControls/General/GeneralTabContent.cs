@@ -258,6 +258,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Instead of instantly moving an item, put it in a queue to prevent \"You must wait\" messages.");
 
+            bool queueManualUses = _profile.QueueManualItemUses;
+            if (ImGui.Checkbox("Queue object uses", ref queueManualUses))
+            {
+                _profile.QueueManualItemUses = queueManualUses;
+            }
+            ImGuiComponents.Tooltip("Instead of instantly double clicking an item or mobile, put it in a queue to prevent \"You must wait\" messages.");
+
             if (ImGui.Checkbox("Auto open own corpse", ref _autoOpenOwnCorpse))
             {
                 _profile.AutoOpenOwnCorpse = _autoOpenOwnCorpse;
@@ -291,7 +298,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Checkbox("Long-Distance Pathfinding", ref _useLongDistancePathing))
             {
                 World.Instance.Player.Pathfinder.UseLongDistancePathfinding = _useLongDistancePathing;
-                Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
+                Client.Settings?.SetAsync(SettingsScope.Global, Constants.SqlSettings.USE_LONG_DISTANCE_PATHING,  _useLongDistancePathing);
             }
             ImGuiComponents.Tooltip("This is currently in beta.");
 

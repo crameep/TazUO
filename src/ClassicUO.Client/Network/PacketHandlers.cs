@@ -2403,7 +2403,7 @@ sealed class PacketHandlers
             AsyncNetClient.Socket.Send_OpenChat("");
 
             AsyncNetClient.Socket.Send_SkillsRequest(world.Player);
-            scene.DoubleClickDelayed(world.Player | 0x8000_0000);
+            ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(world.Player | 0x8000_0000), ActionPriority.UseItem);
 
             if (Client.Game.UO.Version >= Utility.ClientVersion.CV_306E)
             {

@@ -844,7 +844,11 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <param name="spellName">This can be a partial match. Fireba will cast Fireball.</param>
-        public void CastSpell(string spellName) => MainThreadQueue.InvokeOnMainThread(() => { GameActions.CastSpellByName(spellName); });
+        public void CastSpell(string spellName) => MainThreadQueue.InvokeOnMainThread(() =>
+        {
+            if(!GameActions.CastSpellByName(spellName, false))
+                GameActions.CastSpellByName(spellName);
+        });
 
         /// <summary>
         /// Dress from a saved dress configuration.
@@ -3722,7 +3726,7 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <returns></returns>
-        public bool IsProcessingUseItemQueue() => MainThreadQueue.InvokeOnMainThread(() => !UseItemQueue.Instance.IsEmpty);
+        public bool IsProcessingUseItemQueue() => MainThreadQueue.InvokeOnMainThread(() => !ObjectActionQueue.Instance.IsEmpty);
 
         /// <summary>
         /// Check if the global cooldown is currently active. This applies to actions like moving or using items,

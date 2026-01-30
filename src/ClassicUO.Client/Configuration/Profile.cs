@@ -753,7 +753,7 @@ namespace ClassicUO.Configuration
             }
         } = 11;
 
-        
+
         [JsonIgnore]
         public bool QueueManualItemMoves
         {
@@ -762,6 +762,19 @@ namespace ClassicUO.Configuration
             {
                 if (field != value)
                     _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.QUEUE_MANUAL_ITEM_MOVES, value);
+
+                field = value;
+            }
+        }
+
+        [JsonIgnore]
+        public bool QueueManualItemUses
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.QUEUE_MANUAL_ITEM_USES, value);
 
                 field = value;
             }
@@ -778,10 +791,27 @@ namespace ClassicUO.Configuration
             }
 
             //These are fine if we continue without loading them yet (non-Char scoped)
-            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.MIN_GUMP_MOVE_DIST, 5, b => { MinGumpMoveDistance = b; });
-            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.DISABLE_WEATHER, false, b => { DisableWeather = b; });
-            _ = Client.Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.QUEUE_MANUAL_ITEM_MOVES, false, b => { QueueManualItemMoves = b; });
+            Client.Settings.GetAllAsync(SettingsScope.Global).ContinueWith(t =>
+            {
+                Dictionary<string, string> kvp = t.Result;
+                MainThreadQueue.EnqueueAction(() =>
+                {
+                    string val;
+                    bool b;
 
+                    if (kvp.TryGetValue(Constants.SqlSettings.MIN_GUMP_MOVE_DIST, out val) && int.TryParse(val, out int v))
+                        MinGumpMoveDistance = v;
+
+                    if (kvp.TryGetValue(Constants.SqlSettings.DISABLE_WEATHER, out val) && bool.TryParse(val, out b))
+                        DisableWeather = b;
+
+                    if (kvp.TryGetValue(Constants.SqlSettings.QUEUE_MANUAL_ITEM_MOVES, out val) && bool.TryParse(val, out b))
+                        QueueManualItemMoves = b;
+
+                    if (kvp.TryGetValue(Constants.SqlSettings.QUEUE_MANUAL_ITEM_USES, out val) && bool.TryParse(val, out b))
+                        QueueManualItemUses = b;
+                });
+            });
 
             //These must be waited before continue for various purposes elsewhere
             Task[] mustWait = [
