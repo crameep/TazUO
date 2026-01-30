@@ -465,7 +465,7 @@ namespace ClassicUO.LegionScripting
                 if (i != null)
                 {
                     Item bp = World.Player.Backpack;
-                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).FromMoveRequest(), ActionPriority.MoveItem);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                     Found = i.Serial;
                     return new PyItem(i);
                 }
@@ -494,7 +494,7 @@ namespace ClassicUO.LegionScripting
                 if (i != null)
                 {
                     Item bp = World.Player.Backpack;
-                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).FromMoveRequest(), ActionPriority.MoveItem);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(i, bp).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                     Found = i.Serial;
                     return new PyItem(i);
                 }
@@ -648,8 +648,13 @@ namespace ClassicUO.LegionScripting
         public void EquipItem(uint serial) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
-                GameActions.PickUp(World, serial, 0, 0, 1);
-                GameActions.Equip(World);
+                if(ProfileManager.CurrentProfile.QueueManualItemMoves && World.Items.Get(serial) is Item i)
+                    ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(serial, (Layer)i.ItemData.Layer), ActionPriority.EquipItem);
+                else
+                {
+                    GameActions.PickUp(World, serial, 0, 0, 1);
+                    GameActions.Equip(World);
+                }
             }
         );
 
@@ -684,7 +689,7 @@ namespace ClassicUO.LegionScripting
         public void QueueMoveItem(uint serial, uint destination, ushort amt = 0, int x = 0xFFFF, int y = 0xFFFF) => MainThreadQueue.InvokeOnMainThread
         (() =>
             {
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, destination, amt, x, y).FromMoveRequest(), ActionPriority.MoveItem);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, destination, amt, x, y).ToObjectActionQueueItem(), ActionPriority.MoveItem);
             }
         );
 
@@ -756,7 +761,7 @@ namespace ClassicUO.LegionScripting
                 if (!useCalculatedZ)
                     z = World.Player.Z + z;
 
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, OSI ? uint.MaxValue : 0, amt, World.Player.X + x, World.Player.Y + y, z).FromMoveRequest(), ActionPriority.MoveItem);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(serial, OSI ? uint.MaxValue : 0, amt, World.Player.X + x, World.Player.Y + y, z).ToObjectActionQueueItem(), ActionPriority.MoveItem);
             }
         );
 

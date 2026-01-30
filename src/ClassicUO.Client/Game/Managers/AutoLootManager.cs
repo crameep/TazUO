@@ -335,7 +335,7 @@ namespace ClassicUO.Game.Managers
             }
 
             if (destinationSerial != 0)
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).FromMoveRequest(), ActionPriority.MoveItem);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
             else
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
 

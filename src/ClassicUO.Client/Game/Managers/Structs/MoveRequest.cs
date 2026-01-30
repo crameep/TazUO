@@ -5,6 +5,16 @@ using ClassicUO.Network;
 
 namespace ClassicUO.Game.Managers.Structs;
 
+/// <summary>
+/// Create a move item request. If <param name="layer"></param> is not Layer.Invalid, it will be an equip request instead of a move item.
+/// </summary>
+/// <param name="serial"></param>
+/// <param name="destination"></param>
+/// <param name="amount"></param>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="z"></param>
+/// <param name="layer"></param>
 public readonly struct MoveRequest(uint serial, uint destination, ushort amount = 0, int x = 0xFFFF, int y = 0xFFFF, int z = 0, Layer layer = Layer.Invalid)
 {
     public uint Serial { get; } = serial;
@@ -17,17 +27,16 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
     public int X { get; } = x;
     public int Y { get; } = y;
     public int Z { get; } = z;
-
     public Layer Layer { get; } = layer;
 
     public void Execute()
     {
         AsyncNetClient.Socket.Send_PickUpRequest(Serial, Amount);
 
-        if(Destination != uint.MaxValue)
+        if(layer == Layer.Invalid)
             GameActions.DropItem(Serial, X, Y, Z, Destination, true);
         else
-            AsyncNetClient.Socket.Send_EquipRequest(Serial, Layer, World.Instance.Player);
+            AsyncNetClient.Socket.Send_EquipRequest(Serial, Layer, Destination);
     }
 
     public static MoveRequest? ToLootBag(uint serial)
@@ -52,7 +61,7 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
 
         if (i == null) return null;
 
-        return new MoveRequest(serial, uint.MaxValue, 1, 0xFFFF, 0xFFFF, 0, layer);
+        return new MoveRequest(serial, World.Instance.Player, 1, 0xFFFF, 0xFFFF, 0, layer);
     }
 }
 
@@ -60,5 +69,5 @@ public static class MoveRequestExtensions
 {
     public static MoveRequest? ToLootBag(this Item item) => MoveRequest.ToLootBag(item.Serial);
 
-    public static ObjectActionQueueItem FromMoveRequest(this MoveRequest moveRequest) => new(moveRequest.Execute);
+    public static ObjectActionQueueItem ToObjectActionQueueItem(this MoveRequest moveRequest) => new(moveRequest.Execute);
 }
