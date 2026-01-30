@@ -5,6 +5,7 @@ using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Processes;
 using ClassicUO.Network;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -35,7 +36,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         public GeneralTabContent()
         {
-            _objectMoveDelay = _profile.MoveMultiObjectDelay;
             _highlightObjects = _profile.HighlightGameObjects;
             _showNames = _profile.NameOverheadToggled;
             _autoOpenOwnCorpse = _profile.AutoOpenOwnCorpse;
@@ -239,12 +239,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _profile.TurnDelay = _turnDelay;
             }
             ImGui.SetNextItemWidth(150);
+            _objectMoveDelay = ProfileManager.CurrentProfile.MoveMultiObjectDelay;
             if (ImGui.InputInt("Object Delay", ref _objectMoveDelay, 50, 100))
             {
                 _objectMoveDelay = Math.Clamp(_objectMoveDelay, 0, 3000);
 
                 _profile.MoveMultiObjectDelay = _objectMoveDelay;
             }
+
+            if (ImGui.Button("Automated delay checker"))
+            {
+                AutomatedObjectDelay.Begin();
+            }
+            ImGuiComponents.Tooltip("Run a small test to try to determine the best object delay time.\nThis is an experimental feature, if it doesn't work for you just adjust your delay manually.");
 
             ImGui.Spacing();
             ImGui.Spacing();
