@@ -134,7 +134,7 @@ internal static class OpenContainer
                     {
                         UIManager.GetGump<GridLootGump>(serial)?.Dispose();
                         UIManager.Add(new GridLootGump(world, serial));
-                        SharedStore.RequestedGridLoot = serial;
+                        Helpers.SharedStore.RequestedGridLoot = serial;
 
                         if (ProfileManager.CurrentProfile.GridLootType == 1)
                             return;

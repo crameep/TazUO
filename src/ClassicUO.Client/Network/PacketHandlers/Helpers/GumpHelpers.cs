@@ -1,249 +1,49 @@
-// SPDX-License-Identifier: BSD-2-Clause
-
-using ClassicUO.Assets;
-using ClassicUO.Configuration;
-using ClassicUO.Game;
-using ClassicUO.Game.Data;
-using ClassicUO.Game.GameObjects;
-using ClassicUO.Game.Managers;
-using ClassicUO.Game.Scenes;
-using ClassicUO.Game.UI;
-using ClassicUO.Game.UI.Controls;
-using ClassicUO.Game.UI.Gumps;
-using ClassicUO.IO;
-using ClassicUO.Network;
-using ClassicUO.Renderer;
-using ClassicUO.Resources;
-using ClassicUO.Utility;
-using ClassicUO.Utility.Logging;
-using ClassicUO.Utility.Platforms;
-using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using ClassicUO.Game.UI.Gumps.Login;
-using ClassicUO.Game.UI.Gumps.GridHighLight;
+using ClassicUO.Configuration;
+using ClassicUO.Game;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Controls;
+using ClassicUO.Game.UI.Gumps;
 using ClassicUO.LegionScripting;
-using Constants = ClassicUO.Game.Constants;
+using ClassicUO.Utility;
+using ClassicUO.Utility.Logging;
+using Microsoft.Xna.Framework;
 
-namespace ClassicUO.Network;
-sealed class PacketHandlersOld
+namespace ClassicUO.Network.PacketHandlers.Helpers;
+
+internal static class GumpHelpers
 {
-    public delegate void OnPacketBufferReader(World world, ref StackDataReader p);
+    [ThreadStatic] private static TextFileParser _parser;
+    [ThreadStatic] private static TextFileParser _cmdParser;
 
-    private static uint _requestedGridLoot;
-
-    private List<uint> _clilocRequests = new List<uint>();
-    private List<uint> _customHouseRequests = new List<uint>();
-    private readonly OnPacketBufferReader[] _handlers = new OnPacketBufferReader[0x100];
-
-    public static PacketHandlers Handler { get; } = new PacketHandlers();
-
-    public void Add(byte id, OnPacketBufferReader handler) => _handlers[id] = handler;
-
-    // Increased from 4096 to 65536 (64KB) to reduce Array.Resize frequency during packet processing
-    private byte[] _readingBuffer = new byte[65536];
-    private readonly PacketLogger _packetLogger = new PacketLogger();
-    private readonly CircularBuffer _buffer = new CircularBuffer();
-    private readonly CircularBuffer _pluginsBuffer = new CircularBuffer();
-
-    public int ParsePackets(World world, Span<byte> data)
+    private static TextFileParser GetParser()
     {
-        Profiler.EnterContext("APPEND");
-        Append(data, false);
-        Profiler.ExitContext("APPEND");
-
-#if DEBUG
-        string packet = _buffer == null || _buffer.Length == 0 ? "0xFF" : _buffer[0].ToString();
-
-        Profiler.EnterContext(packet);
-#endif
-
-        int c = ParsePackets(world, _buffer, true) + ParsePackets(world, _pluginsBuffer, false);
-
-#if DEBUG
-        Profiler.ExitContext(packet);
-#endif
-
-        return c;
+        if (_parser == null)
+            _parser = new TextFileParser(
+                string.Empty,
+                new[] { ' ' },
+                new char[] { },
+                new[] { '{', '}' }
+            );
+        return _parser;
     }
 
-    private int ParsePackets(World world, CircularBuffer stream, bool allowPlugins)
+    private static TextFileParser GetCmdParser()
     {
-        int packetsCount = 0;
-
-        lock (stream)
-        {
-            ref byte[] packetBuffer = ref _readingBuffer;
-
-            while (stream.Length > 0)
-            {
-                if (
-                    !GetPacketInfo(
-                        stream,
-                        stream.Length,
-                        out byte packetID,
-                        out int offset,
-                        out int packetlength
-                    )
-                )
-                {
-                    Log.Warn(
-                        $"Invalid ID: {packetID:X2} | off: {offset} | len: {packetlength} | stream.pos: {stream.Length}"
-                    );
-
-                    break;
-                }
-
-                if (stream.Length < packetlength)
-                {
-                    Log.Warn(
-                        $"need more data ID: {packetID:X2} | off: {offset} | len: {packetlength} | stream.pos: {stream.Length}"
-                    );
-
-                    // need more data
-                    break;
-                }
-
-                while (packetlength > packetBuffer.Length)
-                {
-                    Profiler.EnterContext("PACKET_BUFFER_RESIZE");
-                    int oldSize = packetBuffer.Length;
-                    int newSize = packetBuffer.Length * 2;
-
-                    Log.Warn($"PacketHandler buffer resize from {oldSize} to {newSize} for packet length {packetlength} (may cause spike)");
-
-                    Array.Resize(ref packetBuffer, newSize);
-                    Profiler.ExitContext("PACKET_BUFFER_RESIZE");
-                }
-
-                _ = stream.Dequeue(packetBuffer, 0, packetlength);
-
-                PacketLogger.Default?.Log(packetBuffer.AsSpan(0, packetlength), false);
-
-                if (!allowPlugins || Plugin.ProcessRecvPacket(packetBuffer, ref packetlength))
-                {
-                    AnalyzePacket(world, packetBuffer.AsSpan(0, packetlength), offset);
-
-                    ++packetsCount;
-                }
-            }
-        }
-
-        return packetsCount;
+        if (_cmdParser == null)
+            _cmdParser = new TextFileParser(
+                string.Empty,
+                new[] { ' ', ',' },
+                new char[] { },
+                new[] { '@', '@' }
+            );
+        return _cmdParser;
     }
 
-    public void Append(Span<byte> data, bool fromPlugins)
-    {
-        if (data.IsEmpty)
-            return;
-
-        (fromPlugins ? _pluginsBuffer : _buffer).Enqueue(data);
-    }
-
-    private void AnalyzePacket(World world, ReadOnlySpan<byte> data, int offset)
-    {
-        if (data.IsEmpty)
-            return;
-
-        OnPacketBufferReader bufferReader = _handlers[data[0]];
-
-        if (bufferReader != null)
-        {
-            var buffer = new StackDataReader(data);
-            buffer.Seek(offset);
-
-            bufferReader(world, ref buffer);
-        }
-    }
-
-    private static bool GetPacketInfo(
-        CircularBuffer buffer,
-        int bufferLen,
-        out byte packetID,
-        out int packetOffset,
-        out int packetLen
-    )
-    {
-        if (buffer == null || bufferLen <= 0)
-        {
-            packetID = 0xFF;
-            packetLen = 0;
-            packetOffset = 0;
-
-            return false;
-        }
-
-        packetLen = AsyncNetClient.PacketsTable.GetPacketLength(packetID = buffer[0]);
-        packetOffset = 1;
-
-        if (packetLen == -1)
-        {
-            if (bufferLen < 3)
-            {
-                return false;
-            }
-
-            byte b0 = buffer[1];
-            byte b1 = buffer[2];
-
-            packetLen = (b0 << 8) | b1;
-            packetOffset = 3;
-        }
-
-        return true;
-    }
-
-    public static void SendMegaClilocRequests(World world)
-    {
-        if (world.ClientFeatures.TooltipsEnabled && Handler._clilocRequests.Count != 0)
-        {
-            if (Client.Game.UO.Version >= Utility.ClientVersion.CV_5090)
-            {
-                if (Handler._clilocRequests.Count != 0)
-                {
-                    AsyncNetClient.Socket.Send_MegaClilocRequest(Handler._clilocRequests);
-                }
-            }
-            else
-            {
-                foreach (uint serial in Handler._clilocRequests)
-                {
-                    AsyncNetClient.Socket.Send_MegaClilocRequest_Old(serial);
-                }
-
-                Handler._clilocRequests.Clear();
-            }
-        }
-
-        if (Handler._customHouseRequests.Count > 0)
-        {
-            for (int i = 0; i < Handler._customHouseRequests.Count; ++i)
-            {
-                AsyncNetClient.Socket.Send_CustomHouseDataRequest(Handler._customHouseRequests[i]);
-            }
-
-            Handler._customHouseRequests.Clear();
-        }
-    }
-
-    public static void AddMegaClilocRequest(uint serial)
-    {
-        foreach (uint s in Handler._clilocRequests)
-        {
-            if (s == serial)
-            {
-                return;
-            }
-        }
-
-        Handler._clilocRequests.Add(serial);
-    }
-
-    private static void ParticleEffect3D(World world, ref StackDataReader p) { }
-
-    private static Gump CreateGump(
+    public static Gump CreateGump(
         World world,
         uint sender,
         uint gumpID,
@@ -280,7 +80,7 @@ sealed class PacketHandlersOld
         else
             UIManager.SavePosition(gumpID, new Point(x, y));
 
-        if(mustBeAdded)
+        if (mustBeAdded)
             gump = new Gump(world, sender, gumpID)
             {
                 X = x,
@@ -310,17 +110,13 @@ sealed class PacketHandlersOld
             List<string> gparams = GetCmdParser().GetTokens(cmdlist[cnt], false);
 
             if (gparams.Count == 0)
-            {
                 continue;
-            }
 
             string entry = gparams[0];
             gumpTextBuilder.Append(string.Join(" ", gparams)).Append('\n');
 
             if (string.Equals(entry, "button", StringComparison.InvariantCultureIgnoreCase))
-            {
                 gump.Add(new Button(gparams), page);
-            }
             else if (
                 string.Equals(
                     entry,
@@ -328,9 +124,7 @@ sealed class PacketHandlersOld
                     StringComparison.InvariantCultureIgnoreCase
                 )
             )
-            {
                 gump.Add(new ButtonTileArt(gparams), page);
-            }
             else if (
                 string.Equals(
                     entry,
@@ -353,9 +147,7 @@ sealed class PacketHandlersOld
             else if (
                 string.Equals(entry, "croppedtext", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(new CroppedText(gparams, lines), page);
-            }
             else if (
                 string.Equals(entry, "tilepicasgumppic", StringComparison.InvariantCultureIgnoreCase) ||
                 string.Equals(entry, "gumppic", StringComparison.InvariantCultureIgnoreCase)
@@ -363,10 +155,10 @@ sealed class PacketHandlersOld
             {
                 GumpPic pic;
                 bool isVirtue = gparams.Count >= 6
-                    && gparams[5].IndexOf(
-                        "virtuegumpitem",
-                        StringComparison.InvariantCultureIgnoreCase
-                    ) >= 0;
+                                && gparams[5].IndexOf(
+                                    "virtuegumpitem",
+                                    StringComparison.InvariantCultureIgnoreCase
+                                ) >= 0;
 
                 if (isVirtue)
                 {
@@ -419,13 +211,9 @@ sealed class PacketHandlersOld
 
                         case 2406:
                             if (pic.Graphic == 0x6F)
-                            {
                                 lvl = "Seeker of ";
-                            }
                             else
-                            {
                                 lvl = "Knight of ";
-                            }
 
                             break;
 
@@ -480,16 +268,12 @@ sealed class PacketHandlersOld
                     }
 
                     if (string.IsNullOrEmpty(s))
-                    {
                         s = "Unknown virtue";
-                    }
 
                     pic.SetTooltip(lvl + s, 100);
                 }
                 else
-                {
                     pic = new GumpPic(gparams);
-                }
 
                 gump.Add(pic, page);
             }
@@ -500,19 +284,14 @@ sealed class PacketHandlersOld
                     StringComparison.InvariantCultureIgnoreCase
                 )
             )
-            {
                 gump.Add(new GumpPicTiled(gparams), page);
-            }
             else if (
                 string.Equals(entry, "htmlgump", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(new HtmlControl(gparams, lines), page);
-            }
             else if (
                 string.Equals(entry, "xmfhtmlgump", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(
                     new HtmlControl(
                         int.Parse(gparams[1]),
@@ -525,13 +304,9 @@ sealed class PacketHandlersOld
                         Client.Game.UO.FileManager.Clilocs.GetString(int.Parse(gparams[5].Replace("#", ""))),
                         0,
                         true
-                    )
-                    {
-                        IsFromServer = true
-                    },
+                    ) { IsFromServer = true },
                     page
                 );
-            }
             else if (
                 string.Equals(
                     entry,
@@ -543,9 +318,7 @@ sealed class PacketHandlersOld
                 int color = int.Parse(gparams[8]);
 
                 if (color == 0x7FFF)
-                {
                     color = 0x00FFFFFF;
-                }
 
                 gump.Add(
                     new HtmlControl(
@@ -559,10 +332,7 @@ sealed class PacketHandlersOld
                         Client.Game.UO.FileManager.Clilocs.GetString(int.Parse(gparams[5].Replace("#", ""))),
                         color,
                         true
-                    )
-                    {
-                        IsFromServer = true
-                    },
+                    ) { IsFromServer = true },
                     page
                 );
             }
@@ -573,9 +343,7 @@ sealed class PacketHandlersOld
                 int color = int.Parse(gparams[7]);
 
                 if (color == 0x7FFF)
-                {
                     color = 0x00FFFFFF;
-                }
 
                 StringBuilder sb = null;
 
@@ -609,32 +377,23 @@ sealed class PacketHandlersOld
                             ),
                         color,
                         true
-                    )
-                    {
-                        IsFromServer = true
-                    },
+                    ) { IsFromServer = true },
                     page
                 );
             }
             else if (string.Equals(entry, "page", StringComparison.InvariantCultureIgnoreCase))
             {
                 if (gparams.Count >= 2)
-                {
                     page = int.Parse(gparams[1]);
-                }
             }
             else if (
                 string.Equals(entry, "resizepic", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(new ResizePic(gparams), page);
-            }
             else if (string.Equals(entry, "text", StringComparison.InvariantCultureIgnoreCase))
             {
                 if (gparams.Count >= 5)
-                {
                     gump.Add(new Label(gparams, lines), page);
-                }
             }
             else if (
                 string.Equals(
@@ -663,44 +422,30 @@ sealed class PacketHandlersOld
                 string.Equals(entry, "tilepichue", StringComparison.InvariantCultureIgnoreCase)
                 || string.Equals(entry, "tilepic", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(new StaticPic(gparams), page);
-            }
             else if (
                 string.Equals(entry, "noclose", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.CanCloseWithRightClick = false;
-            }
             else if (
                 string.Equals(entry, "nodispose", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.CanCloseWithEsc = false;
-            }
             else if (
                 string.Equals(entry, "nomove", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.CanMove = false;
-            }
             else if (
                 string.Equals(entry, "group", StringComparison.InvariantCultureIgnoreCase)
                 || string.Equals(entry, "endgroup", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 group++;
-            }
             else if (string.Equals(entry, "radio", StringComparison.InvariantCultureIgnoreCase))
-            {
                 gump.Add(new RadioButton(group, gparams, lines), page);
-            }
             else if (
                 string.Equals(entry, "checkbox", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.Add(new Checkbox(gparams, lines), page);
-            }
             else if (
                 string.Equals(entry, "tooltip", StringComparison.InvariantCultureIgnoreCase)
             )
@@ -712,9 +457,7 @@ sealed class PacketHandlersOld
                     string args = gparams[2];
 
                     for (int i = 3; i < gparams.Count; i++)
-                    {
                         args += '\t' + gparams[i];
-                    }
 
                     if (args.Length == 0)
                     {
@@ -724,18 +467,13 @@ sealed class PacketHandlersOld
                         );
                     }
                     else
-                    {
                         text = Client.Game.UO.FileManager.Clilocs.Translate(
                             int.Parse(gparams[1]),
-                            args,
-                            false
+                            args
                         );
-                    }
                 }
                 else
-                {
                     text = Client.Game.UO.FileManager.Clilocs.GetString(int.Parse(gparams[1]));
-                }
 
                 Control last =
                     gump.Children.Count != 0 ? gump.Children[gump.Children.Count - 1] : null;
@@ -751,9 +489,7 @@ sealed class PacketHandlersOld
                         }
                     }
                     else
-                    {
                         last.SetTooltip(text);
-                    }
 
                     last.Priority = ClickPriority.High;
                     last.AcceptMouseInput = true;
@@ -777,9 +513,7 @@ sealed class PacketHandlersOld
                         uint.TryParse(gparams[1], out uint s)
                         && (!world.OPL.TryGetRevision(s, out uint rev) || rev == 0)
                     )
-                    {
-                        AddMegaClilocRequest(s);
-                    }
+                        SharedStore.AddMegaCliLocRequest(s);
                 }
             }
             else if (
@@ -788,24 +522,18 @@ sealed class PacketHandlersOld
             else if (
                 string.Equals(entry, "mastergump", StringComparison.InvariantCultureIgnoreCase)
             )
-            {
                 gump.MasterGumpSerial = gparams.Count > 0 ? SerialHelper.Parse(gparams[1]) : 0;
-            }
             else if (string.Equals(entry, "picinpichued", StringComparison.InvariantCultureIgnoreCase) ||
                      string.Equals(entry, "picinpicphued", StringComparison.InvariantCultureIgnoreCase) ||
                      string.Equals(entry, "picinpic", StringComparison.InvariantCultureIgnoreCase)
                     )
             {
                 if (gparams.Count > 7)
-                {
                     gump.Add(new GumpPicInPic(gparams), page);
-                }
             }
             else if (string.Equals(entry, "\0", StringComparison.InvariantCultureIgnoreCase))
-            {
                 //This gump is null terminated: Breaking
                 break;
-            }
             else if (string.Equals(entry, "gumppichued", StringComparison.InvariantCultureIgnoreCase) ||
                      string.Equals(entry, "gumppicphued", StringComparison.InvariantCultureIgnoreCase))
             {
@@ -818,47 +546,38 @@ sealed class PacketHandlersOld
             }
             else if (string.Equals(entry, "maparea", StringComparison.InvariantCultureIgnoreCase))
             {
-                if(gparams.Count >= 10)
-                    if(int.TryParse(gparams[1], out int cx) &&
+                if (gparams.Count >= 10)
+                    if (int.TryParse(gparams[1], out int cx) &&
                         int.TryParse(gparams[2], out int cy) &&
                         int.TryParse(gparams[3], out int width) &&
                         int.TryParse(gparams[4], out int height) &&
                         int.TryParse(gparams[5], out int mapindex) &&
-                        int.TryParse(gparams[6], out int mapx)&&
-                        int.TryParse(gparams[7], out int mapy)&&
-                        int.TryParse(gparams[8], out int mapex)&&
+                        int.TryParse(gparams[6], out int mapx) &&
+                        int.TryParse(gparams[7], out int mapy) &&
+                        int.TryParse(gparams[8], out int mapex) &&
                         int.TryParse(gparams[9], out int mapey))
-                    {
-                        gump.Add(new RenderedMapArea(mapindex, new Rectangle(mapx, mapy, mapex - mapx, mapey - mapy), cx, cy, width, height), page);
-                    }
+                        gump.Add(
+                            new RenderedMapArea(mapindex, new Rectangle(mapx, mapy, mapex - mapx, mapey - mapy), cx, cy,
+                                width, height), page);
             }
             else
-            {
                 Log.Warn($"Invalid Gump Command: \"{gparams[0]}\"");
-            }
         }
 
         gump.PacketGumpText = gumpTextBuilder.ToString();
 
         if (mustBeAdded)
-        {
             UIManager.Add(gump);
-        }
 
         gump.Update();
         gump.SetInScreen();
 
         if (CUOEnviroment.Debug)
-        {
             GameActions.Print(world, $"GumpID: {gumpID}");
-        }
 
         if (ProfileManager.CurrentProfile != null)
-        {
             if (gumpID == ProfileManager.CurrentProfile.SOSGumpID) //SOS message gump
-            {
                 for (int i = 0; i < gump.Children.Count; i++)
-                {
                     if (gump.Children[i] is HtmlControl)
                     {
                         string pattern = @"(\d+('N)?('S)?('E)?('W)?)";
@@ -866,7 +585,8 @@ sealed class PacketHandlersOld
                         string[] loc = new string[4];
 
                         int c = 0;
-                        foreach (Match m in Regex.Matches(((HtmlControl)gump.Children[i]).Text, pattern, RegexOptions.Multiline))
+                        foreach (Match m in Regex.Matches(((HtmlControl)gump.Children[i]).Text, pattern,
+                                     RegexOptions.Multiline))
                         {
                             if (c > 3)
                                 break;
@@ -888,12 +608,17 @@ sealed class PacketHandlersOld
 
                         xlong = int.Parse(loc[2]);
                         ylat = int.Parse(loc[0]);
-                        xmins = int.Parse(loc[3].Substring(0, loc[3].Length - 1)); ;
+                        xmins = int.Parse(loc[3].Substring(0, loc[3].Length - 1));
+                        ;
                         ymins = int.Parse(loc[1].Substring(0, loc[1].Length - 1));
-                        Vector3 location = ReverseLookup(xlong, ylat, xmins, ymins, xeast, ysouth);
-                        GameActions.Print(world, $"If I am on the correct facet I think these coords should be somewhere near.. {location.X} and {location.Y}..");
+                        Vector3 location = LocationHelpers.ReverseLookup(xlong, ylat, xmins, ymins, xeast, ysouth);
+                        GameActions.Print(world,
+                            $"If I am on the correct facet I think these coords should be somewhere near.. {location.X} and {location.Y}..");
 
-                        var menu = new MenuButton(25, Color.Black.PackedValue, 0.75f, "Menu") { X = gump.Width - 46, Y = 6 };
+                        var menu = new MenuButton(25, Color.Black.PackedValue, 0.75f, "Menu")
+                        {
+                            X = gump.Width - 46, Y = 6
+                        };
                         menu.MouseUp += (s, e) =>
                         {
                             menu.ContextMenu?.Show();
@@ -908,6 +633,7 @@ sealed class PacketHandlersOld
                                 gump = new WorldMapGump(world);
                                 UIManager.Add(gump);
                             }
+
                             gump.GoToMarker((int)location.X, (int)location.Y, true);
                         }));
 
@@ -919,6 +645,7 @@ sealed class PacketHandlersOld
                                 gump = new WorldMapGump(world);
                                 UIManager.Add(gump);
                             }
+
                             gump.AddUserMarker("SOS", (int)location.X, (int)location.Y, world.Map.Index);
                         }));
 
@@ -928,14 +655,9 @@ sealed class PacketHandlersOld
                         }));
                         gump.Add(menu);
                     }
-                }
-            }
-        }
 
         if (world.Player != null)
-        {
             world.Player.LastGumpID = gumpID;
-        }
 
         if (gump.X == 0 && gump.Y == 0)
         {
@@ -948,11 +670,23 @@ sealed class PacketHandlersOld
         return gump;
     }
 
-    [Flags]
-    private enum AffixType
+    public static void ApplyTrans(Gump gump, int current_page, int x, int y, int width, int height)
     {
-        Append = 0x00,
-        Prepend = 0x01,
-        System = 0x02
+        int x2 = x + width;
+        int y2 = y + height;
+        for (int i = 0; i < gump.Children.Count; i++)
+        {
+            Control child = gump.Children[i];
+            bool canDraw = child.Page == 0 || current_page == child.Page;
+
+            bool overlap =
+                x < child.X + child.Width
+                && child.X < x2
+                && y < child.Y + child.Height
+                && child.Y < y2;
+
+            if (canDraw && child.IsVisible && overlap)
+                child.Alpha = 0.5f;
+        }
     }
 }
