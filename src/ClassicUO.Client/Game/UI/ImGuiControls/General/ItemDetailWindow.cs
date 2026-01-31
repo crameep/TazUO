@@ -238,7 +238,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
 
                 ImGui.Button("Take Item");
-                SetTooltip("This item is not currently visible in the game world, the container is not open or its already in your backpack.");
+                SetTooltip("This item is not currently visible in the game world, the container is not open or the item is already in your backpack.");
 
                 ImGui.PopStyleColor(3);
             }
