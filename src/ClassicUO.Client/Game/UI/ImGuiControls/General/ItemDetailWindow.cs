@@ -6,6 +6,7 @@ using ClassicUO.Game.UI.Gumps;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using ClassicUO.Game.Managers.Structs;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -218,6 +219,30 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.PopStyleColor(3);
             }
 
+            var player = GetPlayer();
+            Item item = Client.Game.UO?.World?.Items?.Get(_itemInfo.Serial);
+            Item container = item != null ? Client.Game.UO?.World?.Items?.Get(item.Container) : null;
+            //NOTE: There seems to be an error in container.Opened when the grid container preview closes this check returns false even though the container is open in game
+            if (worldItem != null && ((container != null && container.Opened && player?.Backpack?.Serial != container.Serial) || worldItem.OnGround))
+            {
+                if (ImGui.Button("Take Item"))
+                {
+                    MoveItemToBackpack(_itemInfo);
+                    SetTooltip("Move the item to your backpack");
+                }
+            }
+            else
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+
+                ImGui.Button("Take Item");
+                SetTooltip("This item is not currently visible in the game world, the container is not open or its already in your backpack.");
+
+                ImGui.PopStyleColor(3);
+            }
+
             // Try to locate button
             ImGui.Spacing();
             if (ImGui.Button("Try to Locate"))
@@ -231,6 +256,43 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Button("Close"))
             {
                 IsOpen = false;
+            }
+        }
+        
+        private void MoveItemToBackpack(ItemInfo itemInfo)
+        {
+            try
+            {
+                World world = Client.Game.UO?.World;
+                var player = GetPlayer(world);
+
+                Item item = world?.Items?.Get(itemInfo.Serial);
+                if (item == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Item not found in world");
+                    return;
+                }
+
+                Item backpack = world.Items?.Get(player.Backpack.Serial);
+                if (backpack == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Backpack not found");
+                    return;
+                }
+                
+                if(backpack.Serial == item.Container)
+                {
+                    Utility.Logging.Log.Info("Item is already in backpack");
+                    return;
+                }
+
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, backpack.Serial).ToObjectActionQueueItem(), ActionPriority.MoveItem);
+
+                Utility.Logging.Log.Info($"Item 0x{item.Serial:X8} moved to backpack");
+            }
+            catch (Exception ex)
+            {
+                Utility.Logging.Log.Error($"Failed to move item to backpack: {ex.Message}");
             }
         }
 
@@ -423,6 +485,20 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 Utility.Logging.Log.Error($"Failed to search for container 0x{containerSerial:X8}: {ex.Message}");
             }
+        }
+        
+        private PlayerMobile GetPlayer(World world = null)
+        {
+            world ??= Client.Game.UO?.World;
+            if (world == null)
+                Utility.Logging.Log.Warn("Cannot get player: World not available");
+                
+            
+            var player = world?.Player;
+            if (player == null)
+                Utility.Logging.Log.Warn("Cannot get player: Player not available");
+            
+            return player;
         }
 
         public override void Dispose()
