@@ -59,6 +59,9 @@ internal sealed class PacketParser
 
     public void AddHandler(uint id, PacketHandler handler, bool allowOverride = true)
     {
+        if (id >= _handlers.Length)
+            throw new ArgumentOutOfRangeException($"A packet handler's ID must be between 0 and {_handlers.Length}");
+
         if (!allowOverride && _handlers[id] != null)
             throw new InvalidOperationException($"Handler {id} is already registered");
 
