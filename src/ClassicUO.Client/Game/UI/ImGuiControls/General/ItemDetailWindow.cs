@@ -219,11 +219,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.PopStyleColor(3);
             }
 
-            var player = GetPlayer();
+            var player = Client.Game.UO?.World?.Player;
             Item item = Client.Game.UO?.World?.Items?.Get(_itemInfo.Serial);
             Item container = item != null ? Client.Game.UO?.World?.Items?.Get(item.Container) : null;
             //NOTE: There seems to be an error in container.Opened when the grid container preview closes this check returns false even though the container is open in game
-            if (worldItem != null && ((container != null && container.Opened && player?.Backpack?.Serial != container.Serial) || worldItem.OnGround))
+            if (worldItem != null && ((container != null && player?.Backpack != null && container.Opened && player.Backpack.Serial != container.Serial) || worldItem.OnGround))
             {
                 if (ImGui.Button("Take Item"))
                 {
@@ -264,12 +264,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
             try
             {
                 World world = Client.Game.UO?.World;
-                var player = GetPlayer(world);
+                var player = world?.Player;
 
                 Item item = world?.Items?.Get(itemInfo.Serial);
                 if (item == null)
                 {
                     Utility.Logging.Log.Warn("Cannot move item: Item not found in world");
+                    return;
+                }
+                
+                if (player == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Player not available");
+                    return;
+                }
+                
+                if (player.Backpack == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Player backpack not available");
                     return;
                 }
 
@@ -282,7 +294,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 
                 if(backpack.Serial == item.Container)
                 {
-                    Utility.Logging.Log.Info("Item is already in backpack");
+                    Utility.Logging.Log.Info("Cannot move item: Item is already in backpack");
                     return;
                 }
 
@@ -485,20 +497,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 Utility.Logging.Log.Error($"Failed to search for container 0x{containerSerial:X8}: {ex.Message}");
             }
-        }
-        
-        private PlayerMobile GetPlayer(World world = null)
-        {
-            world ??= Client.Game.UO?.World;
-            if (world == null)
-                Utility.Logging.Log.Warn("Cannot get player: World not available");
-                
-            
-            var player = world?.Player;
-            if (player == null)
-                Utility.Logging.Log.Warn("Cannot get player: Player not available");
-            
-            return player;
         }
 
         public override void Dispose()
