@@ -228,8 +228,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (ImGui.Button("Take Item"))
                 {
                     MoveItemToBackpack(_itemInfo);
-                    SetTooltip("Move the item to your backpack");
                 }
+                SetTooltip("Move the item to your backpack");
             }
             else
             {
