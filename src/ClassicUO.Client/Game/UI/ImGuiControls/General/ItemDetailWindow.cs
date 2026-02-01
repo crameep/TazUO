@@ -6,6 +6,7 @@ using ClassicUO.Game.UI.Gumps;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using ClassicUO.Game.Managers.Structs;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -14,11 +15,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
         public static HashSet<ItemInfo> OpenedWindows = new();
 
         private readonly ItemInfo _itemInfo;
+        private readonly uint? _backpackSerial;
 
         public ItemDetailWindow(ItemInfo itemInfo) : base($"Item Details - {itemInfo.Name}")
         {
-            _itemInfo = itemInfo ?? throw new ArgumentNullException(nameof(itemInfo));
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
+            _itemInfo       = itemInfo ?? throw new ArgumentNullException(nameof(itemInfo));
+            _backpackSerial = Client.Game.UO?.World?.Player?.Backpack?.Serial;
+            WindowFlags     = ImGuiWindowFlags.AlwaysAutoResize;
             OpenedWindows.Add(itemInfo);
         }
 
@@ -218,6 +221,28 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.PopStyleColor(3);
             }
 
+            Item container = worldItem != null ? Client.Game.UO?.World?.Items?.Get(worldItem.Container) : null;
+            //NOTE: There seems to be an error in container.Opened when the grid container preview closes this check returns false even though the container is open in game
+            if (worldItem != null && ((container != null && _backpackSerial != null && container.Opened && _backpackSerial != container.Serial) || worldItem.OnGround))
+            {
+                if (ImGui.Button("Take Item"))
+                {
+                    MoveItemToBackpack(_itemInfo);
+                }
+                SetTooltip("Move the item to your backpack");
+            }
+            else
+            {
+                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
+
+                ImGui.Button("Take Item");
+                SetTooltip("This item is not currently visible in the game world, the container is not open or the item is already in your backpack.");
+
+                ImGui.PopStyleColor(3);
+            }
+
             // Try to locate button
             ImGui.Spacing();
             if (ImGui.Button("Try to Locate"))
@@ -231,6 +256,55 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Button("Close"))
             {
                 IsOpen = false;
+            }
+        }
+        
+        private void MoveItemToBackpack(ItemInfo itemInfo)
+        {
+            try
+            {
+                World world = Client.Game.UO?.World;
+                var player = world?.Player;
+
+                Item item = world?.Items?.Get(itemInfo.Serial);
+                if (item == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Item not found in world");
+                    return;
+                }
+                
+                if (player == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Player not available");
+                    return;
+                }
+                
+                if (player.Backpack == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Player backpack not available");
+                    return;
+                }
+
+                Item backpack = world.Items?.Get(player.Backpack.Serial);
+                if (backpack == null)
+                {
+                    Utility.Logging.Log.Warn("Cannot move item: Backpack not found");
+                    return;
+                }
+                
+                if(backpack.Serial == item.Container)
+                {
+                    Utility.Logging.Log.Info("Cannot move item: Item is already in backpack");
+                    return;
+                }
+
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, backpack.Serial).ToObjectActionQueueItem(), ActionPriority.MoveItem);
+
+                Utility.Logging.Log.Info($"Item 0x{item.Serial:X8} moved to backpack");
+            }
+            catch (Exception ex)
+            {
+                Utility.Logging.Log.Error($"Failed to move item to backpack: {ex.Message}");
             }
         }
 
