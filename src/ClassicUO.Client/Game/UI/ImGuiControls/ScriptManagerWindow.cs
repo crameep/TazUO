@@ -25,6 +25,7 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
     private Vector2 _contextMenuPosition;
     private bool _pendingReload = false;
     private bool _shouldCancelRename = false;
+    private string _searchFilter = "";
 
     private const string SCRIPT_HEADER =
         "# See examples at" +
@@ -187,10 +188,11 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
 
     private void DrawMenuBar()
     {
+        const string MANAGER_MENU_ID = "ScriptManagerMenu";
+
         if (ImGui.Button("Menu"))
         {
-            ImGui.OpenPopup("ScriptManagerMenu");
-
+            ImGui.OpenPopup(MANAGER_MENU_ID);
         }
         ImGui.SameLine();
         if (ImGui.Button("Add +"))
@@ -201,8 +203,12 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
             _contextMenuScript = null;
             _contextMenuPosition = ImGui.GetMousePos();
         }
+        ImGui.SameLine();
 
-        if (ImGui.BeginPopup("ScriptManagerMenu"))
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.InputTextWithHint("##SearchFilter", "Search...", ref _searchFilter, 100);
+
+        if (ImGui.BeginPopup(MANAGER_MENU_ID))
         {
             if (ImGui.MenuItem("Refresh"))
             {
@@ -250,8 +256,13 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
             { "", new Dictionary<string, List<ScriptFile>> { { "", new List<ScriptFile>() } } }
         };
 
+        bool hasFilter = !string.IsNullOrWhiteSpace(_searchFilter);
+
         foreach (ScriptFile sf in LegionScripting.LegionScripting.LoadedScripts)
         {
+            if (hasFilter && sf.FileName.IndexOf(_searchFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+
             if (!groupsMap.ContainsKey(sf.Group))
                 groupsMap[sf.Group] = new Dictionary<string, List<ScriptFile>>();
 
