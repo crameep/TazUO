@@ -15,11 +15,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
         public static HashSet<ItemInfo> OpenedWindows = new();
 
         private readonly ItemInfo _itemInfo;
+        private readonly uint? _backpackSerial;
 
         public ItemDetailWindow(ItemInfo itemInfo) : base($"Item Details - {itemInfo.Name}")
         {
-            _itemInfo = itemInfo ?? throw new ArgumentNullException(nameof(itemInfo));
-            WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
+            _itemInfo       = itemInfo ?? throw new ArgumentNullException(nameof(itemInfo));
+            _backpackSerial = Client.Game.UO?.World?.Player?.Backpack?.Serial;
+            WindowFlags     = ImGuiWindowFlags.AlwaysAutoResize;
             OpenedWindows.Add(itemInfo);
         }
 
@@ -219,11 +221,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.PopStyleColor(3);
             }
 
-            var player = Client.Game.UO?.World?.Player;
-            Item item = Client.Game.UO?.World?.Items?.Get(_itemInfo.Serial);
-            Item container = item != null ? Client.Game.UO?.World?.Items?.Get(item.Container) : null;
+            Item container = worldItem != null ? Client.Game.UO?.World?.Items?.Get(worldItem.Container) : null;
             //NOTE: There seems to be an error in container.Opened when the grid container preview closes this check returns false even though the container is open in game
-            if (worldItem != null && ((container != null && player?.Backpack != null && container.Opened && player.Backpack.Serial != container.Serial) || worldItem.OnGround))
+            if (worldItem != null && ((container != null && _backpackSerial != null && container.Opened && _backpackSerial != container.Serial) || worldItem.OnGround))
             {
                 if (ImGui.Button("Take Item"))
                 {
