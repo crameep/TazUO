@@ -429,15 +429,19 @@ namespace ClassicUO.LegionScripting
                     RegexOptions.Multiline
                 );
 
+                // The script.FileContents and other props currently do not update after instance creation so we have to refresh here
+                bool scriptReadOk = TryGetInterpreterScriptContent(script, out string[] scriptContents);
+
                 // If we were able to fully parse and validate the stacktrace message, use that
                 Match match = exParserRx.Match(formattedEx);
-                if (int.TryParse(match?.Groups?["lineno"]?.Value, out int lineNumber) && lineNumber >= 0 &&
-                    lineNumber < script.FileContents.Length)
+                if (scriptReadOk && int.TryParse(match?.Groups?["lineno"]?.Value, out int lineNumber) &&
+                    lineNumber - 1 >= 0 &&
+                    lineNumber - 1 < scriptContents.Length)
                 {
                     string errMsg = match?.Groups["error"]?.Value ?? e.Message;
                     GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
                     GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
-                    GameActions.Print(_world, $"{script.FileContents[lineNumber]}", Constants.HUE_ERROR);
+                    GameActions.Print(_world, $"{scriptContents[lineNumber - 1]}", Constants.HUE_ERROR);
                 }
                 else
                     // Otherwise, use the standard formatted exception
@@ -448,6 +452,31 @@ namespace ClassicUO.LegionScripting
                 GameActions.Print(_world, e.Message, Constants.HUE_ERROR);
 
             Log.Warn(e.ToString());
+        }
+
+        /// <summary>
+        /// Gets the current script's content from disk and returns it as an array correlated
+        /// to what the Python Interpreter actually sees.
+        ///
+        /// This is an attempt to correlate script content with actual stack-traces
+        /// </summary>
+        /// <param name="script">The script to read</param>
+        /// <param name="content">The content the interpreter saw</param>
+        /// <returns></returns>
+        private static bool TryGetInterpreterScriptContent(ScriptFile script, out string[] content)
+        {
+            try
+            {
+                script.ReadFromFile();
+                content = script.FileContentsJoined.Split("\n");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Log.Warn($"Failed to read script '{script.FileName}' for debug purposes: {e}");
+                content = null;
+                return false;
+            }
         }
 
         public static void StopScript(ScriptFile script)
