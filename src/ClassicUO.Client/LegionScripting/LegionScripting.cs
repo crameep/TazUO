@@ -12,6 +12,7 @@ using ClassicUO.Utility.Logging;
 using IronPython.Hosting;
 using Microsoft.Scripting.Hosting;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using ClassicUO.LegionScripting.PyClasses;
 using Microsoft.Scripting;
 
@@ -404,17 +405,49 @@ namespace ClassicUO.LegionScripting
             catch (OperationCanceledException) { }
             catch (Exception e)
             {
-                ExceptionOperations eo = script.PythonEngine.GetService<ExceptionOperations>();
-                string error = e.Message;
-                if (eo != null)
-                    error = eo.FormatException(e);
-
-                GameActions.Print(_world, "Python Script Error:");
-                GameActions.Print(_world, error);
-                Log.Warn(e.ToString());
+                ShowScriptError(script, e);
             }
 
             MainThreadQueue.EnqueueAction(() => { StopScript(script); });
+        }
+
+        /// <summary>
+        /// Formats a script execution exception returned by IronPython/ScriptHost
+        /// </summary>
+        /// <param name="script">The script that triggered the error</param>
+        /// <param name="e">The thrown error</param>
+        private static void ShowScriptError(ScriptFile script, Exception e)
+        {
+            GameActions.Print(_world, $"Legion Script '{script.FileName}' encountered an error:", Constants.HUE_ERROR);
+
+            ExceptionOperations eo = script.PythonEngine.GetService<ExceptionOperations>();
+            if (eo != null)
+            {
+                string formattedEx = eo.FormatException(e);
+                var exParserRx = new Regex(
+                    "File \".+\", line (?<lineno>\\d+), in .+\\r?\\n(?<error>.+)\\r?$",
+                    RegexOptions.Multiline
+                );
+
+                // If we were able to fully parse and validate the stacktrace message, use that
+                Match match = exParserRx.Match(formattedEx);
+                if (int.TryParse(match?.Groups?["lineno"]?.Value, out int lineNumber) && lineNumber >= 0 &&
+                    lineNumber < script.FileContents.Length)
+                {
+                    string errMsg = match?.Groups["error"]?.Value ?? e.Message;
+                    GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
+                    GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
+                    GameActions.Print(_world, $"{script.FileContents[lineNumber]}", Constants.HUE_ERROR);
+                }
+                else
+                    // Otherwise, use the standard formatted exception
+                    GameActions.Print(_world, formattedEx, Constants.HUE_ERROR);
+            }
+            else
+                // And finally, if we were unable to even get a formatted stack, use the minimal message
+                GameActions.Print(_world, e.Message, Constants.HUE_ERROR);
+
+            Log.Warn(e.ToString());
         }
 
         public static void StopScript(ScriptFile script)
