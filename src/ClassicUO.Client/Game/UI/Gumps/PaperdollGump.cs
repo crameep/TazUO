@@ -462,8 +462,8 @@ namespace ClassicUO.Game.UI.Gumps
                     && (item.Layer == Layer.Backpack || item.ItemData.IsContainer);
 
                 if (
-                    _paperDollInteractable.HasFakeItem && !Client.Game.UO.GameCursor.ItemHold.Enabled
-                    || force_false
+                    _paperDollInteractable.HasFakeItem && (!Client.Game.UO.GameCursor.ItemHold.Enabled
+                    || force_false)
                 )
                 {
                     _paperDollInteractable.SetFakeItem(false);
