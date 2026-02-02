@@ -30,12 +30,16 @@ public class ScriptErrorWindow : ImGuiWindow
 
         ImGui.Text($"Line Number: {_errorDetails.LineNumber}");
 
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1, 0.2f, 0.2f, 1));
+        ImGui.Text(_errorMsg);
+        ClipboardOnClick(_errorMsg);
+        ImGui.PopStyleColor();
+        ImGuiComponents.Tooltip("Click this error to copy it to your clipboard.");
+
+        ImGui.Text($"Line Content:");
         Vector2 size = ImGui.GetContentRegionAvail();
         size.Y = 100;
-        ImGui.InputTextMultiline("###Error", ref _errorMsg, uint.MaxValue, size);
-
-        ImGui.Text($"Line Content: {_errorDetails.LineContent}");
-        ImGui.InputText("###ErrorLineContent", ref _lineContent, uint.MaxValue);
+        ImGui.InputTextMultiline("###ErrorLineContent", ref _lineContent, uint.MaxValue, size);
 
         if (ImGui.Button("Edit")) ImGuiManager.AddWindow(new ScriptEditorWindow(_errorDetails.Script));
 

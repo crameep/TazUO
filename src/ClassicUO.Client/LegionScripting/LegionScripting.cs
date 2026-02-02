@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ using System.Text.RegularExpressions;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
 using ClassicUO.LegionScripting.PyClasses;
+using ClassicUO.Utility;
 using Microsoft.Scripting;
 
 namespace ClassicUO.LegionScripting
@@ -426,10 +428,7 @@ namespace ClassicUO.LegionScripting
             if (eo != null)
             {
                 string formattedEx = eo.FormatException(e);
-                var exParserRx = new Regex(
-                    "File \".+\", line (?<lineno>\\d+), in .+\\r?\\n(?<error>.+)\\r?$",
-                    RegexOptions.Multiline
-                );
+                Regex exParserRx = RegexHelper.GetRegex("File \".+\", line (?<lineno>\\d+)", RegexOptions.Compiled | RegexOptions.Multiline);
 
                 // The script.FileContents and other props currently do not update after instance creation so we have to refresh here
                 bool scriptReadOk = TryGetInterpreterScriptContent(script, out string[] scriptContents);
@@ -440,9 +439,18 @@ namespace ClassicUO.LegionScripting
                     lineNumber - 1 >= 0 &&
                     lineNumber - 1 < scriptContents.Length)
                 {
-                    string errMsg = match?.Groups["error"]?.Value ?? e.Message;
+                    var sb = new StringBuilder();
 
-                    ImGuiManager.AddWindow(new ScriptErrorWindow(new ScriptErrorDetails(errMsg, lineNumber, scriptContents[lineNumber - 1], script)));
+                    if (lineNumber - 2 >= 0 && lineNumber - 2 < scriptContents.Length)
+                        sb.AppendLine(scriptContents[lineNumber - 2]);
+
+                    if (lineNumber - 1 >= 0 && lineNumber - 1 < scriptContents.Length)
+                        sb.AppendLine(scriptContents[lineNumber - 1] + "  <-- Error line");
+
+                    if (lineNumber >= 0 && lineNumber < scriptContents.Length)
+                        sb.AppendLine(scriptContents[lineNumber]);
+
+                    ImGuiManager.AddWindow(new ScriptErrorWindow(new ScriptErrorDetails(e.Message, lineNumber, sb.ToString(), script)));
 
                     // GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
                     // GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
