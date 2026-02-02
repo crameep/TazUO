@@ -8,6 +8,7 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
 using ClassicUO.LegionScripting;
+using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ImGuiNET;
 using Vector2 = System.Numerics.Vector2;
@@ -813,7 +814,7 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
 
         if (ImGui.MenuItem("Edit Externally"))
         {
-            OpenFileWithDefaultApp(script.FullPath);
+            FileSystemHelper.OpenFileWithDefaultApp(script.FullPath);
             _showContextMenu = false;
         }
 
@@ -1248,30 +1249,6 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
         }
     }
 
-    private static void OpenFileWithDefaultApp(string filePath)
-    {
-        try
-        {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                Process.Start(new ProcessStartInfo(filePath) { UseShellExecute = true });
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                ProcessStartInfo p = new() { FileName = "xdg-open", ArgumentList = { filePath }};
-                Process.Start(p);
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                ProcessStartInfo p = new() { FileName = "open", ArgumentList = { filePath }};
-                Process.Start(p);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Error opening file: " + ex.Message);
-        }
-    }
 
     private void MoveScriptToGroup(ScriptFile script, string targetGroup, string targetSubGroup)
     {

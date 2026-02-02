@@ -13,6 +13,8 @@ using IronPython.Hosting;
 using Microsoft.Scripting.Hosting;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using ClassicUO.Game.UI;
+using ClassicUO.Game.UI.ImGuiControls.Legion;
 using ClassicUO.LegionScripting.PyClasses;
 using Microsoft.Scripting;
 
@@ -418,7 +420,7 @@ namespace ClassicUO.LegionScripting
         /// <param name="e">The thrown error</param>
         private static void ShowScriptError(ScriptFile script, Exception e)
         {
-            GameActions.Print(_world, $"Legion Script '{script.FileName}' encountered an error:", Constants.HUE_ERROR);
+            GameActions.Print(_world, $"Legion Script '{script.FileName}' encountered an error.", Constants.HUE_ERROR);
 
             ExceptionOperations eo = script.PythonEngine.GetService<ExceptionOperations>();
             if (eo != null)
@@ -439,9 +441,12 @@ namespace ClassicUO.LegionScripting
                     lineNumber - 1 < scriptContents.Length)
                 {
                     string errMsg = match?.Groups["error"]?.Value ?? e.Message;
-                    GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
-                    GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
-                    GameActions.Print(_world, $"{scriptContents[lineNumber - 1]}", Constants.HUE_ERROR);
+
+                    ImGuiManager.AddWindow(new ScriptErrorWindow(new ScriptErrorDetails(errMsg, lineNumber, scriptContents[lineNumber - 1], script)));
+
+                    // GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
+                    // GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
+                    // GameActions.Print(_world, $"{scriptContents[lineNumber - 1]}", Constants.HUE_ERROR);
                 }
                 else
                     // Otherwise, use the standard formatted exception

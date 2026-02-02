@@ -258,13 +258,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 IsOpen = false;
             }
         }
-        
+
         private void MoveItemToBackpack(ItemInfo itemInfo)
         {
             try
             {
                 World world = Client.Game.UO?.World;
-                var player = world?.Player;
+                PlayerMobile player = world?.Player;
 
                 Item item = world?.Items?.Get(itemInfo.Serial);
                 if (item == null)
@@ -272,13 +272,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     Utility.Logging.Log.Warn("Cannot move item: Item not found in world");
                     return;
                 }
-                
+
                 if (player == null)
                 {
                     Utility.Logging.Log.Warn("Cannot move item: Player not available");
                     return;
                 }
-                
+
                 if (player.Backpack == null)
                 {
                     Utility.Logging.Log.Warn("Cannot move item: Player backpack not available");
@@ -291,7 +291,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     Utility.Logging.Log.Warn("Cannot move item: Backpack not found");
                     return;
                 }
-                
+
                 if(backpack.Serial == item.Container)
                 {
                     Utility.Logging.Log.Info("Cannot move item: Item is already in backpack");
