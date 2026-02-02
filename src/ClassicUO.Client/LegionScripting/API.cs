@@ -3032,15 +3032,18 @@ namespace ClassicUO.LegionScripting
         /// <param name="notoriety">List of notorieties</param>
         /// <param name="maxDistance"></param>
         /// <returns></returns>
-        public PyMobile NearestMobile(IList<Notoriety> notoriety, int maxDistance = 10) => MainThreadQueue.InvokeOnMainThread
+        public PyMobile NearestMobile(IList<Notoriety> notoriety, int maxDistance = 10) => MainThreadQueue.BubblingInvokeOnMainThread
         (() =>
             {
                 Found = 0;
                 if (notoriety == null || notoriety.Count == 0)
                     return null;
 
+                // IronPython can yield a mixed list - there's no guarantee the values are actually Notoriety
+                Notoriety[] requestedNotoriety = Utility.ConvertNotorietyOrThrow(notoriety);
+
                 Mobile mob = World.Mobiles.Values.Where
-                (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && notoriety.Contains
+                (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && requestedNotoriety.Contains
                      ((Notoriety)(byte)m.NotorietyFlag) && m.Distance <= maxDistance && !OnIgnoreList(m)
                 ).OrderBy(m => m.Distance).FirstOrDefault();
 
@@ -3095,14 +3098,16 @@ namespace ClassicUO.LegionScripting
         /// <param name="notoriety">List of notorieties</param>
         /// <param name="maxDistance"></param>
         /// <returns></returns>
-        public PyMobile[] NearestMobiles(IList<Notoriety> notoriety, int maxDistance = 10) => MainThreadQueue.InvokeOnMainThread
+        public PyMobile[] NearestMobiles(IList<Notoriety> notoriety, int maxDistance = 10) => MainThreadQueue.BubblingInvokeOnMainThread
         (() =>
             {
                 if (notoriety == null || notoriety.Count == 0)
                     return null;
 
+                Notoriety[] requestedNotoriety = Utility.ConvertNotorietyOrThrow(notoriety);
+
                 Mobile[] list = World.Mobiles.Values.Where
-                (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && notoriety.Contains
+                (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && requestedNotoriety.Contains
                      ((Notoriety)(byte)m.NotorietyFlag) && m.Distance <= maxDistance && !OnIgnoreList(m)
                 ).OrderBy(m => m.Distance).ToArray();
 
@@ -3156,7 +3161,7 @@ namespace ClassicUO.LegionScripting
         /// <param name="distance">Optional maximum distance from player</param>
         /// <param name="notoriety">Optional list of notoriety flags to filter by</param>
         /// <returns></returns>
-        public PyMobile[] GetAllMobiles(ushort? graphic = null, int? distance = null, IList<Notoriety> notoriety = null) => MainThreadQueue.InvokeOnMainThread(() =>
+        public PyMobile[] GetAllMobiles(ushort? graphic = null, int? distance = null, IList<Notoriety> notoriety = null) => MainThreadQueue.BubblingInvokeOnMainThread(() =>
         {
             IEnumerable<Mobile> mobiles = World.Mobiles.Values.AsEnumerable();
 
@@ -3167,7 +3172,10 @@ namespace ClassicUO.LegionScripting
                 mobiles = mobiles.Where(m => m.Distance <= distance.Value);
 
             if (notoriety != null && notoriety.Count > 0)
-                mobiles = mobiles.Where(m => notoriety.Contains((Notoriety)(byte)m.NotorietyFlag));
+            {
+                Notoriety[] requestedNotoriety = Utility.ConvertNotorietyOrThrow(notoriety);
+                mobiles = mobiles.Where(m => requestedNotoriety.Contains((Notoriety)(byte)m.NotorietyFlag));
+            }
 
             return mobiles.Select(m => new PyMobile(m)).ToArray();
         });
