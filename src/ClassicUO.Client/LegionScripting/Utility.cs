@@ -273,12 +273,14 @@ internal static class Utility
     }
 
     /// <summary>
-    /// Converts the given values into an array of <see cref="API.Notoriety"/>
-    /// Throws if any value is not a valid notoriety
+    ///     Converts the given values into an array of <see cref="API.Notoriety" />
+    ///     Throws if any value is not a valid notoriety
     /// </summary>
     /// <param name="values"></param>
     /// <returns>An array of notoriety values in the same order as provided</returns>
-    /// <exception cref="InvalidEnumArgumentException">One or more given values are not valid <see cref="API.Notoriety"/></exception>
+    /// <exception cref="InvalidEnumArgumentException">
+    ///     One or more given values are not valid <see cref="API.Notoriety" />
+    /// </exception>
     public static API.Notoriety[] ConvertNotorietyOrThrow(IEnumerable values) =>
         values is null
             ? []
@@ -332,5 +334,4 @@ internal static class Utility
                 return false;
         }
     }
-
 }

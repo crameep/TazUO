@@ -22,7 +22,7 @@ public static class MainThreadQueue
     public static void EnqueueAction(Action action) => _queuedActions.Enqueue(action);
 
     /// <summary>
-    /// Wraps the given function with a try/catch, returning any caught exception
+    ///     Wraps the given function with a try/catch, returning any caught exception
     /// </summary>
     /// <param name="callback">The function to wrap</param>
     /// <typeparam name="T"></typeparam>
@@ -41,7 +41,7 @@ public static class MainThreadQueue
         };
 
     /// <summary>
-    /// Dispatches the given function for invocation on the main thread and waits synchronously for the result
+    ///     Dispatches the given function for invocation on the main thread and waits synchronously for the result
     /// </summary>
     /// <param name="func">The function to invoke on the main thread</param>
     /// <typeparam name="T"></typeparam>
@@ -61,7 +61,7 @@ public static class MainThreadQueue
 
         void MtAction()
         {
-            var (res, e) = WrapCallback(func)();
+            (T res, Exception e) = WrapCallback(func)();
             mtResult = res;
             ex = e;
             resultEvent.Set();
@@ -69,11 +69,10 @@ public static class MainThreadQueue
     }
 
     /// <summary>
-    /// Dispatches a given function for execution on the MainThread.
-    ///
-    /// If the current thread is the main thread, the function will run immediately as-is,
-    /// otherwise, the function will be dispatched and waited for.
-    /// Any exceptions raised on the main thread's context will be captured and bubbled back.
+    ///     Dispatches a given function for execution on the MainThread.
+    ///     If the current thread is the main thread, the function will run immediately as-is,
+    ///     otherwise, the function will be dispatched and waited for.
+    ///     Any exceptions raised on the main thread's context will be captured and bubbled back.
     /// </summary>
     /// <param name="func">The function to execute</param>
     /// <typeparam name="T"></typeparam>
