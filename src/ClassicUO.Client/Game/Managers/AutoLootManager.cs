@@ -239,22 +239,14 @@ namespace ClassicUO.Game.Managers
         {
             if (!_loaded) return;
 
-            if (!ProfileManager.CurrentProfile.EnableScavenger && !IsEnabled)
-                return;
+            if (ProfileManager.CurrentProfile.EnableScavenger)
+                foreach (Item item in _world.Items.Values)
+                    if (item != null && item.OnGround && !item.IsLocked && !item.IsCorpse && item.Distance < 3)
+                        CheckAndLoot(item);
 
-            foreach (Item item in _world.Items.Values)
-            {
-                if (item == null || !item.OnGround || item.Distance >= 3)
-                    continue;
-
-                // The scavenger only picks up not-locked/not-corpse objects;
-                // The looter only picks corpses, but both ultimately use the same code paths
-                if (
-                    (ProfileManager.CurrentProfile.EnableScavenger && !item.IsLocked && !item.IsCorpse)
-                    || (IsEnabled && item.IsCorpse)
-                )
-                    CheckAndLoot(item);
-            }
+            if (IsEnabled)
+                foreach (Item corpse in _world.GetCorpseSnapshot())
+                    CheckCorpse(corpse);
         }
 
         private void OnOpenContainer(object sender, uint e)
