@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+using System.Collections.Generic;
+using System.Numerics;
 using ClassicUO.LegionScripting;
 using ClassicUO.Utility;
 using ImGuiNET;
@@ -14,21 +15,18 @@ public class ScriptErrorWindow : ImGuiWindow
     {
         _errorDetails = errorDetails;
         _errorMsg = errorDetails.ErrorMsg;
-        _lineContent = errorDetails.LineContent;
-        WindowFlags = ImGuiWindowFlags.NoResize;
+        _lineContents = new string[errorDetails.Locations.Count];
+        for (int i = 0; i < errorDetails.Locations.Count; i++)
+            _lineContents[i] = errorDetails.Locations[i].LineContent;
+        WindowFlags = ImGuiWindowFlags.AlwaysAutoResize;
     }
 
-    private Vector2 _size = new(500, 300);
-    private string _errorMsg, _lineContent;
+    private string _errorMsg;
+    private readonly string[] _lineContents;
 
     public override void DrawContent()
     {
-        ImGui.SetWindowSize(_size);
         ImGui.Text("Your script encountered an error, here's what we know:");
-
-        ImGui.Text($"Filename: {_errorDetails.Script.FileName}");
-
-        ImGui.Text($"Line Number: {_errorDetails.LineNumber}");
 
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1, 0.2f, 0.2f, 1));
         ImGui.Text(_errorMsg);
@@ -36,10 +34,21 @@ public class ScriptErrorWindow : ImGuiWindow
         ImGui.PopStyleColor();
         ImGuiComponents.Tooltip("Click this error to copy it to your clipboard.");
 
-        ImGui.Text($"Line Content:");
-        Vector2 size = ImGui.GetContentRegionAvail();
-        size.Y = 100;
-        ImGui.InputTextMultiline("###ErrorLineContent", ref _lineContent, uint.MaxValue, size);
+        ImGui.Separator();
+
+        for (int i = _errorDetails.Locations.Count - 1; i >= 0; i--)
+        {
+            ScriptErrorLocation loc = _errorDetails.Locations[i];
+            ImGui.Text($"File: {loc.FileName}  |  Line: {loc.LineNumber}");
+
+            if (!string.IsNullOrEmpty(_lineContents[i]))
+            {
+                ImGui.InputTextMultiline($"###ErrorLineContent{i}", ref _lineContents[i], uint.MaxValue, new Vector2(480, 80));
+            }
+
+            if (i > 0)
+                ImGui.Separator();
+        }
 
         if (ImGui.Button("Edit")) ImGuiManager.AddWindow(new ScriptEditorWindow(_errorDetails.Script));
 
@@ -49,10 +58,17 @@ public class ScriptErrorWindow : ImGuiWindow
     }
 }
 
-public struct ScriptErrorDetails(string errorMsg, int lineNumber, string lineContent, ScriptFile script)
+public struct ScriptErrorLocation(string fileName, string filePath, int lineNumber, string lineContent)
 {
-    public string ErrorMsg { get; } = errorMsg;
+    public string FileName { get; } = fileName;
+    public string FilePath { get; } = filePath;
     public int LineNumber { get; } = lineNumber;
     public string LineContent { get; } = lineContent;
+}
+
+public struct ScriptErrorDetails(string errorMsg, List<ScriptErrorLocation> locations, ScriptFile script)
+{
+    public string ErrorMsg { get; } = errorMsg;
+    public List<ScriptErrorLocation> Locations { get; } = locations;
     public ScriptFile Script { get; } = script;
 }

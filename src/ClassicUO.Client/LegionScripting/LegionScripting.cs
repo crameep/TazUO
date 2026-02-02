@@ -428,66 +428,76 @@ namespace ClassicUO.LegionScripting
             if (eo != null)
             {
                 string formattedEx = eo.FormatException(e);
-                Regex exParserRx = RegexHelper.GetRegex("File \".+\", line (?<lineno>\\d+)", RegexOptions.Compiled | RegexOptions.Multiline);
+                Log.Warn(formattedEx);
 
-                // The script.FileContents and other props currently do not update after instance creation so we have to refresh here
-                bool scriptReadOk = TryGetInterpreterScriptContent(script, out string[] scriptContents);
+                Regex exParserRx = RegexHelper.GetRegex("File \"(?<filepath>.+?)\", line (?<lineno>\\d+)", RegexOptions.Compiled | RegexOptions.Multiline);
 
-                // If we were able to fully parse and validate the stacktrace message, use that
-                Match match = exParserRx.Match(formattedEx);
-                if (scriptReadOk && int.TryParse(match?.Groups?["lineno"]?.Value, out int lineNumber) &&
-                    lineNumber - 1 >= 0 &&
-                    lineNumber - 1 < scriptContents.Length)
+                MatchCollection matches = exParserRx.Matches(formattedEx);
+                var errorLocations = new List<ScriptErrorLocation>();
+
+                bool first = true;
+                foreach (Match match in matches)
                 {
-                    var sb = new StringBuilder();
+                    string filePath = match.Groups["filepath"].Value;
 
-                    if (lineNumber - 2 >= 0 && lineNumber - 2 < scriptContents.Length)
-                        sb.AppendLine(scriptContents[lineNumber - 2]);
+                    // Skip internal IronPython frames (e.g. File "<string>", ...)
+                    if (filePath.StartsWith("<"))
+                        continue;
 
-                    if (lineNumber - 1 >= 0 && lineNumber - 1 < scriptContents.Length)
-                        sb.AppendLine(scriptContents[lineNumber - 1] + "  <-- Error line");
+                    if (!int.TryParse(match.Groups["lineno"].Value, out int lineNumber))
+                        continue;
 
-                    if (lineNumber >= 0 && lineNumber < scriptContents.Length)
-                        sb.AppendLine(scriptContents[lineNumber]);
+                    string fileName = Path.GetFileName(filePath);
+                    string lineContent = "";
 
-                    ImGuiManager.AddWindow(new ScriptErrorWindow(new ScriptErrorDetails(e.Message, lineNumber, sb.ToString(), script)));
+                    if (TryReadFileLines(filePath, out string[] fileLines))
+                        lineContent = GetContents(fileLines, first? lineNumber + 1 : lineNumber); //Offset for removal of import API line
 
-                    // GameActions.Print(_world, errMsg, Constants.HUE_ERROR);
-                    // GameActions.Print(_world, $"at line {lineNumber}:", Constants.HUE_ERROR);
-                    // GameActions.Print(_world, $"{scriptContents[lineNumber - 1]}", Constants.HUE_ERROR);
+                    errorLocations.Add(new ScriptErrorLocation(fileName, filePath, lineNumber, lineContent));
+
+                    first = false;
+                }
+
+                if (errorLocations.Count > 0)
+                {
+                    ImGuiManager.AddWindow(new ScriptErrorWindow(new ScriptErrorDetails(e.Message, errorLocations, script)));
                 }
                 else
-                    // Otherwise, use the standard formatted exception
                     GameActions.Print(_world, formattedEx, Constants.HUE_ERROR);
             }
             else
-                // And finally, if we were unable to even get a formatted stack, use the minimal message
                 GameActions.Print(_world, e.Message, Constants.HUE_ERROR);
 
-            Log.Warn(e.ToString());
+            if (e.InnerException != null)
+                ShowScriptError(script, e);
         }
 
-        /// <summary>
-        /// Gets the current script's content from disk and returns it as an array correlated
-        /// to what the Python Interpreter actually sees.
-        ///
-        /// This is an attempt to correlate script content with actual stack-traces
-        /// </summary>
-        /// <param name="script">The script to read</param>
-        /// <param name="content">The content the interpreter saw</param>
-        /// <returns></returns>
-        private static bool TryGetInterpreterScriptContent(ScriptFile script, out string[] content)
+        private static string GetContents(string[] lines, int line, int outerLines = 1)
+        {
+            var sb = new StringBuilder();
+            int errorIndex = line - 1;
+
+            for (int i = errorIndex - outerLines; i <= errorIndex + outerLines; i++)
+            {
+                if (i < 0 || i >= lines.Length)
+                    continue;
+
+                sb.AppendLine(i == errorIndex ? lines[i] + "  <-- Error line" : lines[i]);
+            }
+
+            return sb.ToString();
+        }
+
+        private static bool TryReadFileLines(string filePath, out string[] lines)
         {
             try
             {
-                script.ReadFromFile();
-                content = script.FileContentsJoined.Split("\n");
+                lines = File.ReadAllText(filePath).Split("\n");
                 return true;
             }
-            catch (Exception e)
+            catch
             {
-                Log.Warn($"Failed to read script '{script.FileName}' for debug purposes: {e}");
-                content = null;
+                lines = null;
                 return false;
             }
         }
