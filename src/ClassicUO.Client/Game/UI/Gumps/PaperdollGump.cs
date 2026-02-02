@@ -542,7 +542,7 @@ namespace ClassicUO.Game.UI.Gumps
                                         var mr = new MoveRequest(
                                             Client.Game.UO.GameCursor.ItemHold.Serial,
                                             LocalSerial != World.Player ? container : World.Player,
-                                            layer: (Layer)Client.Game.UO.GameCursor.ItemHold.ItemData.Layer);
+                                            layer: (Layer)Client.Game.UO.GameCursor.ItemHold.ItemData.Layer, moveType: MoveType.Equip);
                                         ObjectActionQueue.Instance.Enqueue(mr.ToObjectActionQueueItem(), ActionPriority.EquipItem);
                                     }
                                     else

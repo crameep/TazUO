@@ -15,7 +15,7 @@ namespace ClassicUO.Game.Managers.Structs;
 /// <param name="y"></param>
 /// <param name="z"></param>
 /// <param name="layer"></param>
-public readonly struct MoveRequest(uint serial, uint destination, ushort amount = 0, int x = 0xFFFF, int y = 0xFFFF, int z = 0, Layer layer = Layer.Invalid)
+public readonly struct MoveRequest(uint serial, uint destination, ushort amount = 0, int x = 0xFFFF, int y = 0xFFFF, int z = 0, Layer layer = Layer.Invalid, MoveType moveType = MoveType.Move)
 {
     public uint Serial { get; } = serial;
 
@@ -33,7 +33,7 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
     {
         AsyncNetClient.Socket.Send_PickUpRequest(Serial, Amount);
 
-        if(layer == Layer.Invalid)
+        if(moveType == MoveType.Move)
             GameActions.DropItem(Serial, X, Y, Z, Destination, true);
         else
             AsyncNetClient.Socket.Send_EquipRequest(Serial, Layer, Destination);
@@ -61,7 +61,7 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
 
         if (i == null) return null;
 
-        return new MoveRequest(serial, World.Instance.Player, 1, 0xFFFF, 0xFFFF, 0, layer);
+        return new MoveRequest(serial, World.Instance.Player, 1, 0xFFFF, 0xFFFF, 0, layer, MoveType.Equip);
     }
 }
 
@@ -70,4 +70,10 @@ public static class MoveRequestExtensions
     public static MoveRequest? ToLootBag(this Item item) => MoveRequest.ToLootBag(item.Serial);
 
     public static ObjectActionQueueItem ToObjectActionQueueItem(this MoveRequest moveRequest) => new(moveRequest.Execute);
+}
+
+public enum MoveType
+{
+    Move,
+    Equip
 }

@@ -3032,30 +3032,34 @@ namespace ClassicUO.LegionScripting
         /// <param name="notoriety">List of notorieties</param>
         /// <param name="maxDistance"></param>
         /// <returns></returns>
-        public PyMobile NearestMobile(IList<Notoriety> notoriety, int maxDistance = 10) => MainThreadQueue.BubblingInvokeOnMainThread
-        (() =>
-            {
-                Found = 0;
-                if (notoriety == null || notoriety.Count == 0)
-                    return null;
+        public PyMobile NearestMobile(IList<Notoriety> notoriety, int maxDistance = 10)
+        {
+            Found = 0;
 
-                // IronPython can yield a mixed list - there's no guarantee the values are actually Notoriety
-                Notoriety[] requestedNotoriety = Utility.ConvertNotorietyOrThrow(notoriety);
-
-                Mobile mob = World.Mobiles.Values.Where
-                (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && requestedNotoriety.Contains
-                     ((Notoriety)(byte)m.NotorietyFlag) && m.Distance <= maxDistance && !OnIgnoreList(m)
-                ).OrderBy(m => m.Distance).FirstOrDefault();
-
-                if (mob != null)
-                {
-                    Found = mob.Serial;
-                    return new PyMobile(mob);
-                }
-
+            if (notoriety == null || notoriety.Count == 0)
                 return null;
-            }
-        );
+
+            // IronPython can yield a mixed list - there's no guarantee the values are actually Notoriety
+            Notoriety[] requestedNotoriety = Utility.ConvertNotorietyOrThrow(notoriety);
+
+            return MainThreadQueue.BubblingInvokeOnMainThread
+            (() =>
+                {
+                    Mobile mob = World.Mobiles.Values.Where
+                    (m => !m.IsDestroyed && !m.IsDead && m.Serial != World.Player.Serial && requestedNotoriety.Contains
+                            ((Notoriety)(byte)m.NotorietyFlag) && m.Distance <= maxDistance && !OnIgnoreList(m)
+                    ).OrderBy(m => m.Distance).FirstOrDefault();
+
+                    if (mob != null)
+                    {
+                        Found = mob.Serial;
+                        return new PyMobile(mob);
+                    }
+
+                    return null;
+                }
+            );
+        }
 
         /// <summary>
         /// Get the nearest corpse within a distance.

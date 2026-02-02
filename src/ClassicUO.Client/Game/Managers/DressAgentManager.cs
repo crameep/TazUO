@@ -33,7 +33,7 @@ namespace ClassicUO.Game.Managers
 
         private readonly string _saveFileName = "dress_configs.json";
 
-        private Layer[] _forbiddenLayers = [Layer.Backpack, Layer.Beard, Layer.Hair, Layer.Invalid, Layer.ShopBuy, Layer.ShopBuyRestock, Layer.ShopSell, Layer.Bank];
+        private Layer[] _forbiddenLayers = [Layer.Backpack, Layer.Beard, Layer.Hair, Layer.ShopBuy, Layer.ShopBuyRestock, Layer.ShopSell, Layer.Bank];
 
         private DressAgentManager() { }
 
