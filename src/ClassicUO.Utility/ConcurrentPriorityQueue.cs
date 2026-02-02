@@ -6,7 +6,7 @@ public class ConcurrentPriorityQueue<TElement, TPriority>
 {
     public bool IsEmpty => _isEmpty;
 
-    private readonly PriorityQueue<TElement, (TPriority Priority, long Sequence)> _queue = new(new PrioritySequenceComparer<TPriority>());
+    protected readonly PriorityQueue<TElement, (TPriority Priority, long Sequence)> _queue = new(new PrioritySequenceComparer<TPriority>());
     private readonly object _lock = new();
     private bool _isEmpty = true;
     private long _sequence;

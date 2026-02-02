@@ -26,5 +26,10 @@ public class TestWindow : SingletonImGuiWindow<TestWindow>
 
         ImGui.Text("Pending heals: " + BandageManager.Instance.PendingHealCount);
         ImGui.Text("Pending heals in global queue: " + BandageManager.Instance.PendingInGlobalQueueCount);
+
+        ImGui.Text("Pending queue items: " + ObjectActionQueue.Instance.GetCurrentQueuedCount);
+        if (ImGui.Button("Try mount"))
+            GameActions.Mount();
+
     }
 }

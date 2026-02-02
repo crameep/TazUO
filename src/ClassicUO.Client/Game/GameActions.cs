@@ -592,7 +592,7 @@ internal static class GameActions
         if (World.Instance != null)
             ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
             {
-                DoubleClick(World.Instance, serial, ignoreWarMode);
+                DoubleClick(World.Instance, serial, ignoreWarMode, true);
             }), ActionPriority.UseItem);
     }
 

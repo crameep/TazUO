@@ -10,6 +10,8 @@ public class ObjectActionQueue : ConcurrentPriorityQueue<ObjectActionQueueItem, 
 {
     public static ObjectActionQueue Instance { get; } = new();
 
+    public int GetCurrentQueuedCount => _queue.Count;
+
     private ObjectActionQueue() { }
 
     public void Update()
