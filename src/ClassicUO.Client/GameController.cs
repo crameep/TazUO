@@ -26,6 +26,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ClassicUO.Network.PacketHandlers;
 using ImGuiNET;
 using SDL3;
 using static SDL3.SDL;
@@ -151,7 +152,7 @@ namespace ClassicUO
                     break;
 
                 Profiler.EnterContext("PARSE");
-                int c = PacketHandlers.Handler.ParsePackets(Client.Game.UO.World, message);
+                int c = PacketParser.Instance.ParsePackets(Client.Game.UO.World, message);
                 Profiler.ExitContext("PARSE");
 
                 AsyncNetClient.Socket.Statistics.TotalPacketsReceived += (uint)c;
