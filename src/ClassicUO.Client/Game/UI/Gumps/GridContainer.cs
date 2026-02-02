@@ -46,6 +46,7 @@ using System.Globalization;
 using System.Linq;
 using System.Xml;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
+using ClassicUO.Utility;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -529,10 +530,8 @@ namespace ClassicUO.Game.UI.Gumps
                 // Store current height before minimizing
                 _heightBeforeMinimize = Height;
 
-                // Save current maximized position and load minimized position
                 SwitchPositionState(false);
 
-                // Hide all controls except container name, background, and border
                 SetControlsVisibility(false);
 
                 // Resize to minimal height (just the label area + border)
@@ -544,43 +543,33 @@ namespace ClassicUO.Game.UI.Gumps
                 if (background != null) background.Height = LABEL_HEIGHT;
                 if (backgroundTexture != null) backgroundTexture.Height = LABEL_HEIGHT;
 
-                // Update the border control to match new dimensions
                 OnResize();
             }
             else
             {
-                // Save current minimized position and load maximized position
                 SwitchPositionState(true);
 
-                // Restore all controls
                 SetControlsVisibility(true);
 
                 // Restore original height (fallback to default if not set)
                 int restoredHeight;
                 if (_heightBeforeMinimize > 0)
-                {
                     restoredHeight = _heightBeforeMinimize;
-                }
                 else
-                {
                     // Fallback to a reasonable default height
                     restoredHeight = GetHeight();
-                }
 
                 ResizeWindow(new Point(Width, restoredHeight));
                 Height = restoredHeight;
 
-                // Restore border and background dimensions
                 if (background != null) background.Height = Height - (borderWidth * 2);
                 if (backgroundTexture != null) backgroundTexture.Height = Height - (borderWidth * 2);
 
-                // Update the border control to match restored dimensions
                 OnResize();
             }
 
             WantUpdateSize = true;
 
-            // Save the minimized state
             gridContainerEntry?.UpdateSaveDataEntry(this);
         }
 
@@ -645,9 +634,19 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             // Re-applies highlight rules and colors; useful if item highlights desync after SOS loot or container refresh.
-            control.Add(new ContextMenuItemEntry("Refresh item highlights", () =>
+            control.Add(new ContextMenuItemEntry("Refresh item highlights", GridHighlightData.RecheckMatchStatus));
+
+            control.Add(new ContextMenuItemEntry("Rename container", () =>
             {
-                GridHighlightData.RecheckMatchStatus();
+                var input = new InputRequest(World, "Type in a custom name for this container.", "Save", "Reset", (r, s) =>
+                {
+                    gridContainerEntry?.CustomName = r == InputRequest.Result.BUTTON1 ? s : null;
+
+                    containerNameLabel.Text = GetContainerName();
+                }, GetContainerName(true));
+                input.CenterXInViewPort();
+                input.CenterYInViewPort();
+                UIManager.Add(input);
             }));
 
             return control;
@@ -985,11 +984,13 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        private string GetContainerName()
+        private string GetContainerName(bool skipCount = false)
         {
-            string containerName = !string.IsNullOrEmpty(container.Name) ? container.Name : "a container";
+            string containerName =
+                GridContainerEntry?.CustomName.NotNullNotEmpty() == true ? GridContainerEntry.CustomName :
+                !string.IsNullOrEmpty(container.Name) ? container.Name : "a container";
 
-            if (SlotManager != null)
+            if (!skipCount && SlotManager != null)
             {
                 containerName += $" ({SlotManager.ContainerContents.Count})";
             }
