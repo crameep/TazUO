@@ -141,6 +141,11 @@ namespace ClassicUO.Game.Managers
         {
             uint serial;
 
+            if (World.Instance.Player.FindBandage(BandageGraphic) == null) {
+                VerifyTimer();
+                return; //Return early if we don't have bandages..
+            }
+
             // Safely get and remove the first item from the queue
             lock (_queueLock)
             {
