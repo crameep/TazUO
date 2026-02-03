@@ -363,7 +363,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
-            base.Draw(batcher, x, y);
+            if (!base.Draw(batcher, x, y)) return false;
 
             // Draw border as plain lines
             Vector3 hueVector = ShaderHueTranslator.GetHueVector(_borderHue, false, 1.0f);
@@ -790,7 +790,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             public override bool Draw(UltimaBatcher2D batcher, int x, int y)
             {
-                if(IsDisposed) return false;
+                if (IsDisposed) return false;
 
                 if (MouseIsOver)
                 {
