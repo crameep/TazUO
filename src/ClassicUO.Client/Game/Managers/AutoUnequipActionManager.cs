@@ -122,10 +122,13 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         {
             while (!_cTokenSource.IsCancellationRequested && await _flushChannel.Reader.WaitToReadAsync())
             {
+                // A micro-delay to let producers settle, in case of a series of actions
+                await Task.Delay(50);
                 var tasks = new List<Action>();
                 while (_flushChannel.Reader.TryRead(out Action task))
                     tasks.Add(task);
                 ExecuteBatchedTasks(tasks);
+                await Task.Delay(250); // A short delay to avoid spammy edge cases
             }
         }
         catch (TaskCanceledException)
