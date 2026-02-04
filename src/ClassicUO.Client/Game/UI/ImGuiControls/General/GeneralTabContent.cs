@@ -278,7 +278,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Automatically open your own corpse when you die, even if auto open corpses is disabled.");
 
-            if (ImGui.Checkbox("Auto unequip for spells", ref _autoUnequipForActions))
+            if (ImGui.Checkbox("Auto unequip for spells & potions", ref _autoUnequipForActions))
             {
                 _profile.AutoUnequipForActions = _autoUnequipForActions;
             }

@@ -1,205 +1,245 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
-using ClassicUO.Game.UI.ImGuiControls;
+using ClassicUO.Utility.Logging;
 
-namespace ClassicUO.Game.Managers
+namespace ClassicUO.Game.Managers;
+
+public sealed partial class AutoUnequipActionManager : IDisposable
 {
-    public sealed class AutoUnequipActionManager
+    private const string DBL_CLICK_INTERCEPTOR_KEY = "dclk";
+    private const string CAST_SPELL_INTERCEPTOR_KEY = "cs";
+
+    private struct Armament(uint serial, Layer layer)
     {
-        public static AutoUnequipActionManager Instance { get; private set; }
+        public readonly uint Serial = serial;
+        public readonly Layer Layer = layer;
+    }
 
-        private readonly World _world;
-        private uint _oneHandedSerial = 0;
-        private uint _twoHandedSerial = 0;
-        private bool _isProcessing = false;
-        private int _pendingSpellIndex = -1;
-        private SequenceState _sequenceState = SequenceState.Unequipping;
+    public static AutoUnequipActionManager Instance { get; private set; }
 
-        private enum SequenceState
+    private readonly World _world;
+    private readonly ConcurrentDictionary<string, Action> _interceptions = new();
+    private uint _shouldFlush;
+    private uint _isFlushing;
+    private bool _disposed;
+
+    public bool Enabled => ProfileManager.CurrentProfile?.AutoUnequipForActions ?? false;
+
+    public AutoUnequipActionManager(World world)
+    {
+        _world = world;
+        Instance = this;
+    }
+
+    public bool TryInterceptSpellCast(int spellIndex)
+    {
+        if (spellIndex is >= 100 and <= 678 or >= 700)
+            return false;
+
+        // Check if feature is enabled and player exists
+        if ((!_disposed && !Enabled) || _world?.Player == null)
+            return false;
+
+        string taskKey = $"{CAST_SPELL_INTERCEPTOR_KEY}-{spellIndex}";
+        return SetInterceptAndSignal(taskKey, () => GameActions.CastSpellDirect(spellIndex));
+    }
+
+    public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate)
+    {
+        if ((!_disposed && !Enabled) || _world?.Player == null || !ShouldInterceptDblClick(itemSerial))
+            return false;
+
+        string taskKey = $"{DBL_CLICK_INTERCEPTOR_KEY}-{itemSerial}";
+        return SetInterceptAndSignal(taskKey, () => sendDoubleClickDelegate(itemSerial));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        // The flush queue can technically be active at this point, but it's the edge of edge cases
+        // so ignoring this, for now.
+        _interceptions.Clear();
+        Interlocked.And(ref _shouldFlush, 0);
+        Interlocked.And(ref _isFlushing, 0);
+
+        _disposed = true;
+    }
+
+    private bool SetInterceptAndSignal(string taskKey, Action task)
+    {
+        bool wasEmpty = _shouldFlush == 0;
+        bool interceptAdded = SetIntercept(taskKey, task);
+        if (!interceptAdded)
+            return false;
+
+        if (!wasEmpty || _shouldFlush == 0)
+            return false;
+
+        Task.Run(FlushTasks);
+        return true;
+    }
+
+    private bool SetIntercept(string taskKey, Action task)
+    {
+        if (_interceptions.TryAdd(taskKey, task))
         {
-            Unequipping,  // Currently unequipping weapons
-            Casting,      // Cast action has been queued/executed
-            Reequipping   // Currently reequipping weapons
+            if (_interceptions.Count == 1)
+                Interlocked.Or(ref _shouldFlush, 1);
+            return true;
         }
 
-        public AutoUnequipActionManager(World world)
+        if (!_interceptions.TryRemove(taskKey, out _))
         {
-            _world = world;
-            Instance = this;
+            Log.Warn("Failed to remove an existing double click intercept prior to updating");
+            return false;
         }
 
-        public bool TryInterceptSpellCast(int spellIndex)
+        // A false here means a task already exist and we should update instead
+        if (!_interceptions.TryAdd(taskKey, task))
         {
-            if (spellIndex is >= 100 and <= 678 or >= 700)
-                return false;
-
-            // Check if feature is enabled
-            if (!(ProfileManager.CurrentProfile?.AutoUnequipForActions ?? false))
-                return false;
-
-            // Check if player exists
-            if (_world?.Player == null)
-                return false;
-
-            // Handle mid-sequence interruptions
-            if (_isProcessing)
-            {
-                if (_sequenceState == SequenceState.Unequipping)
-                {
-                    // Replace pending spell, continue unequipping
-                    _pendingSpellIndex = spellIndex;
-                    return true;
-                }
-
-                if (_sequenceState == SequenceState.Casting)
-                {
-                    // Hands already free, cast new spell directly and skip reequip
-                    GameActions.CastSpellDirect(spellIndex);
-                    _pendingSpellIndex = spellIndex;
-                    return true;
-                }
-                // If reequipping, don't intercept - let it complete normally
-                return false;
-            }
-
-            // Check if player has weapons equipped
-            Item oneHanded = _world.Player.FindItemByLayer(Layer.OneHanded);
-            Item twoHanded = _world.Player.FindItemByLayer(Layer.TwoHanded);
-
-            // If no weapons equipped, don't intercept
-            if (oneHanded == null && twoHanded == null)
-                return false;
-
-            // Store the serials for reequipping (only if items exist)
-            _oneHandedSerial = oneHanded?.Serial ?? 0;
-            _twoHandedSerial = twoHanded?.Serial ?? 0;
-            _pendingSpellIndex = spellIndex;
-            _isProcessing = true;
-            _sequenceState = SequenceState.Unequipping;
-
-            // Enqueue the sequence: unequip -> cast -> reequip
-            EnqueueUnequipCastReequip();
-
-            return true; // We intercepted the cast
+            Log.Warn("Failed to enqueue a double click intercept for item with serial");
+            return false;
         }
 
-        private void EnqueueUnequipCastReequip()
+        if (_interceptions.Count == 1)
+            Interlocked.Or(ref _shouldFlush, 1);
+        return true;
+    }
+
+    /// <summary>
+    ///     A method to used to check whether a Double-Click should be intercepted
+    /// </summary>
+    /// <param name="serial">The clicked target's serial</param>
+    /// <returns>True if the event should be intercepted, false otherwise</returns>
+    private bool ShouldInterceptDblClick(uint serial) =>
+        IsPotionItem(serial);
+
+    private List<Armament> GetArmingState()
+    {
+        // Check if player has weapons equipped
+        Item oneHanded = _world.Player.FindItemByLayer(Layer.OneHanded);
+        Item twoHanded = _world.Player.FindItemByLayer(Layer.TwoHanded);
+
+        var arms = new List<Armament>();
+        if (oneHanded?.Serial != null)
+            arms.Add(new Armament(oneHanded.Serial, Layer.OneHanded));
+
+        if (twoHanded?.Serial != null)
+            arms.Add(new Armament(twoHanded.Serial, Layer.TwoHanded));
+
+        return arms;
+    }
+
+    private bool IsPotionItem(uint serial)
+    {
+        Item item = _world.Items.Get(serial);
+        if (item == null)
+            return false;
+
+        // Check if item is 0xF06-0xF09 OR 0xF0B-0xF0C - these are the 'drinkable' potion graphics
+        if (item.Graphic is (< 0xF06 or > 0xF09) and (< 0xF0B or > 0xF0C))
+            return false;
+
+        // Get the un-localized item name
+        if (_world.OPL.TryGetNameAndData(item.Serial, out string name, out _))
+            // Use a simple regular expression to heuristically determine if something is a potion.
+            // To be expanded on with configuration.
+            return name != null && IsPotionRegex().IsMatch(name);
+
+        // Data doesn't exist in OPL cache - stay conservative and assume this is *not* a potion
+        return false;
+    }
+
+    private void FlushTasks()
+    {
+        if (_disposed)
+            return;
+
+        if (Interlocked.CompareExchange(ref _isFlushing, 1, 0) != 0)
+            return; // Flush already in progress
+
+        Item backpack = _world.Player.Backpack;
+        if (backpack == null)
         {
-            Item backpack = _world.Player.Backpack;
-            if (backpack == null)
-            {
-                Reset();
+            ClearInterceptionsMap();
+            return;
+        }
+
+        if (_interceptions.IsEmpty)
+            return;
+
+        IList<Armament> unEquipped = EnqueueUnequipIfNeeded();
+        EnqueueInterceptedCalls();
+        if (unEquipped.Count > 0)
+            EnqueueReEquip(unEquipped);
+
+        Interlocked.And(ref _isFlushing, 0);
+    }
+
+    private IList<Armament> EnqueueUnequipIfNeeded()
+    {
+        // First, fetch a 'fresh' state
+        // Don't bother issuing an unequip command if we're not currently armed.
+        IList<Armament> arms = GetArmingState();
+
+        foreach (Armament arm in arms ?? [])
+            ObjectActionQueue.Instance.Enqueue(
+                CreateUnequipQueueItem(arm.Serial, arm.Layer),
+                ActionPriority.EquipItem
+            );
+
+        return arms;
+    }
+
+    private ObjectActionQueueItem CreateUnequipQueueItem(uint serial, Layer layer) =>
+        new(() =>
+        {
+            Item item = _world.Items.Get(serial);
+            if (item == null || item.Container != _world.Player.Serial || item.Layer != layer)
                 return;
-            }
 
-            // Action 1: Unequip one-handed weapon (if equipped)
-            if (_oneHandedSerial != 0)
-            {
-                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
-                {
-                    Item item = _world.Items.Get(_oneHandedSerial);
-                    if (item != null && item.Container == _world.Player.Serial && item.Layer == Layer.OneHanded)
-                    {
-                        Item bp = _world.Player.Backpack;
-                        if (bp != null)
-                        {
-                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_oneHandedSerial, bp.Serial, item.Amount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
-                        }
-                    }
-                }), ActionPriority.EquipItem);
-            }
+            Item bp = _world.Player.Backpack;
+            if (bp != null)
+                new MoveRequest(serial, bp.Serial, item.Amount).Execute();
+        });
 
-            // Action 2: Unequip two-handed weapon (if equipped)
-            if (_twoHandedSerial != 0)
-            {
-                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
-                {
-                    Item item = _world.Items.Get(_twoHandedSerial);
-                    if (item != null && item.Container == _world.Player.Serial && item.Layer == Layer.TwoHanded)
-                    {
-                        Item bp = _world.Player.Backpack;
-                        if (bp != null)
-                        {
-                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(_twoHandedSerial, bp.Serial, item.Amount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
-                        }
-                    }
-                }), ActionPriority.EquipItem);
-            }
-
-            // Action 3: Cast the spell (after unequipping)
+    private void EnqueueReEquip(IList<Armament> arms)
+    {
+        foreach (Armament arm in arms)
             ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
             {
-                if (_pendingSpellIndex >= 0)
-                {
-                    GameActions.CastSpellDirect(_pendingSpellIndex);
-                }
-                _sequenceState = SequenceState.Casting;
+                Item item = _world.Items.Get(arm.Serial);
+                Item backpackItem = _world.Player.Backpack;
+
+                if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
+                    MoveRequest.EquipItem(arm.Serial, arm.Layer)?.Execute();
             }), ActionPriority.EquipItem);
-
-            // Action 4: Reequip one-handed weapon (check state first)
-            if (_oneHandedSerial != 0)
-            {
-                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
-                {
-                    // If state changed, skip reequip
-                    if (_sequenceState != SequenceState.Casting)
-                        return;
-
-                    _sequenceState = SequenceState.Reequipping;
-
-                    Item item = _world.Items.Get(_oneHandedSerial);
-                    Item backpackItem = _world.Player.Backpack;
-
-                    if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
-                    {
-                        ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(_oneHandedSerial, Layer.OneHanded), ActionPriority.EquipItem);
-                    }
-                }), ActionPriority.EquipItem);
-            }
-            else
-            {
-                // No one-handed weapon, but still transition state
-                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
-                {
-                    if (_sequenceState == SequenceState.Casting)
-                        _sequenceState = SequenceState.Reequipping;
-                }), ActionPriority.EquipItem);
-            }
-
-            // Action 5: Reequip two-handed weapon (check state first)
-            if (_twoHandedSerial != 0)
-            {
-                ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
-                {
-                    // If state changed or not reequipping, skip
-                    if (_sequenceState != SequenceState.Reequipping)
-                        return;
-
-                    Item item = _world.Items.Get(_twoHandedSerial);
-                    Item backpackItem = _world.Player.Backpack;
-
-                    if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
-                    {
-                        ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(_twoHandedSerial, Layer.TwoHanded), ActionPriority.EquipItem);
-                    }
-                }), ActionPriority.EquipItem);
-            }
-
-            // Action 6: Cleanup
-            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(Reset), ActionPriority.EquipItem);
-        }
-
-        private void Reset()
-        {
-            _isProcessing = false;
-            _oneHandedSerial = 0;
-            _twoHandedSerial = 0;
-            _pendingSpellIndex = -1;
-            _sequenceState = SequenceState.Unequipping;
-        }
-
-        public void Clear() => Reset();
     }
+
+    private void ClearInterceptionsMap()
+    {
+        _interceptions.Clear();
+        Interlocked.And(ref _shouldFlush, 0);
+    }
+
+    private void EnqueueInterceptedCalls()
+    {
+        foreach (Action task in _interceptions.Values)
+            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(task), ActionPriority.EquipItem);
+        ClearInterceptionsMap();
+    }
+
+    [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IsPotionRegex();
 }
