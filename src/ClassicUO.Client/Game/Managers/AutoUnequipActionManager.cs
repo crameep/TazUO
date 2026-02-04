@@ -1,22 +1,18 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
-using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Managers;
 
 public sealed partial class AutoUnequipActionManager : IDisposable
 {
-    private const string DBL_CLICK_INTERCEPTOR_KEY = "dclk";
-    private const string CAST_SPELL_INTERCEPTOR_KEY = "cs";
-
     private struct Armament(uint serial, Layer layer)
     {
         public readonly uint Serial = serial;
@@ -26,9 +22,13 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     public static AutoUnequipActionManager Instance { get; private set; }
 
     private readonly World _world;
-    private readonly ConcurrentDictionary<string, Action> _interceptions = new();
-    private uint _shouldFlush;
-    private uint _isFlushing;
+
+    private readonly CancellationTokenSource _cTokenSource = new();
+
+    private readonly Channel<Action> _flushChannel = Channel.CreateUnbounded<Action>(
+        new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
+    );
+
     private bool _disposed;
 
     public bool Enabled => ProfileManager.CurrentProfile?.AutoUnequipForActions ?? false;
@@ -37,6 +37,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     {
         _world = world;
         Instance = this;
+        Task.Run(ActionConsumer);
     }
 
     public bool TryInterceptSpellCast(int spellIndex)
@@ -48,8 +49,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         if ((!_disposed && !Enabled) || _world?.Player == null)
             return false;
 
-        string taskKey = $"{CAST_SPELL_INTERCEPTOR_KEY}-{spellIndex}";
-        return SetInterceptAndSignal(taskKey, () => GameActions.CastSpellDirect(spellIndex));
+        return _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
     }
 
     public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate)
@@ -57,8 +57,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         if ((!_disposed && !Enabled) || _world?.Player == null || !ShouldInterceptDblClick(itemSerial))
             return false;
 
-        string taskKey = $"{DBL_CLICK_INTERCEPTOR_KEY}-{itemSerial}";
-        return SetInterceptAndSignal(taskKey, () => sendDoubleClickDelegate(itemSerial));
+        return _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
     }
 
     public void Dispose()
@@ -66,54 +65,11 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         if (_disposed)
             return;
 
-        // The flush queue can technically be active at this point, but it's the edge of edge cases
-        // so ignoring this, for now.
-        _interceptions.Clear();
-        Interlocked.And(ref _shouldFlush, 0);
-        Interlocked.And(ref _isFlushing, 0);
-
+        _cTokenSource.Cancel();
+        _flushChannel.Writer.Complete();
+        Task.WaitAll(_flushChannel.Reader.Completion);
+        Instance = null;
         _disposed = true;
-    }
-
-    private bool SetInterceptAndSignal(string taskKey, Action task)
-    {
-        bool wasEmpty = _shouldFlush == 0;
-        bool interceptAdded = SetIntercept(taskKey, task);
-        if (!interceptAdded)
-            return false;
-
-        if (!wasEmpty || _shouldFlush == 0)
-            return false;
-
-        Task.Run(FlushTasks);
-        return true;
-    }
-
-    private bool SetIntercept(string taskKey, Action task)
-    {
-        if (_interceptions.TryAdd(taskKey, task))
-        {
-            if (_interceptions.Count == 1)
-                Interlocked.Or(ref _shouldFlush, 1);
-            return true;
-        }
-
-        if (!_interceptions.TryRemove(taskKey, out _))
-        {
-            Log.Warn("Failed to remove an existing double click intercept prior to updating");
-            return false;
-        }
-
-        // A false here means a task already exist and we should update instead
-        if (!_interceptions.TryAdd(taskKey, task))
-        {
-            Log.Warn("Failed to enqueue a double click intercept for item with serial");
-            return false;
-        }
-
-        if (_interceptions.Count == 1)
-            Interlocked.Or(ref _shouldFlush, 1);
-        return true;
     }
 
     /// <summary>
@@ -160,30 +116,43 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return false;
     }
 
-    private void FlushTasks()
+    private async ValueTask ActionConsumer()
     {
-        if (_disposed)
-            return;
-
-        if (Interlocked.CompareExchange(ref _isFlushing, 1, 0) != 0)
-            return; // Flush already in progress
-
-        Item backpack = _world.Player.Backpack;
-        if (backpack == null)
+        try
         {
-            ClearInterceptionsMap();
-            return;
+            while (!_cTokenSource.IsCancellationRequested && await _flushChannel.Reader.WaitToReadAsync())
+            {
+                var tasks = new List<Action>();
+                while (_flushChannel.Reader.TryRead(out Action task))
+                    tasks.Add(task);
+                ExecuteBatchedTasks(tasks);
+            }
         }
+        catch (TaskCanceledException)
+        {
+            // Done
+        }
+    }
 
-        if (_interceptions.IsEmpty)
+    private void ExecuteBatchedTasks(List<Action> tasks)
+    {
+        if (_disposed || _world?.Player?.Backpack == null)
             return;
 
+        _cTokenSource.Token.ThrowIfCancellationRequested();
+
+        // Enqueue a disarm if necessary
         IList<Armament> unEquipped = EnqueueUnequipIfNeeded();
-        EnqueueInterceptedCalls();
+        _cTokenSource.Token.ThrowIfCancellationRequested();
+
+        // Enqueue all batched actions
+        foreach (Action task in tasks)
+            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(task), ActionPriority.EquipItem);
+        _cTokenSource.Token.ThrowIfCancellationRequested();
+
+        // Enqueue a re-arm if necessary
         if (unEquipped.Count > 0)
             EnqueueReEquip(unEquipped);
-
-        Interlocked.And(ref _isFlushing, 0);
     }
 
     private IList<Armament> EnqueueUnequipIfNeeded()
@@ -224,19 +193,6 @@ public sealed partial class AutoUnequipActionManager : IDisposable
                 if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
                     MoveRequest.EquipItem(arm.Serial, arm.Layer)?.Execute();
             }), ActionPriority.EquipItem);
-    }
-
-    private void ClearInterceptionsMap()
-    {
-        _interceptions.Clear();
-        Interlocked.And(ref _shouldFlush, 0);
-    }
-
-    private void EnqueueInterceptedCalls()
-    {
-        foreach (Action task in _interceptions.Values)
-            ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(task), ActionPriority.EquipItem);
-        ClearInterceptionsMap();
     }
 
     [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion",
