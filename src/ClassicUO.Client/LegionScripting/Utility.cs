@@ -169,6 +169,8 @@ internal static class Utility
                 case Direction.South: return "south";
                 case Direction.Left: return "southwest";
                 case Direction.West: return "west";
+                case Direction.Running:
+                case Direction.NONE: //Running north for some reason is resulting in NONE, so we'll default it to northwest.
                 case Direction.Up: return "northwest";
                 default: return "none";
             }
