@@ -42,22 +42,18 @@ public sealed partial class AutoUnequipActionManager : IDisposable
 
     public bool TryInterceptSpellCast(int spellIndex)
     {
-        if (spellIndex is >= 100 and <= 678 or >= 700)
+        if (!CanIntercept())
             return false;
 
-        // Check if feature is enabled and player exists
-        if ((!_disposed && !Enabled) || _world?.Player == null)
-            return false;
-
-        return _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
+        return ShouldInterceptCast(spellIndex) && _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
     }
 
     public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate)
     {
-        if ((!_disposed && !Enabled) || _world?.Player == null || !ShouldInterceptDblClick(itemSerial))
+        if (!CanIntercept())
             return false;
 
-        return _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
+        return ShouldInterceptDblClick(itemSerial) && _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
     }
 
     public void Dispose()
@@ -70,6 +66,29 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         Task.WaitAll(_flushChannel.Reader.Completion);
         Instance = null;
         _disposed = true;
+    }
+
+    private bool CanIntercept() => !_disposed && Enabled && _world?.Player != null;
+
+    private bool ShouldInterceptCast(int spellIndex)
+    {
+        if (spellIndex is >= 100 and <= 678 or >= 700)
+            return false;
+
+        List<Armament> arms = GetArmingState();
+        if (arms.Count <= 0)
+            return false;
+
+        foreach (Armament arm in arms)
+        {
+            if (!_world.OPL.TryGetNameAndData(arm.Serial, out string _, out string data))
+                return true; // If missing from OPL, err on the side of caution and intercept
+
+            if (string.IsNullOrWhiteSpace(data) || !IsSpellChannelling().IsMatch(data))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -197,6 +216,9 @@ public sealed partial class AutoUnequipActionManager : IDisposable
                     MoveRequest.EquipItem(arm.Serial, arm.Layer)?.Execute();
             }), ActionPriority.EquipItem);
     }
+
+    [GeneratedRegex(@"\bSpell Channeling\b", RegexOptions.CultureInvariant)]
+    private static partial Regex IsSpellChannelling();
 
     [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
