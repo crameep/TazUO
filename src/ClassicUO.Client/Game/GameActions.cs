@@ -631,8 +631,9 @@ internal static class GameActions
                 ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.ManualUseItem);
             else
             {
-                // This should be generalized to a form of blocking interceptor
-                if (!AutoUnequipActionManager.Instance.TryInterceptDoubleClick(serial, Socket.Send_DoubleClick))
+                bool intercepted = AutoUnequipActionManager.Instance?.TryInterceptDoubleClick(serial, Socket.Send_DoubleClick) ?? false;
+
+                if (!intercepted)
                     // Run the actual send only if the interceptor yielded control back, otherwise, the auto manager would have handled the 'send' part
                     Socket.Send_DoubleClick(serial);
             }
