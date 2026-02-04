@@ -8,6 +8,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
+using Lock = System.Threading.Lock;
 
 namespace ClassicUO.Game.Managers;
 
@@ -29,9 +30,9 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
     );
 
+    private readonly Lock _disposalLock = new();
     private bool _disposed;
 
-    public bool Enabled => ProfileManager.CurrentProfile?.AutoUnequipForActions ?? false;
 
     public AutoUnequipActionManager(World world)
     {
@@ -40,6 +41,11 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         Task.Run(ActionConsumer);
     }
 
+    /// <summary>
+    ///     Attempts to intercept a spell cast
+    /// </summary>
+    /// <param name="spellIndex">The spell being intercepted</param>
+    /// <returns>True if the spell was intercepted, false otherwise</returns>
     public bool TryInterceptSpellCast(int spellIndex)
     {
         if (!CanIntercept())
@@ -48,6 +54,12 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return ShouldInterceptCast(spellIndex) && _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
     }
 
+    /// <summary>
+    ///     Attempts to intercept a double click
+    /// </summary>
+    /// <param name="itemSerial">The serial of the item being double-clicked</param>
+    /// <param name="sendDoubleClickDelegate">The original 'send double click' function</param>
+    /// <returns>True if the click was intercepted, false otherwise</returns>
     public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate)
     {
         if (!CanIntercept())
@@ -56,20 +68,38 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return ShouldInterceptDblClick(itemSerial) && _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
     }
 
+    /// <summary>
+    ///     Disposes the manager instance.
+    ///     Note this method may take a few milliseconds to return.
+    /// </summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
+        lock (_disposalLock)
+        {
+            if (_disposed)
+                return;
 
-        _cTokenSource.Cancel();
-        _flushChannel.Writer.Complete();
-        Task.WaitAll(_flushChannel.Reader.Completion);
-        Instance = null;
-        _disposed = true;
+            _cTokenSource.Cancel();
+            _flushChannel.Writer.Complete();
+            // Synchronously wait for the reader to terminate. This should be measured in several milliseconds
+            Task.WaitAll(_flushChannel.Reader.Completion);
+            Instance = null;
+            _disposed = true;
+        }
     }
 
-    private bool CanIntercept() => !_disposed && Enabled && _world?.Player != null;
+    /// <summary>
+    ///     Checks whether the manager is in a valid state and can intercept calls.
+    ///     Note that this method considers profile settings.
+    /// </summary>
+    /// <returns>True if the manager is ready to intercept, false otherwise</returns>
+    private bool CanIntercept() => !_disposed && ProfileManager.CurrentProfile?.AutoUnequipForActions == true && _world?.Player != null;
 
+    /// <summary>
+    ///     Determines whether a spell cast should be intercepted
+    /// </summary>
+    /// <param name="spellIndex">The intercepted spell's index</param>
+    /// <returns>True if the spell should be intercepted, false otherwise</returns>
     private bool ShouldInterceptCast(int spellIndex)
     {
         if (spellIndex is >= 100 and <= 678 or >= 700)
@@ -92,13 +122,17 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     }
 
     /// <summary>
-    ///     A method to used to check whether a Double-Click should be intercepted
+    ///     Determines whether a Double-Click should be intercepted
     /// </summary>
     /// <param name="serial">The clicked target's serial</param>
     /// <returns>True if the event should be intercepted, false otherwise</returns>
     private bool ShouldInterceptDblClick(uint serial) =>
-        IsPotionItem(serial);
+        IsDrinkablePotionItem(serial) && GetArmingState().Count > 0;
 
+    /// <summary>
+    ///     Gets a snapshot of the player's current arming state, that is, what weapons/shields they have equipped
+    /// </summary>
+    /// <returns>A list of equipped weapons/shields</returns>
     private List<Armament> GetArmingState()
     {
         // Check if player has weapons equipped
@@ -115,7 +149,12 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return arms;
     }
 
-    private bool IsPotionItem(uint serial)
+    /// <summary>
+    ///     Heuristically determines whether an item, given by serial, is a player-drinkable potion
+    /// </summary>
+    /// <param name="serial">The item's serial</param>
+    /// <returns></returns>
+    private bool IsDrinkablePotionItem(uint serial)
     {
         Item item = _world.Items.Get(serial);
         if (item == null)
@@ -125,7 +164,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         if (item.Graphic is (< 0xF06 or > 0xF09) and (< 0xF0B or > 0xF0C))
             return false;
 
-        // Get the un-localized item name
+        // Get the un-localized item name. We perform an extra check here as graphics may be shared by unrelated items
         if (_world.OPL.TryGetNameAndData(item.Serial, out string name, out _))
             // Use a simple regular expression to heuristically determine if something is a potion.
             // To be expanded on with configuration.
@@ -135,19 +174,28 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return false;
     }
 
+    /// <summary>
+    ///     The task channel's consumer, responsible for actually performing any disarming/rearming
+    /// </summary>
     private async ValueTask ActionConsumer()
     {
         try
         {
-            while (!_cTokenSource.IsCancellationRequested && await _flushChannel.Reader.WaitToReadAsync())
+            // Wait for interception requests/cancellation
+            while (await _flushChannel.Reader.WaitToReadAsync(_cTokenSource.Token))
             {
                 // A micro-delay to let producers settle, in case of a series of actions
-                await Task.Delay(50);
+                await Task.Delay(50, _cTokenSource.Token);
+
+                // Gather-up whatever tasks we've collected until now
                 var tasks = new List<Action>();
                 while (_flushChannel.Reader.TryRead(out Action task))
                     tasks.Add(task);
+
                 ExecuteBatchedTasks(tasks);
-                await Task.Delay(250); // A short delay to avoid spammy edge cases
+
+                // A short delay to avoid excessive spam
+                await Task.Delay(200, _cTokenSource.Token);
             }
         }
         catch (TaskCanceledException)
@@ -156,6 +204,11 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         }
     }
 
+    /// <summary>
+    ///     Executes the given tasks, after ensuring player has been disarmed.
+    ///     Re-arms the player, afterward.
+    /// </summary>
+    /// <param name="tasks">The tasks to execute. These could be "cast a spell" or "drink a potion"</param>
     private void ExecuteBatchedTasks(List<Action> tasks)
     {
         if (_disposed || _world?.Player?.Backpack == null)
@@ -177,12 +230,24 @@ public sealed partial class AutoUnequipActionManager : IDisposable
             EnqueueReEquip(unEquipped);
     }
 
+    /// <summary>
+    ///     Enqueues un-equip actions, if the player is currently armed
+    /// </summary>
+    /// <returns></returns>
     private IList<Armament> EnqueueUnequipIfNeeded()
     {
         // First, fetch a 'fresh' state
         // Don't bother issuing an unequip command if we're not currently armed.
+        //
+        // Note that there's a slight edge case here - if the equipped armaments were changed
+        // after enqueuing a task but before we got here, there may be a change in the 'spell channeling' status.
+        //
+        // Theoretically, then, a disarm may no longer be necessary.
+        // This is, however, a minor and mostly harmless quirk.
         IList<Armament> arms = GetArmingState();
 
+        // Issue an unequip for each equipped armament.
+        // Future compatability with Cephalopod based players.
         foreach (Armament arm in arms ?? [])
             ObjectActionQueue.Instance.Enqueue(
                 CreateUnequipQueueItem(arm.Serial, arm.Layer),
@@ -192,6 +257,12 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         return arms;
     }
 
+    /// <summary>
+    ///     Create an un-equip queue item, to be used with the object queue
+    /// </summary>
+    /// <param name="serial">The item to un-equip</param>
+    /// <param name="layer">The item's layer, used for validation</param>
+    /// <returns></returns>
     private ObjectActionQueueItem CreateUnequipQueueItem(uint serial, Layer layer) =>
         new(() =>
         {
@@ -204,6 +275,10 @@ public sealed partial class AutoUnequipActionManager : IDisposable
                 new MoveRequest(serial, bp.Serial, item.Amount).Execute();
         });
 
+    /// <summary>
+    ///     Enqueues the given armaments for re-equipment
+    /// </summary>
+    /// <param name="arms">The armaments to re-equip</param>
     private void EnqueueReEquip(IList<Armament> arms)
     {
         foreach (Armament arm in arms)
@@ -217,10 +292,17 @@ public sealed partial class AutoUnequipActionManager : IDisposable
             }), ActionPriority.EquipItem);
     }
 
-    [GeneratedRegex(@"\bSpell Channeling\b", RegexOptions.CultureInvariant)]
+    /// <summary>
+    ///     A regex used to match an item's `Spell Channeling` property
+    /// </summary>
+    /// <returns></returns>
+    [GeneratedRegex(@"^\s*Spell Channeling\s*$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
     private static partial Regex IsSpellChannelling();
 
-    [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    /// <summary>
+    ///     A regex used to match standard 'drinkable' potion names
+    /// </summary>
+    /// <returns></returns>
+    [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsPotionRegex();
 }
