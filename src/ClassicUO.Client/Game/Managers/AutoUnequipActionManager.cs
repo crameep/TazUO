@@ -178,7 +178,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     /// <summary>
     ///     The task channel's consumer, responsible for actually performing any disarming/rearming
     /// </summary>
-    private async ValueTask ActionConsumer()
+    private async Task ActionConsumer()
     {
         try
         {
