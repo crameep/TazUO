@@ -83,6 +83,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
             _flushChannel.Writer.Complete();
             // Synchronously wait for the reader to terminate. This should be measured in several milliseconds
             Task.WaitAll(_flushChannel.Reader.Completion);
+            _cTokenSource.Dispose();
             Instance = null;
             _disposed = true;
         }
