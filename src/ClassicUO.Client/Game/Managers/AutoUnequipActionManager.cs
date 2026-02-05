@@ -212,13 +212,27 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     /// <param name="tasks">The tasks to execute. These could be "cast a spell" or "drink a potion"</param>
     private void ExecuteBatchedTasks(List<Action> tasks)
     {
-        if (_disposed || _world?.Player?.Backpack == null)
+        if (_disposed)
+            return;
+
+        // Dispatch to MT to avoid any potential sync issues.
+        //
+        // We need to fetch a 'fresh' state - no point issuing an unequip command if we're not currently armed.
+        //
+        // Note that there's a slight edge case here - if the equipped armaments were changed
+        // after enqueuing a task but before we got here, there may be a change in the 'spell channeling' status.
+        //
+        // Theoretically, then, a disarm may no longer be necessary.
+        // This is, however, a minor and mostly harmless quirk.
+        var (backpack, arms) = MainThreadQueue.InvokeOnMainThread(() => (_world?.Player?.Backpack, GetArmingState()));
+        if (backpack == null)
             return;
 
         _cTokenSource.Token.ThrowIfCancellationRequested();
 
         // Enqueue a disarm if necessary
-        IList<Armament> unEquipped = EnqueueUnequipIfNeeded();
+        if (arms.Count > 0)
+            EnqueueUnequip(arms);
         _cTokenSource.Token.ThrowIfCancellationRequested();
 
         // Enqueue all batched actions
@@ -227,26 +241,16 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         _cTokenSource.Token.ThrowIfCancellationRequested();
 
         // Enqueue a re-arm if necessary
-        if (unEquipped.Count > 0)
-            EnqueueReEquip(unEquipped);
+        if (arms.Count > 0)
+            EnqueueReEquip(arms);
     }
 
     /// <summary>
     ///     Enqueues un-equip actions, if the player is currently armed
     /// </summary>
     /// <returns></returns>
-    private IList<Armament> EnqueueUnequipIfNeeded()
+    private void EnqueueUnequip(IList<Armament> arms)
     {
-        // First, fetch a 'fresh' state
-        // Don't bother issuing an unequip command if we're not currently armed.
-        //
-        // Note that there's a slight edge case here - if the equipped armaments were changed
-        // after enqueuing a task but before we got here, there may be a change in the 'spell channeling' status.
-        //
-        // Theoretically, then, a disarm may no longer be necessary.
-        // This is, however, a minor and mostly harmless quirk.
-        IList<Armament> arms = GetArmingState();
-
         // Issue an unequip for each equipped armament.
         // Future compatability with Cephalopod based players.
         foreach (Armament arm in arms ?? [])
@@ -254,8 +258,6 @@ public sealed partial class AutoUnequipActionManager : IDisposable
                 CreateUnequipQueueItem(arm.Serial, arm.Layer),
                 ActionPriority.EquipItem
             );
-
-        return arms;
     }
 
     /// <summary>
