@@ -8,6 +8,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
+using ClassicUO.Utility.Logging;
 using Lock = System.Threading.Lock;
 
 namespace ClassicUO.Game.Managers;
@@ -23,36 +24,59 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     public static AutoUnequipActionManager Instance { get; private set; }
 
     private readonly World _world;
-
     private readonly CancellationTokenSource _cTokenSource = new();
 
     private readonly Channel<Action> _flushChannel = Channel.CreateUnbounded<Action>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
     );
 
+    #region Dispose
+
     private readonly Lock _disposalLock = new();
     private bool _disposed;
 
+    #endregion
+
+    #region Accessors
+
+    /// <summary>
+    ///     Checks whether the manager is in a valid state and can intercept calls.
+    ///     Note that this method considers profile settings.
+    /// </summary>
+    /// <returns>True if the manager is ready to intercept, false otherwise</returns>
+    private bool CanIntercept => !_disposed && ProfileManager.CurrentProfile?.AutoUnequipForActions == true && IsPlayerBackpackAvailable;
+
+    /// <summary>
+    ///     Determines whether the player's backpack is available
+    /// </summary>
+    private bool IsPlayerBackpackAvailable => _world?.Player?.Backpack != null;
+
+    #endregion
 
     public AutoUnequipActionManager(World world)
     {
         _world = world;
         Instance = this;
-        Task.Run(ActionConsumer);
+        Task.Run(ActionConsumer).ContinueWith(result =>
+        {
+            if (result.Exception is not { InnerException: not null or TaskCanceledException })
+                return;
+
+            Log.Warn("Auto-Unequip manager task processor faulted:");
+            Log.Warn(result.Exception.InnerException.ToString());
+            // We could restart but honestly if it faulted, we're probably better off leaving it disabled.
+        });
     }
+
+    #region Public Methods
 
     /// <summary>
     ///     Attempts to intercept a spell cast
     /// </summary>
     /// <param name="spellIndex">The spell being intercepted</param>
     /// <returns>True if the spell was intercepted, false otherwise</returns>
-    public bool TryInterceptSpellCast(int spellIndex)
-    {
-        if (!CanIntercept())
-            return false;
-
-        return ShouldInterceptCast(spellIndex) && _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
-    }
+    public bool TryInterceptSpellCast(int spellIndex) =>
+        ShouldInterceptCast(spellIndex) && _flushChannel.Writer.TryWrite(() => GameActions.CastSpellDirect(spellIndex));
 
     /// <summary>
     ///     Attempts to intercept a double click
@@ -60,13 +84,8 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     /// <param name="itemSerial">The serial of the item being double-clicked</param>
     /// <param name="sendDoubleClickDelegate">The original 'send double click' function</param>
     /// <returns>True if the click was intercepted, false otherwise</returns>
-    public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate)
-    {
-        if (!CanIntercept())
-            return false;
-
-        return ShouldInterceptDblClick(itemSerial) && _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
-    }
+    public bool TryInterceptDoubleClick(uint itemSerial, Action<uint> sendDoubleClickDelegate) =>
+        ShouldInterceptDblClick(itemSerial, sendDoubleClickDelegate) && _flushChannel.Writer.TryWrite(() => sendDoubleClickDelegate(itemSerial));
 
     /// <summary>
     ///     Disposes the manager instance.
@@ -79,22 +98,25 @@ public sealed partial class AutoUnequipActionManager : IDisposable
             if (_disposed)
                 return;
 
+            // First, issue a cancel. The token propagates to the wait for the main thread as well
             _cTokenSource.Cancel();
+
+            // Then, close the writers
             _flushChannel.Writer.Complete();
+
             // Synchronously wait for the reader to terminate. This should be measured in several milliseconds
             Task.WaitAll(_flushChannel.Reader.Completion);
+            // Finally, dispose of the rest
             _cTokenSource.Dispose();
             Instance = null;
+
             _disposed = true;
         }
     }
 
-    /// <summary>
-    ///     Checks whether the manager is in a valid state and can intercept calls.
-    ///     Note that this method considers profile settings.
-    /// </summary>
-    /// <returns>True if the manager is ready to intercept, false otherwise</returns>
-    private bool CanIntercept() => !_disposed && ProfileManager.CurrentProfile?.AutoUnequipForActions == true && _world?.Player != null;
+    #endregion
+
+    #region PrivateMethods
 
     /// <summary>
     ///     Determines whether a spell cast should be intercepted
@@ -103,6 +125,9 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     /// <returns>True if the spell should be intercepted, false otherwise</returns>
     private bool ShouldInterceptCast(int spellIndex)
     {
+        if (!CanIntercept)
+            return false;
+
         if (spellIndex is >= 100 and <= 678 or >= 700)
             return false;
 
@@ -126,9 +151,15 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     ///     Determines whether a Double-Click should be intercepted
     /// </summary>
     /// <param name="serial">The clicked target's serial</param>
+    /// <param name="sendDoubleClickDelegate">The original 'send double click' function</param>
     /// <returns>True if the event should be intercepted, false otherwise</returns>
-    private bool ShouldInterceptDblClick(uint serial) =>
-        IsDrinkablePotionItem(serial) && GetArmingState().Count > 0;
+    private bool ShouldInterceptDblClick(uint serial, Action<uint> sendDoubleClickDelegate)
+    {
+        if (sendDoubleClickDelegate == null || !CanIntercept)
+            return false;
+
+        return IsDrinkablePotionItem(serial) && GetArmingState().Count > 0;
+    }
 
     /// <summary>
     ///     Gets a snapshot of the player's current arming state, that is, what weapons/shields they have equipped
@@ -201,7 +232,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         }
         catch (TaskCanceledException)
         {
-            // Done
+            Log.Info("Auto-Unequip action consumer has been interrupted by a cancellation request");
         }
     }
 
@@ -224,8 +255,8 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         //
         // Theoretically, then, a disarm may no longer be necessary.
         // This is, however, a minor and mostly harmless quirk.
-        var (backpack, arms) = MainThreadQueue.InvokeOnMainThread(() => (_world?.Player?.Backpack, GetArmingState()));
-        if (backpack == null)
+        List<Armament> arms = MainThreadQueue.InvokeOnMainThread(() => IsPlayerBackpackAvailable ? GetArmingState() : null, _cTokenSource.Token);
+        if (arms == null) // null means world/player/backpack are gone and we should stop.
             return;
 
         _cTokenSource.Token.ThrowIfCancellationRequested();
@@ -269,11 +300,11 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     private ObjectActionQueueItem CreateUnequipQueueItem(uint serial, Layer layer) =>
         new(() =>
         {
-            Item item = _world.Items.Get(serial);
+            Item item = _world?.Items?.Get(serial);
             if (item == null || item.Container != _world.Player.Serial || item.Layer != layer)
                 return;
 
-            Item bp = _world.Player.Backpack;
+            Item bp = _world.Player?.Backpack;
             if (bp != null)
                 new MoveRequest(serial, bp.Serial, item.Amount).Execute();
         });
@@ -287,13 +318,17 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         foreach (Armament arm in arms)
             ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() =>
             {
-                Item item = _world.Items.Get(arm.Serial);
-                Item backpackItem = _world.Player.Backpack;
+                Item item = _world?.Items?.Get(arm.Serial);
+                Item backpackItem = _world?.Player?.Backpack;
 
                 if (item != null && backpackItem != null && item.Container == backpackItem.Serial)
                     MoveRequest.EquipItem(arm.Serial, arm.Layer)?.Execute();
             }), ActionPriority.EquipItem);
     }
+
+    #endregion
+
+    #region Regular Expressions
 
     /// <summary>
     ///     A regex used to match an item's `Spell Channeling` property
@@ -308,4 +343,6 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     /// <returns></returns>
     [GeneratedRegex(@"(Strength|Agility|Heal|Cure|Nightsight|Refresh(ment)?)\s+Potion", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsPotionRegex();
+
+    #endregion
 }
