@@ -96,7 +96,7 @@ public class FastUlongLookupTable<T>
     }
 
     /// <summary>
-    ///     Gets the value indexed by the key/>
+    ///     Gets the value indexed by the key
     /// </summary>
     /// <param name="key">The key to get the value of</param>
     /// <returns>The requested value or default <see cref="T" />, if one does not exist</returns>
