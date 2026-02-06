@@ -40,7 +40,7 @@ namespace ClassicUO.Game
             }
         );
 
-        private static PixelPicker _picker = new PixelPicker();
+        private static PixelPicker _picker = new PixelPicker(true);
         private byte _font;
 
         private MultilinesFontInfo _info;
