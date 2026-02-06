@@ -325,6 +325,7 @@ namespace ClassicUO.Game.UI.Gumps
                 AcceptMouseInput = true,
                 CanMove = true
             };
+            containerNameLabel.SetTooltip(GetContainerName(true, false));
             containerNameLabel.MouseDoubleClick += OnMinimizeToggleDoubleClick;
 
             searchBox = new StbTextBox(0xFF, 20, 0, true, FontStyle.None, 0x0481)
@@ -643,6 +644,7 @@ namespace ClassicUO.Game.UI.Gumps
                     gridContainerEntry?.CustomName = r == InputRequest.Result.BUTTON1 ? s : null;
 
                     containerNameLabel.Text = GetContainerName();
+                    containerNameLabel.SetTooltip(GetContainerName(true, false));
                 }, GetContainerName(true));
                 input.CenterXInViewPort();
                 input.CenterYInViewPort();
@@ -806,8 +808,9 @@ namespace ClassicUO.Game.UI.Gumps
                 Dispose();
                 return;
             }
-
+            
             containerNameLabel.Text = GetContainerName();
+            containerNameLabel.SetTooltip(GetContainerName(true, false));
 
             if (autoSortContainer)
                 overrideSort = true;
@@ -984,11 +987,14 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        private string GetContainerName(bool skipCount = false)
+        private string GetContainerName(bool skipCount = false, bool truncate = true)
         {
             string containerName =
                 GridContainerEntry?.CustomName.NotNullNotEmpty() == true ? GridContainerEntry.CustomName :
                 !string.IsNullOrEmpty(container.Name) ? container.Name : "a container";
+
+            if (truncate)
+                containerName = containerName.Truncate(21);
 
             if (!skipCount && SlotManager != null)
             {
