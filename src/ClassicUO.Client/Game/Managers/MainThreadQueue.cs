@@ -92,21 +92,20 @@ public static class MainThreadQueue
     /// This will wait for the returned result.
     /// </summary>
     /// <param name="func"></param>
-    /// <param name="cancellationToken">An optional cancellation token to interrupt result wait</param>
     /// <typeparam name="T"></typeparam>
     /// <returns></returns>
-    public static T InvokeOnMainThread<T>(Func<T> func, CancellationToken? cancellationToken = null)
+    public static T InvokeOnMainThread<T>(Func<T> func)
     {
         if (_isMainThread) return func();
 
         // The MT is so slow there's no real point in spinning; Just wastes CPU.
-        var resultEvent = new ManualResetEventSlim(false, 0);
+        var resultEvent = new ManualResetEvent(false);
         T result = default;
 
         _queuedActions.Enqueue(Action);
 
         // Wait for the main thread to complete the operation
-        resultEvent.Wait(cancellationToken ?? CancellationToken.None);
+        resultEvent.WaitOne();
 
         return result;
 

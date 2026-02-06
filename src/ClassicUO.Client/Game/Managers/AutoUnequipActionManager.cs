@@ -8,6 +8,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
+using ClassicUO.Resources;
 using ClassicUO.Utility.Logging;
 using Lock = System.Threading.Lock;
 
@@ -25,6 +26,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
 
     private readonly World _world;
     private readonly CancellationTokenSource _cTokenSource = new();
+    private readonly Task _interceptConsumerCompletion;
 
     private readonly Channel<Action> _flushChannel = Channel.CreateUnbounded<Action>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
@@ -57,14 +59,27 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     {
         _world = world;
         Instance = this;
-        Task.Run(ActionConsumer).ContinueWith(result =>
+        _interceptConsumerCompletion = Task.Run(ActionConsumer).ContinueWith(result =>
         {
-            if (result.Exception is not { InnerException: not null or TaskCanceledException })
+            if (result.IsCanceled || result.Exception == null)
                 return;
 
             Log.Warn("Auto-Unequip manager task processor faulted:");
-            Log.Warn(result.Exception.InnerException.ToString());
+            Log.Warn(result.Exception.ToString());
             // We could restart but honestly if it faulted, we're probably better off leaving it disabled.
+            MainThreadQueue.InvokeOnMainThread(() =>
+            {
+                if (_world == null)
+                    return;
+                try
+                {
+                    GameActions.Print(_world, ResErrorMessages.AutoUnequipFailedStopped, Constants.HUE_ERROR);
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to notify user of auto-equip agent failure: {e}");
+                }
+            });
         });
     }
 
@@ -101,11 +116,11 @@ public sealed partial class AutoUnequipActionManager : IDisposable
             // First, issue a cancel. The token propagates to the wait for the main thread as well
             _cTokenSource.Cancel();
 
-            // Then, close the writers
+            // Then, close the producers
             _flushChannel.Writer.Complete();
 
-            // Synchronously wait for the reader to terminate. This should be measured in several milliseconds
-            Task.WaitAll(_flushChannel.Reader.Completion);
+            // Wait for the consumer to return
+            Task.WaitAll(_interceptConsumerCompletion);
             // Finally, dispose of the rest
             _cTokenSource.Dispose();
             Instance = null;
@@ -230,7 +245,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
                 await Task.Delay(200, _cTokenSource.Token);
             }
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
             Log.Info("Auto-Unequip action consumer has been interrupted by a cancellation request");
         }
@@ -255,7 +270,7 @@ public sealed partial class AutoUnequipActionManager : IDisposable
         //
         // Theoretically, then, a disarm may no longer be necessary.
         // This is, however, a minor and mostly harmless quirk.
-        List<Armament> arms = MainThreadQueue.InvokeOnMainThread(() => IsPlayerBackpackAvailable ? GetArmingState() : null, _cTokenSource.Token);
+        List<Armament> arms = MainThreadQueue.BubblingInvokeOnMainThread(() => IsPlayerBackpackAvailable ? GetArmingState() : null, _cTokenSource.Token);
         if (arms == null) // null means world/player/backpack are gone and we should stop.
             return;
 
