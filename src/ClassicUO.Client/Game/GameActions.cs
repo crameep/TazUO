@@ -598,8 +598,11 @@ internal static class GameActions
 
     internal static void DoubleClick(World world, uint serial, bool ignoreWarMode = false, bool ignoreQueue = false)
     {
+        bool isItem = SerialHelper.IsItem(serial);
+        bool isMobile = SerialHelper.IsMobile(serial);
+
         // Record action for script recording (only for items)
-        if (SerialHelper.IsItem(serial))
+        if (isItem)
             ScriptRecorder.Instance.RecordUseItem(serial);
 
         ScriptingInfoGump.AddOrUpdateInfo("Last Object", $"0x{serial:X}");
@@ -607,14 +610,14 @@ internal static class GameActions
         if (obj != null)
             ScriptingInfoGump.AddOrUpdateInfo("Last Object Graphic", $"0x{obj.Graphic:X}");
 
-        if (serial != world.Player && SerialHelper.IsMobile(serial) && world.Player.InWarMode && !ignoreWarMode)
+        if (serial != world.Player && isMobile && world.Player.InWarMode && !ignoreWarMode)
         {
             RequestMobileStatus(world, serial);
             Attack(world, serial);
         }
         else
         {
-            if (SerialHelper.IsItem(serial))
+            if (isItem)
             {
                 Gump g = UIManager.GetGump<GridContainer>(serial);
                 if (g != null)
@@ -627,10 +630,16 @@ internal static class GameActions
             if (ProfileManager.CurrentProfile.QueueManualItemUses && !ignoreQueue)
                 ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.ManualUseItem);
             else
-                Socket.Send_DoubleClick(serial);
+            {
+                bool intercepted = AutoUnequipActionManager.Instance?.TryInterceptDoubleClick(serial, Socket.Send_DoubleClick) ?? false;
+
+                if (!intercepted)
+                    // Run the actual send only if the interceptor yielded control back, otherwise, the auto manager would have handled the 'send' part
+                    Socket.Send_DoubleClick(serial);
+            }
         }
 
-        if (SerialHelper.IsItem(serial) || (SerialHelper.IsMobile(serial) && (world.Mobiles.Get(serial)?.IsHuman ?? false)))
+        if (isItem || (isMobile && (world.Mobiles.Get(serial)?.IsHuman ?? false)))
         {
             world.LastObject = serial;
         }

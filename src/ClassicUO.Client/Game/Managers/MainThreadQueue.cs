@@ -44,18 +44,22 @@ public static class MainThreadQueue
     ///     Dispatches the given function for invocation on the main thread and waits synchronously for the result
     /// </summary>
     /// <param name="func">The function to invoke on the main thread</param>
+    /// <param name="cancellationToken">An optional cancellation token to interrupt result wait</param>
     /// <typeparam name="T"></typeparam>
     /// <returns>The result of the function's invocation</returns>
     /// <exception cref="Exception">The exception, if any, raised by the function invocation</exception>
-    private static T BubblingDispatchToMainThread<T>(Func<T> func)
+    private static T BubblingDispatchToMainThread<T>(Func<T> func, CancellationToken? cancellationToken = null)
     {
-        var resultEvent = new ManualResetEvent(false);
+        // The MT is so slow there's no real point in spinning; Just wastes CPU.
+        var resultEvent = new ManualResetEventSlim(false, 0);
 
         T mtResult = default;
         Exception ex = null;
 
         _queuedActions.Enqueue(MtAction);
-        resultEvent.WaitOne(); // Wait for the main thread to complete the operation
+
+        // Wait for the main thread to complete the operation
+        resultEvent.Wait(cancellationToken ?? CancellationToken.None);
 
         return ex != null ? throw ex : mtResult;
 
@@ -75,13 +79,14 @@ public static class MainThreadQueue
     ///     Any exceptions raised on the main thread's context will be captured and bubbled back.
     /// </summary>
     /// <param name="func">The function to execute</param>
+    /// <param name="cancellationToken">An optional cancellation token to interrupt result wait</param>
     /// <typeparam name="T"></typeparam>
     /// <returns>The function's result</returns>
     /// <exception cref="Exception">On any exception thrown by the given function</exception>
-    public static T BubblingInvokeOnMainThread<T>(Func<T> func) =>
+    public static T BubblingInvokeOnMainThread<T>(Func<T> func, CancellationToken? cancellationToken = null) =>
         _isMainThread
             ? func()
-            : BubblingDispatchToMainThread(func);
+            : BubblingDispatchToMainThread(func, cancellationToken);
 
     /// <summary>
     /// This will wait for the returned result.
@@ -93,19 +98,22 @@ public static class MainThreadQueue
     {
         if (_isMainThread) return func();
 
+        // The MT is so slow there's no real point in spinning; Just wastes CPU.
         var resultEvent = new ManualResetEvent(false);
         T result = default;
 
-        void action()
+        _queuedActions.Enqueue(Action);
+
+        // Wait for the main thread to complete the operation
+        resultEvent.WaitOne();
+
+        return result;
+
+        void Action()
         {
             result = func();
             resultEvent.Set();
         }
-
-        _queuedActions.Enqueue(action);
-        resultEvent.WaitOne(); // Wait for the main thread to complete the operation
-
-        return result;
     }
 
     /// <summary>

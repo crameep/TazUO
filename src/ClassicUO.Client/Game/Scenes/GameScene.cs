@@ -388,7 +388,7 @@ namespace ClassicUO.Game.Scenes
             JournalFilterManager.Instance.Save();
 
             SpellBarManager.Unload();
-            _autoUnequipActionManager?.Clear();
+            _autoUnequipActionManager?.Dispose();
             ObjectActionQueue.Instance.Clear();
 
             GraphicsReplacement.Save();
