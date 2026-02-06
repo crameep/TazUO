@@ -315,13 +315,14 @@ public sealed partial class AutoUnequipActionManager : IDisposable
     private ObjectActionQueueItem CreateUnequipQueueItem(uint serial, Layer layer) =>
         new(() =>
         {
-            Item item = _world?.Items?.Get(serial);
+            if (!IsPlayerBackpackAvailable)
+                return;
+
+            Item item = _world.Items?.Get(serial);
             if (item == null || item.Container != _world.Player.Serial || item.Layer != layer)
                 return;
 
-            Item bp = _world.Player?.Backpack;
-            if (bp != null)
-                new MoveRequest(serial, bp.Serial, item.Amount).Execute();
+            new MoveRequest(serial, _world.Player.Backpack.Serial, item.Amount).Execute();
         });
 
     /// <summary>
