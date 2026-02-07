@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+using Microsoft.Xna.Framework;
+
 namespace ClassicUO.Game
 {
     internal static class Constants
@@ -88,6 +90,7 @@ namespace ClassicUO.Game
         public const int PREDICTABLE_CHUNKS = 300;
         public const float MAX_GAME_SCALE = 1.5f;
         public const float MIN_GAME_SCALE = -0.6f;
+        public static Color SELECTED_COLOR = Color.DarkRed;
 
         public static readonly bool[] BAD_CONTAINER_LAYERS =
         {
