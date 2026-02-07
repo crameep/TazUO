@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Numerics;
 using ImGuiNET;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Processes;
+using ClassicUO.Game.UI.Gumps.SpellBar;
 using ClassicUO.Network;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -21,6 +23,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private int _currentThemeIndex, _minGumpMoveDist, _gameScale, _minScale, _maxScale;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
+        private string _quickHealSpell, _quickCureSpell;
 
         // Child tab contents
         private HudTabContent _hudTab;
@@ -51,6 +54,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _gameScale = (int)(100 * Client.Game.RenderScale);
             _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
             _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
+
+            var heal = SpellDefinition.FullIndexGetSpell(_profile.QuickHealSpell);
+            var cure = SpellDefinition.FullIndexGetSpell(_profile.QuickCureSpell);
+            _quickHealSpell = heal != null ? heal.Name : _profile.QuickHealSpell.ToString();
+            _quickCureSpell = cure != null ? cure.Name : _profile.QuickCureSpell.ToString();
 
             // Initialize theme selector
             _themeNames = ImGuiTheme.GetThemes();
@@ -282,7 +290,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 _profile.AutoUnequipForActions = _autoUnequipForActions;
             }
-            ImGuiComponents.Tooltip("Automatically unequip weapons when casting spells, then reequip them after.");
+            ImGuiComponents.Tooltip("Automatically unequip weapons for spells & potions, then reequip them after.");
 
             if (ImGui.Checkbox("Disable weather", ref _disableWeather))
             {
@@ -293,6 +301,33 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
             }
             ImGuiComponents.Tooltip("Disable weather effects (rain, snow, storms).");
+
+            const string QUICK_SPELL_TOOLTIP = "These are used on health-bars for party members/pets";
+            if (ImGui.Button("Set quick heal spell"))
+                UIManager.Add(new SpellQuickSearch(World.Instance, 0, 0, (s) =>
+                {
+                    if(s != null)
+                    {
+                        _quickHealSpell = s.Name;
+                        _profile.QuickHealSpell = s.ID;
+                    }
+                }, true).CenterInViewPort());
+            ImGui.SameLine();
+            ImGui.Text(_quickHealSpell);
+            ImGuiComponents.Tooltip(QUICK_SPELL_TOOLTIP);
+
+            if (ImGui.Button("Set quick cure spell"))
+                UIManager.Add(new SpellQuickSearch(World.Instance, 0, 0, (s) =>
+                {
+                    if(s != null)
+                    {
+                        _quickCureSpell = s.Name;
+                        _profile.QuickCureSpell = s.ID;
+                    }
+                }, true).CenterInViewPort());
+            ImGui.SameLine();
+            ImGui.Text(_quickCureSpell);
+            ImGuiComponents.Tooltip(QUICK_SPELL_TOOLTIP);
 
             ImGui.EndGroup();
         }
