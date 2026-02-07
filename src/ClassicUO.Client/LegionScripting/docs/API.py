@@ -357,6 +357,17 @@ class PyGameObject:
     IsDestroyed: bool = None
     __class__: str = None
 
+    def SetOutlineColor(self, htmlColor: "str") -> None:
+        """
+         Set an objects outline color using html hex colors.
+         Example:
+         ```py
+         API.Player.SetOutlineColor("#105510")
+         ```
+        
+        """
+        pass
+
     def SetHue(self, hue: "int") -> None:
         """
          Set the hue of a game object.
