@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -32,6 +33,16 @@ namespace ClassicUO.UnitTests.Game.Managers
             entry.RegexSearch.Should().BeEmpty();
             entry.DestinationContainer.Should().Be(0u);
             entry.Uid.Should().NotBeEmpty();
+        }
+
+        [Fact]
+        public void AutoLootConfigEntry_DefaultPriority_ShouldBeNormal()
+        {
+            // Arrange & Act
+            var entry = new AutoLootManager.AutoLootConfigEntry();
+
+            // Assert
+            entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
         }
 
         [Fact]
@@ -207,6 +218,34 @@ namespace ClassicUO.UnitTests.Game.Managers
 
             // Assert
             result.Should().BeFalse();
+        }
+
+        [Fact]
+        public void AutoLootConfigEntry_Equals_DifferentPriority_ShouldStillBeEqual()
+        {
+            // Arrange — Priority is not part of match identity, so entries with
+            // the same Graphic/Hue/Regex but different priorities are equal
+            // (prevents duplicate imports that only differ in priority).
+            var entry1 = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 3821,
+                Hue = 1153,
+                RegexSearch = "",
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var entry2 = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 3821,
+                Hue = 1153,
+                RegexSearch = "",
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+
+            // Act
+            bool result = entry1.Equals(entry2);
+
+            // Assert
+            result.Should().BeTrue();
         }
 
         [Fact]
@@ -491,6 +530,54 @@ namespace ClassicUO.UnitTests.Game.Managers
             deserialized.Hue.Should().Be(ushort.MaxValue);
             deserialized.RegexSearch.Should().BeEmpty();
             deserialized.DestinationContainer.Should().Be(0);
+        }
+
+        [Fact]
+        public void JsonRoundTrip_PriorityPreserved()
+        {
+            // Arrange
+            var entries = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Name = "Low Item", Graphic = 100, Priority = AutoLootManager.AutoLootPriority.Low },
+                new() { Name = "Normal Item", Graphic = 200, Priority = AutoLootManager.AutoLootPriority.Normal },
+                new() { Name = "High Item", Graphic = 300, Priority = AutoLootManager.AutoLootPriority.High }
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(entries, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+            List<AutoLootManager.AutoLootConfigEntry> deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+
+            // Assert
+            deserialized.Should().HaveCount(3);
+            deserialized[0].Priority.Should().Be(AutoLootManager.AutoLootPriority.Low);
+            deserialized[1].Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
+            deserialized[2].Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
+        }
+
+        [Fact]
+        public void JsonBackwardCompat_MissingPriority_DefaultsToNormal()
+        {
+            // Arrange — JSON from an older config file that doesn't have Priority field
+            string legacyJson = """
+            {
+                "Name": "Old Item",
+                "Graphic": 1234,
+                "Hue": 0,
+                "RegexSearch": "",
+                "DestinationContainer": 0,
+                "Uid": "legacy-uid"
+            }
+            """;
+
+            // Act
+            AutoLootManager.AutoLootConfigEntry deserialized = JsonSerializer.Deserialize(legacyJson, AutoLootJsonContext.Default.AutoLootConfigEntry);
+
+            // Assert — missing Priority should default to Normal
+            deserialized.Should().NotBeNull();
+            deserialized.Name.Should().Be("Old Item");
+            deserialized.Graphic.Should().Be(1234);
+            deserialized.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal,
+                "legacy config files without Priority field should default to Normal");
         }
 
         #endregion
@@ -1765,6 +1852,40 @@ namespace ClassicUO.UnitTests.Game.Managers
         }
 
         [Fact]
+        public void MatchCache_StoresBestMatch_NotFirstMatch()
+        {
+            // Arrange — two entries match the same item, Normal listed first, High listed second.
+            // Cache must store the High-priority entry, not whichever matched first.
+            var world = CreateWorldWithPlayer(100, 100);
+            var normalEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 1000,
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var highEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 2000,
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+            // Normal listed first to ensure the code doesn't short-circuit on first match
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { normalEntry, highEntry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // Act
+            var result = manager.IsOnLootList(item);
+
+            // Assert — cache should store the best (High) match, not the first (Normal)
+            result.Should().Be(highEntry);
+            manager._matchCache[1u].Should().Be(highEntry, "cache must store highest-priority match, not first match");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
         public void MatchCache_MemoryGrowth_ClearPreventsUnboundedGrowth()
         {
             var world = CreateWorldWithPlayer(100, 100);
@@ -1784,6 +1905,237 @@ namespace ClassicUO.UnitTests.Game.Managers
             manager.ClearMatchCache();
             manager._matchCache.Should().BeEmpty();
             manager._matchCacheHasOpl.Should().BeEmpty();
+
+            CleanupTestWorld(world);
+        }
+
+        #endregion
+
+        #region Priority Queue Tests
+
+        [Fact]
+        public void PriorityQueue_DequeuesHighPriorityFirst()
+        {
+            // Arrange — simulate the same priority encoding used in LootItem()
+            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
+
+            var lowEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Low", Priority = AutoLootManager.AutoLootPriority.Low };
+            var normalEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Normal", Priority = AutoLootManager.AutoLootPriority.Normal };
+            var highEntry = new AutoLootManager.AutoLootConfigEntry { Name = "High", Priority = AutoLootManager.AutoLootPriority.High };
+
+            // Enqueue in scrambled order: Normal, Low, High, Normal, Low, High
+            pq.Enqueue((1, normalEntry), -(int)normalEntry.Priority);
+            pq.Enqueue((2, lowEntry), -(int)lowEntry.Priority);
+            pq.Enqueue((3, highEntry), -(int)highEntry.Priority);
+            pq.Enqueue((4, normalEntry), -(int)normalEntry.Priority);
+            pq.Enqueue((5, lowEntry), -(int)lowEntry.Priority);
+            pq.Enqueue((6, highEntry), -(int)highEntry.Priority);
+
+            // Act — dequeue all
+            var results = new List<(uint item, AutoLootManager.AutoLootConfigEntry entry)>();
+            while (pq.Count > 0)
+                results.Add(pq.Dequeue());
+
+            // Assert — High items first, then Normal, then Low
+            results.Should().HaveCount(6);
+
+            results[0].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
+            results[1].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
+            results[2].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
+            results[3].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
+            results[4].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Low);
+            results[5].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Low);
+        }
+
+        [Fact]
+        public void PriorityQueue_NullEntryDefaultsToNormalPriority()
+        {
+            // Arrange — when entry is null, LootItem uses -(int)AutoLootPriority.Normal
+            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
+
+            var highEntry = new AutoLootManager.AutoLootConfigEntry { Name = "High", Priority = AutoLootManager.AutoLootPriority.High };
+            var lowEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Low", Priority = AutoLootManager.AutoLootPriority.Low };
+
+            // Null entry with Normal priority encoding
+            int nullPri = -(int)AutoLootManager.AutoLootPriority.Normal;
+            pq.Enqueue((1, null), nullPri);
+            pq.Enqueue((2, highEntry), -(int)highEntry.Priority);
+            pq.Enqueue((3, lowEntry), -(int)lowEntry.Priority);
+
+            // Act
+            var first = pq.Dequeue();
+            var second = pq.Dequeue();
+            var third = pq.Dequeue();
+
+            // Assert — High first, then null (Normal priority), then Low
+            first.entry.Should().Be(highEntry);
+            second.entry.Should().BeNull();
+            third.entry.Should().Be(lowEntry);
+        }
+
+        [Fact]
+        public void PriorityQueue_SamePriority_AllDequeued()
+        {
+            // Arrange
+            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
+
+            var entry1 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal A", Priority = AutoLootManager.AutoLootPriority.Normal };
+            var entry2 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal B", Priority = AutoLootManager.AutoLootPriority.Normal };
+            var entry3 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal C", Priority = AutoLootManager.AutoLootPriority.Normal };
+
+            pq.Enqueue((1, entry1), -(int)entry1.Priority);
+            pq.Enqueue((2, entry2), -(int)entry2.Priority);
+            pq.Enqueue((3, entry3), -(int)entry3.Priority);
+
+            // Act
+            var results = new List<(uint item, AutoLootManager.AutoLootConfigEntry entry)>();
+            while (pq.Count > 0)
+                results.Add(pq.Dequeue());
+
+            // Assert — all three should be dequeued (order doesn't matter for same priority)
+            results.Should().HaveCount(3);
+            results.Select(r => r.item).Should().BeEquivalentTo(new uint[] { 1, 2, 3 });
+            results.Should().OnlyContain(r => r.entry.Priority == AutoLootManager.AutoLootPriority.Normal);
+        }
+
+        #endregion
+
+        #region Priority Selection Tests (IsOnLootList returns highest-priority match)
+
+        [Fact]
+        public void IsOnLootList_TwoGraphicMatches_ReturnsHighestPriority()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var normalEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 1000,
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var highEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 2000,
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { normalEntry, highEntry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(highEntry, "High priority entry should win over Normal");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsOnLootList_WildcardHighBeatsGraphicNormal()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var graphicNormal = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var wildcardHigh = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = -1, Hue = ushort.MaxValue,
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { graphicNormal, wildcardHigh });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(wildcardHigh, "Wildcard High should beat graphic-specific Normal");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsOnLootList_SingleMatch_StillReturnsCorrectly()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                Priority = AutoLootManager.AutoLootPriority.Low
+            };
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(entry, "Single matching entry should be returned regardless of priority level");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsOnLootList_HighPriorityListedFirst_StillReturnsHighest()
+        {
+            // Verify order independence: high entry listed before normal entry
+            var world = CreateWorldWithPlayer(100, 100);
+            var highEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 2000,
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+            var normalEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 1000,
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { highEntry, normalEntry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(highEntry, "High priority should win regardless of list order");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsOnLootList_AllThreePriorities_ReturnsHighest()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var lowEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 1000,
+                Priority = AutoLootManager.AutoLootPriority.Low
+            };
+            var normalEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 2000,
+                Priority = AutoLootManager.AutoLootPriority.Normal
+            };
+            var highEntry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA, Hue = ushort.MaxValue,
+                DestinationContainer = 3000,
+                Priority = AutoLootManager.AutoLootPriority.High
+            };
+            var manager = CreateCacheTestManager(world,
+                new List<AutoLootManager.AutoLootConfigEntry> { lowEntry, normalEntry, highEntry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(highEntry, "High priority should win over Normal and Low");
 
             CleanupTestWorld(world);
         }
