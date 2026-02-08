@@ -185,6 +185,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                         AutoLootManager.AutoLootConfigEntry entry = AutoLootManager.Instance.AddAutoLootEntry((ushort)graphic, hue, "");
                         entry.RegexSearch = newRegexInput;
+                        AutoLootManager.Instance.NotifyEntryChanged();
 
                         newGraphicInput = "";
                         newHueInput = "";
@@ -245,6 +246,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         if (StringHelper.TryParseInt(graphicStr, out int newGraphic))
                         {
                             entry.Graphic = newGraphic;
+                            AutoLootManager.Instance.NotifyEntryChanged();
                         }
                     }
                     SetTooltip("Set to -1 to match any graphic.");
@@ -262,10 +264,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         if (hueStr == "-1")
                         {
                             entry.Hue = ushort.MaxValue;
+                            AutoLootManager.Instance.NotifyMatchCriteriaChanged();
                         }
                         else if (ushort.TryParse(hueStr, out ushort newHue))
                         {
                             entry.Hue = newHue;
+                            AutoLootManager.Instance.NotifyMatchCriteriaChanged();
                         }
                     }
                     SetTooltip("Set to -1 to match any hue.");
@@ -292,6 +296,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         {
                             entryRegexInputs[entry.Uid] = regexStr;
                             entry.RegexSearch = regexStr;
+                            AutoLootManager.Instance.NotifyMatchCriteriaChanged();
                         }
 
                         if (ImGui.Button("Close"))

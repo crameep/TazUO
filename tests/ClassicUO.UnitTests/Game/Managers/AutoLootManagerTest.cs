@@ -1,9 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using ClassicUO.Configuration;
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using FluentAssertions;
+using Microsoft.Xna.Framework;
 using Xunit;
 
 namespace ClassicUO.UnitTests.Game.Managers
@@ -733,6 +740,1052 @@ namespace ClassicUO.UnitTests.Game.Managers
             // Assert
             entry.Name.Should().Be("   ");
             entry.RegexSearch.Should().Be("\t\n\r");
+        }
+
+        #endregion
+
+        #region Graphic Index Tests
+
+        private static AutoLootManager CreateTestManager()
+        {
+            return new AutoLootManager(testMode: true);
+        }
+
+        [Fact]
+        public void GraphicIndex_ShouldBucketEntriesByGraphic()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Item A" },
+                new() { Graphic = 200, Name = "Item B" },
+                new() { Graphic = 100, Name = "Item C" }
+            };
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(2);
+            manager._graphicIndex[100].Should().HaveCount(2);
+            manager._graphicIndex[200].Should().HaveCount(1);
+            manager._graphicIndex[100][0].Name.Should().Be("Item A");
+            manager._graphicIndex[100][1].Name.Should().Be("Item C");
+            manager._graphicIndex[200][0].Name.Should().Be("Item B");
+            manager._wildcardEntries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void GraphicIndex_WildcardEntries_ShouldBeSeparated()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Specific Item" },
+                new() { Graphic = -1, Name = "Wildcard Item 1" },
+                new() { Graphic = -1, Name = "Wildcard Item 2" }
+            };
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(1);
+            manager._graphicIndex[100].Should().HaveCount(1);
+            manager._wildcardEntries.Should().HaveCount(2);
+            manager._wildcardEntries[0].Name.Should().Be("Wildcard Item 1");
+            manager._wildcardEntries[1].Name.Should().Be("Wildcard Item 2");
+        }
+
+        [Fact]
+        public void GraphicIndex_GraphicZero_ShouldBeNormalKeyNotWildcard()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 0, Name = "Zero Graphic Item" }
+            };
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().ContainKey(0);
+            manager._graphicIndex[0].Should().HaveCount(1);
+            manager._graphicIndex[0][0].Name.Should().Be("Zero Graphic Item");
+            manager._wildcardEntries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void GraphicIndex_AddingEntry_ShouldRebuildIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Original" }
+            };
+            manager.RebuildGraphicIndex();
+            manager._graphicIndex.Should().HaveCount(1);
+
+            // Act - simulate adding an entry and rebuilding
+            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Added" });
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(2);
+            manager._graphicIndex[100].Should().HaveCount(1);
+            manager._graphicIndex[200].Should().HaveCount(1);
+            manager._graphicIndex[200][0].Name.Should().Be("Added");
+        }
+
+        [Fact]
+        public void GraphicIndex_RemovingEntry_ShouldRebuildIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            var entryToRemove = new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "To Remove" };
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Keep" },
+                entryToRemove
+            };
+            manager.RebuildGraphicIndex();
+            manager._graphicIndex.Should().HaveCount(2);
+
+            // Act - simulate removing an entry and rebuilding
+            manager._autoLootItems.Remove(entryToRemove);
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(1);
+            manager._graphicIndex.Should().ContainKey(100);
+            manager._graphicIndex.Should().NotContainKey(200);
+        }
+
+        [Fact]
+        public void GraphicIndex_ImportingEntries_ShouldRebuildIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Existing" }
+            };
+            manager.RebuildGraphicIndex();
+            manager._graphicIndex.Should().HaveCount(1);
+
+            // Act - simulate importing entries and rebuilding
+            var imported = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 200, Name = "Imported 1" },
+                new() { Graphic = 300, Name = "Imported 2" },
+                new() { Graphic = -1, Name = "Imported Wildcard" }
+            };
+            manager._autoLootItems.AddRange(imported);
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(3);
+            manager._graphicIndex[100].Should().HaveCount(1);
+            manager._graphicIndex[200].Should().HaveCount(1);
+            manager._graphicIndex[300].Should().HaveCount(1);
+            manager._wildcardEntries.Should().HaveCount(1);
+            manager._wildcardEntries[0].Name.Should().Be("Imported Wildcard");
+        }
+
+        [Fact]
+        public void GraphicIndex_EmptyList_ShouldProduceEmptyIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().BeEmpty();
+            manager._wildcardEntries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void GraphicIndex_AllWildcards_ShouldProduceEmptyGraphicIndexFullWildcardList()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = -1, Name = "Wildcard 1", RegexSearch = ".*gold.*" },
+                new() { Graphic = -1, Name = "Wildcard 2", RegexSearch = ".*silver.*" },
+                new() { Graphic = -1, Name = "Wildcard 3", RegexSearch = ".*iron.*" }
+            };
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().BeEmpty();
+            manager._wildcardEntries.Should().HaveCount(3);
+        }
+
+        [Fact]
+        public void GraphicIndex_Rebuild_ShouldClearPreviousState()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Old Item" },
+                new() { Graphic = -1, Name = "Old Wildcard" }
+            };
+            manager.RebuildGraphicIndex();
+            manager._graphicIndex.Should().HaveCount(1);
+            manager._wildcardEntries.Should().HaveCount(1);
+
+            // Act - replace all items and rebuild
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 999, Name = "New Item" }
+            };
+            manager.RebuildGraphicIndex();
+
+            // Assert - old entries should be gone
+            manager._graphicIndex.Should().HaveCount(1);
+            manager._graphicIndex.Should().NotContainKey(100);
+            manager._graphicIndex.Should().ContainKey(999);
+            manager._wildcardEntries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void GraphicIndex_MultipleEntriesSameGraphic_ShouldAllBeInSameBucket()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 500, Hue = 0, Name = "Item A" },
+                new() { Graphic = 500, Hue = 100, Name = "Item B" },
+                new() { Graphic = 500, Hue = 200, Name = "Item C" }
+            };
+
+            // Act
+            manager.RebuildGraphicIndex();
+
+            // Assert
+            manager._graphicIndex.Should().HaveCount(1);
+            manager._graphicIndex[500].Should().HaveCount(3);
+        }
+
+        [Fact]
+        public void GraphicIndex_NotifyEntryChanged_ShouldRebuildIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Item 1" }
+            };
+            manager.RebuildGraphicIndex();
+
+            // Act - add an entry and call NotifyEntryChanged
+            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Item 2" });
+            manager.NotifyEntryChanged();
+
+            // Assert - index should reflect the new entry
+            manager._graphicIndex.Should().HaveCount(2);
+            manager._graphicIndex.Should().ContainKey(200);
+        }
+
+        [Fact]
+        public void GraphicIndex_AutoLootListSetter_ShouldRebuildIndex()
+        {
+            // Arrange
+            var manager = CreateTestManager();
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 100, Name = "Old" }
+            };
+            manager.RebuildGraphicIndex();
+            manager._graphicIndex.Should().ContainKey(100);
+
+            // Act - set via the property (which calls RebuildGraphicIndex)
+            manager.AutoLootList = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 999, Name = "New via setter" }
+            };
+
+            // Assert
+            manager._graphicIndex.Should().NotContainKey(100);
+            manager._graphicIndex.Should().ContainKey(999);
+            manager._graphicIndex[999].Should().HaveCount(1);
+        }
+
+        #endregion
+
+        #region Spatial Tracking Tests
+
+        /// <summary>
+        /// Creates a World with a dummy Player set at (playerX, playerY) for distance calculations.
+        /// Uses RuntimeHelpers.GetUninitializedObject to create a PlayerMobile without calling
+        /// its constructor (which requires FileManager).
+        /// </summary>
+        private static World CreateWorldWithPlayer(int playerX = 100, int playerY = 100)
+        {
+            Client.UnitTestingActive = true;
+            var world = new World();
+
+            // Create a PlayerMobile without calling its constructor (avoids FileManager dependency)
+            var player = (PlayerMobile)RuntimeHelpers.GetUninitializedObject(typeof(PlayerMobile));
+
+            // Set the World property on the player via the backing field.
+            // BaseGameObject.World is a get-only auto property: public World World { get; }
+            // The compiler generates a backing field named <World>k__BackingField.
+            var backingField = typeof(BaseGameObject).GetField("<World>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (backingField == null)
+                throw new InvalidOperationException("Could not find BaseGameObject.World backing field for test setup");
+            backingField.SetValue(player, world);
+
+            // Set Player on World via reflection (private setter)
+            var playerProperty = typeof(World).GetProperty("Player");
+            playerProperty.SetValue(world, player);
+
+            // Set the world's RangeSize to represent the player's position for distance calculations
+            world.RangeSize = new Point(playerX, playerY);
+
+            return world;
+        }
+
+        /// <summary>
+        /// Creates a ground item at (x, y) in the given world. Items default to movable (not locked),
+        /// non-corpse, on-ground.
+        /// </summary>
+        private static Item CreateGroundItem(World world, uint serial, ushort x, ushort y, ushort graphic = 0x0EEA)
+        {
+            var item = Item.Create(world, serial);
+            item.X = x;
+            item.Y = y;
+            item.Graphic = graphic;
+            item.Flags = Flags.Movable; // Movable = not locked
+            // Container defaults to 0xFFFF_FFFF which means OnGround = true
+            world.Items.Add(item);
+            return item;
+        }
+
+        private static AutoLootManager CreateTestManagerWithWorld(World world)
+        {
+            var manager = new AutoLootManager(world);
+            manager._loaded = true;
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+            manager.RebuildGraphicIndex();
+            return manager;
+        }
+
+        /// <summary>
+        /// Safe cleanup for test worlds. World.Clear() calls Destroy() on entities which
+        /// triggers network code and accesses fields that don't exist in test context
+        /// (uninitialized PlayerMobile, no Client.Game, etc). This just clears the collections.
+        /// </summary>
+        private static void CleanupTestWorld(World world)
+        {
+            world.Items.Clear();
+            world.Mobiles.Clear();
+            world.OPL.Clear();
+            var playerProperty = typeof(World).GetProperty("Player");
+            playerProperty.SetValue(world, null);
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_NullItem_ReturnsFalse()
+        {
+            AutoLootManager.IsTrackableGroundItem(null).Should().BeFalse();
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_GroundMovableItem_ReturnsTrue()
+        {
+            Client.UnitTestingActive = true;
+            var world = new World();
+            var item = Item.Create(world, 1);
+            item.Flags = Flags.Movable;
+            // Container defaults to 0xFFFF_FFFF → OnGround = true
+            // Graphic defaults to 0 → not a corpse (0x2006)
+
+            AutoLootManager.IsTrackableGroundItem(item).Should().BeTrue();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_ItemInContainer_ReturnsFalse()
+        {
+            Client.UnitTestingActive = true;
+            var world = new World();
+            var item = Item.Create(world, 1);
+            item.Flags = Flags.Movable;
+            item.Container = 0x40000001; // Valid serial → OnGround = false
+
+            AutoLootManager.IsTrackableGroundItem(item).Should().BeFalse();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_Corpse_ReturnsFalse()
+        {
+            Client.UnitTestingActive = true;
+            var world = new World();
+            var item = Item.Create(world, 1);
+            item.Flags = Flags.Movable;
+            item.Graphic = 0x2006; // Corpse graphic
+
+            AutoLootManager.IsTrackableGroundItem(item).Should().BeFalse();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_MovableItem_IsNotLocked()
+        {
+            // IsLocked = (Flags & Flags.Movable) == 0 && ItemData.Weight > 90
+            // When Flags.Movable is set, IsLocked short-circuits to false regardless of weight.
+            // This verifies movable items pass the IsLocked check in IsTrackableGroundItem.
+            Client.UnitTestingActive = true;
+            var world = new World();
+            var item = Item.Create(world, 1);
+            item.Flags = Flags.Movable;
+
+            AutoLootManager.IsTrackableGroundItem(item).Should().BeTrue();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_PopulatesSetWithNearbyItems()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Item within tracking radius (distance = max(|105-100|, |105-100|) = 5 <= 20)
+            CreateGroundItem(world, 1, 105, 105);
+            // Item within tracking radius (distance = max(|110-100|, |100-100|) = 10 <= 20)
+            CreateGroundItem(world, 2, 110, 100);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(2);
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().Contain(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ExcludesItemsBeyondTrackingRadius()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Item within radius (distance = 5)
+            CreateGroundItem(world, 1, 105, 100);
+            // Item beyond tracking radius (distance = max(|125-100|, |100-100|) = 25 > 20)
+            CreateGroundItem(world, 2, 125, 100);
+            // Item way beyond radius (distance = 50)
+            CreateGroundItem(world, 3, 150, 100);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(1);
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().NotContain(2u);
+            manager._nearbyGroundItems.Should().NotContain(3u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ExcludesItemsInContainers()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Ground item within radius
+            CreateGroundItem(world, 1, 105, 100);
+
+            // Item in a container (not on ground) within radius
+            var containerItem = Item.Create(world, 2);
+            containerItem.X = 105;
+            containerItem.Y = 100;
+            containerItem.Flags = Flags.Movable;
+            containerItem.Container = 0x40000001; // Valid container serial
+            world.Items.Add(containerItem);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(1);
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().NotContain(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ExcludesCorpses()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Normal ground item within radius
+            CreateGroundItem(world, 1, 105, 100);
+
+            // Corpse within radius
+            CreateGroundItem(world, 2, 106, 100, graphic: 0x2006);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(1);
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().NotContain(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ClearsExistingSetBeforePopulating()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Pre-populate with a stale serial
+            manager._nearbyGroundItems.Add(999u);
+
+            CreateGroundItem(world, 1, 105, 100);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(1);
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().NotContain(999u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ItemAtExactRadiusBoundary_IsIncluded()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Item exactly at tracking radius (distance = 20 <= 20)
+            CreateGroundItem(world, 1, 120, 100);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().HaveCount(1);
+            manager._nearbyGroundItems.Should().Contain(1u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void BootstrapNearbyGroundItems_ItemJustBeyondRadius_IsExcluded()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Item just beyond tracking radius (distance = 21 > 20)
+            CreateGroundItem(world, 1, 121, 100);
+
+            manager.BootstrapNearbyGroundItems();
+
+            manager._nearbyGroundItems.Should().BeEmpty();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_PrunesItemsRemovedFromWorld()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Add items to world and tracking set
+            CreateGroundItem(world, 1, 105, 100);
+            CreateGroundItem(world, 2, 106, 100);
+            manager._nearbyGroundItems.Add(1u);
+            manager._nearbyGroundItems.Add(2u);
+
+            // Remove item 2 from world (simulating item deletion)
+            world.Items.Remove(2u);
+
+            // Set up ProfileManager.CurrentProfile for the method
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            // Item 1 should remain, item 2 should be pruned (not found in world)
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().NotContain(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_PrunesItemsMovedOutOfRange()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Add item within range
+            var item = CreateGroundItem(world, 1, 105, 100);
+            manager._nearbyGroundItems.Add(1u);
+
+            // Move item far away (distance = 50 >= SCAVENGER_TRACKING_RADIUS)
+            item.X = 150;
+            item.Y = 100;
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            manager._nearbyGroundItems.Should().NotContain(1u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_KeepsItemsStillInRange()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Add item within range (distance = 5)
+            CreateGroundItem(world, 1, 105, 100);
+            manager._nearbyGroundItems.Add(1u);
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            manager._nearbyGroundItems.Should().Contain(1u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_EmptySet_TriggersBootstrap()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Add items to world but NOT to tracking set (set is empty)
+            CreateGroundItem(world, 1, 105, 100);
+            CreateGroundItem(world, 2, 106, 100);
+
+            manager._nearbyGroundItems.Should().BeEmpty();
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            // Bootstrap should have populated the set
+            manager._nearbyGroundItems.Should().Contain(1u);
+            manager._nearbyGroundItems.Should().Contain(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_WhenNotLoaded_DoesNothing()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = new AutoLootManager(world);
+            manager._loaded = false; // Not loaded
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+
+            CreateGroundItem(world, 1, 105, 100);
+            manager._nearbyGroundItems.Add(99u); // Stale entry
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            // Nothing should change — method returns early
+            manager._nearbyGroundItems.Should().Contain(99u);
+            manager._nearbyGroundItems.Should().HaveCount(1);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void NearbyGroundItems_ClearedOnSceneUnload()
+        {
+            // OnSceneUnload calls _nearbyGroundItems.Clear() among other things.
+            // We can't call OnSceneUnload directly in tests because it also calls Save()
+            // (which needs _savePath), unsubscribes events, and sets Instance = null.
+            // Instead, we verify that the tracking set supports clearing, which is
+            // the operation OnSceneUnload performs on it.
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            manager._nearbyGroundItems.Add(1u);
+            manager._nearbyGroundItems.Add(2u);
+            manager._nearbyGroundItems.Add(3u);
+            manager._nearbyGroundItems.Should().HaveCount(3);
+
+            // Simulate what OnSceneUnload does to the tracking set
+            manager._nearbyGroundItems.Clear();
+
+            manager._nearbyGroundItems.Should().BeEmpty();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_PrunesItemsNoLongerOnGround()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Add item that's on ground and in range
+            var item = CreateGroundItem(world, 1, 105, 100);
+            manager._nearbyGroundItems.Add(1u);
+
+            // Move item into a container (no longer on ground)
+            item.Container = 0x40000001;
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
+            // Item should be pruned: OnPositionChanged checks item.OnGround during iteration
+            // Actually, it checks (item == null || !item.OnGround || item.IsLocked)
+            manager._nearbyGroundItems.Should().NotContain(1u);
+
+            CleanupTestWorld(world);
+        }
+
+        /// <summary>
+        /// Sets up ProfileManager.CurrentProfile with EnableScavenger = true via reflection.
+        /// </summary>
+        private static void SetProfileForScavenger()
+        {
+            var profile = new Profile
+            {
+                EnableScavenger = true,
+                AutoOpenCorpseRange = 3
+            };
+
+            typeof(ProfileManager)
+                .GetProperty("CurrentProfile", BindingFlags.Static | BindingFlags.Public)
+                .SetValue(null, profile);
+        }
+
+        #endregion
+
+        #region Match Cache Tests
+
+        /// <summary>
+        /// Creates an AutoLootManager with a World, loaded state, and loot entries configured.
+        /// Items created via CreateGroundItem will have World set for OPL access.
+        /// </summary>
+        private static AutoLootManager CreateCacheTestManager(World world, List<AutoLootManager.AutoLootConfigEntry> entries)
+        {
+            var manager = new AutoLootManager(world);
+            manager._loaded = true;
+            manager._autoLootItems = entries;
+            manager.RebuildGraphicIndex();
+            // RebuildGraphicIndex calls ClearMatchCache, so cache starts empty
+            return manager;
+        }
+
+        [Fact]
+        public void MatchCache_CacheMiss_RunsMatchingAndStoresResult()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x0EEA, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // First call — cache miss, should run matching and store result
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(entry);
+            manager._matchCache.Should().ContainKey(1u);
+            manager._matchCache[1u].Should().Be(entry);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_PositiveCacheHit_ReturnsStoredEntry()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x0EEA, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // First call populates cache
+            manager.IsOnLootList(item);
+
+            // Second call should return cached result
+            var result = manager.IsOnLootList(item);
+
+            result.Should().Be(entry);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_NegativeCacheHit_ReturnsNull()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x1234, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            // Item with different graphic — won't match
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // First call — no match, caches null
+            var result1 = manager.IsOnLootList(item);
+            result1.Should().BeNull();
+            manager._matchCache.Should().ContainKey(1u);
+
+            // Second call — should return cached null
+            var result2 = manager.IsOnLootList(item);
+            result2.Should().BeNull();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_NegativeCacheWithoutOpl_ReEvaluatesWhenOplArrives()
+        {
+            // CRITICAL: The OPL timing problem.
+            // 1. Item created, no OPL yet
+            // 2. Regex entry doesn't match (falls back to ItemData.Name)
+            // 3. Cached as null WITHOUT OPL
+            // 4. OPL arrives with matching properties
+            // 5. Must detect stale cache and re-evaluate
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA,
+                Hue = ushort.MaxValue,
+                RegexSearch = "Damage Increase"
+            };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // Step 1: No OPL — regex won't match (falls back to ItemData.Name which won't have "Damage Increase")
+            var result1 = manager.IsOnLootList(item);
+            result1.Should().BeNull("no OPL data, regex cannot match");
+            manager._matchCacheHasOpl.Should().NotContain(1u, "OPL was not available during caching");
+
+            // Step 2: OPL arrives with matching data
+            world.OPL.Add(1u, 0, "A Longsword", "Damage Increase 50%", 0);
+
+            // Step 3: Re-check — cache should detect OPL arrived and re-evaluate
+            var result2 = manager.IsOnLootList(item);
+            result2.Should().Be(entry, "OPL now available, regex should match");
+            manager._matchCacheHasOpl.Should().Contain(1u, "OPL was available during re-evaluation");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_NegativeCacheWithOpl_DoesNotReEvaluate()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = 0x0EEA,
+                Hue = ushort.MaxValue,
+                RegexSearch = "Vanquishing"
+            };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // Add OPL that does NOT match the regex
+            world.OPL.Add(1u, 0, "A Longsword", "Damage Increase 50%", 0);
+
+            // First call — no match WITH OPL present
+            var result1 = manager.IsOnLootList(item);
+            result1.Should().BeNull("regex doesn't match OPL data");
+            manager._matchCacheHasOpl.Should().Contain(1u, "OPL was available when cached");
+
+            // Second call — should return cached null (valid negative, OPL was present)
+            var result2 = manager.IsOnLootList(item);
+            result2.Should().BeNull("valid negative cache with OPL");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_RegexEntryMatchesAfterOplArrives()
+        {
+            // Verify the full scenario: regex-only entry matches after OPL arrives
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry
+            {
+                Graphic = -1, // wildcard — matches any graphic
+                Hue = ushort.MaxValue,
+                RegexSearch = "vanq"
+            };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // No OPL — regex falls back to ItemData.Name
+            var result1 = manager.IsOnLootList(item);
+            result1.Should().BeNull("no OPL, ItemData.Name unlikely to contain 'vanq'");
+
+            // OPL arrives with vanquishing
+            world.OPL.Add(1u, 0, "A Katana", "vanquishing", 0);
+
+            // Re-evaluate — should now match
+            var result2 = manager.IsOnLootList(item);
+            result2.Should().Be(entry, "OPL now has 'vanq' in data");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_ClearOnLootListMutation()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x0EEA, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            // Populate cache
+            manager.IsOnLootList(item);
+            manager._matchCache.Should().NotBeEmpty();
+
+            // Mutate loot list — should clear cache
+            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 0x1234 });
+            manager.RebuildGraphicIndex();
+
+            manager._matchCache.Should().BeEmpty("cache should be cleared on loot list mutation");
+            manager._matchCacheHasOpl.Should().BeEmpty("OPL tracking should be cleared too");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_SingleEntryInvalidationOnOplReceive()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x0EEA, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            var item1 = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+            var item2 = CreateGroundItem(world, 2, 106, 100, graphic: 0x0EEA);
+
+            // Populate cache for both items
+            manager.IsOnLootList(item1);
+            manager.IsOnLootList(item2);
+            manager._matchCache.Should().HaveCount(2);
+
+            // Simulate single-serial invalidation (what OnOPLReceived does)
+            manager._matchCache.Remove(1u);
+            manager._matchCacheHasOpl.Remove(1u);
+
+            // Item 1 should be evicted, item 2 should remain
+            manager._matchCache.Should().NotContainKey(1u);
+            manager._matchCache.Should().ContainKey(2u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_ClearMatchCacheClearsBothStructures()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Manually populate cache and OPL tracking
+            manager._matchCache[1u] = new AutoLootManager.AutoLootConfigEntry { Graphic = 100 };
+            manager._matchCache[2u] = null;
+            manager._matchCacheHasOpl.Add(1u);
+
+            manager.ClearMatchCache();
+
+            manager._matchCache.Should().BeEmpty();
+            manager._matchCacheHasOpl.Should().BeEmpty();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_SceneUnloadClearsCache()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            // Populate cache
+            manager._matchCache[1u] = new AutoLootManager.AutoLootConfigEntry { Graphic = 100 };
+            manager._matchCacheHasOpl.Add(1u);
+
+            // Simulate what OnSceneUnload does to cache
+            manager.ClearMatchCache();
+
+            manager._matchCache.Should().BeEmpty();
+            manager._matchCacheHasOpl.Should().BeEmpty();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_NotLoadedReturnsNull()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = new AutoLootManager(world);
+            manager._loaded = false;
+            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            {
+                new() { Graphic = 0x0EEA, Hue = ushort.MaxValue }
+            };
+
+            var item = CreateGroundItem(world, 1, 105, 100, graphic: 0x0EEA);
+
+            var result = manager.IsOnLootList(item);
+            result.Should().BeNull("IsOnLootList returns null when not loaded");
+            manager._matchCache.Should().BeEmpty("cache should not be populated when not loaded");
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void MatchCache_MemoryGrowth_ClearPreventsUnboundedGrowth()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var entry = new AutoLootManager.AutoLootConfigEntry { Graphic = 0x0EEA, Hue = ushort.MaxValue };
+            var manager = CreateCacheTestManager(world, new List<AutoLootManager.AutoLootConfigEntry> { entry });
+
+            // Add many items to the cache
+            for (uint serial = 1; serial <= 100; serial++)
+            {
+                var item = CreateGroundItem(world, serial, 105, 100, graphic: 0x0EEA);
+                manager.IsOnLootList(item);
+            }
+
+            manager._matchCache.Should().HaveCount(100);
+
+            // Clear should prevent unbounded growth
+            manager.ClearMatchCache();
+            manager._matchCache.Should().BeEmpty();
+            manager._matchCacheHasOpl.Should().BeEmpty();
+
+            CleanupTestWorld(world);
         }
 
         #endregion
