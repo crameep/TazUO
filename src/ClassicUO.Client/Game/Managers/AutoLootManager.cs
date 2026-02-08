@@ -33,13 +33,20 @@ namespace ClassicUO.Game.Managers
             }
             private set => field = value;
         }
-        public List<AutoLootConfigEntry> AutoLootList { get => _autoLootItems; set => _autoLootItems = value; }
+        public List<AutoLootConfigEntry> AutoLootList { get => _autoLootItems; set { _autoLootItems = value; RebuildGraphicIndex(); } }
+
+        private const int SCAVENGER_TRACKING_RADIUS = 20;
 
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
+        internal readonly HashSet<uint> _nearbyGroundItems = new();
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
-        private List<AutoLootConfigEntry> _autoLootItems = new ();
-        private bool _loaded = false;
+        internal List<AutoLootConfigEntry> _autoLootItems = new ();
+        internal Dictionary<int, List<AutoLootConfigEntry>> _graphicIndex = new();
+        internal List<AutoLootConfigEntry> _wildcardEntries = new();
+        internal readonly Dictionary<uint, AutoLootConfigEntry> _matchCache = new();
+        internal readonly HashSet<uint> _matchCacheHasOpl = new();
+        internal bool _loaded = false;
         private readonly string _savePath;
         private long _nextLootTime = Time.Ticks;
         private long _nextClearRecents = Time.Ticks + 5000;
@@ -54,6 +61,29 @@ namespace ClassicUO.Game.Managers
             _world = Client.Game.UO.World;
             _savePath = Path.Combine(ProfileManager.ProfilePath, "AutoLoot.json");
         }
+
+        /// <summary>
+        /// Internal constructor for unit testing. Does not initialize world or save path.
+        /// </summary>
+        internal AutoLootManager(bool testMode)
+        {
+        }
+
+        /// <summary>
+        /// Internal constructor for unit testing with a World instance.
+        /// </summary>
+        internal AutoLootManager(World world)
+        {
+            _world = world;
+        }
+
+        public void NotifyEntryChanged() => RebuildGraphicIndex();
+
+        /// <summary>
+        /// Lighter-weight notification for changes that don't affect graphic bucketing
+        /// (e.g. hue or regex changes). Only clears the match cache so items are re-evaluated.
+        /// </summary>
+        public void NotifyMatchCriteriaChanged() => ClearMatchCache();
 
         public bool IsBeingLooted(uint serial) => _quickContainsLookup.Contains(serial);
 
@@ -79,6 +109,11 @@ namespace ClassicUO.Game.Managers
             if (cont == null) return;
 
             for (LinkedObject i = cont.Items; i != null; i = i.Next) CheckAndLoot((Item)i);
+        }
+
+        internal static bool IsTrackableGroundItem(Item item)
+        {
+            return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
         }
 
         /// <summary>
@@ -110,15 +145,60 @@ namespace ClassicUO.Game.Managers
         /// </summary>
         /// <param name="i">The item to check the loot list against</param>
         /// <returns>The matched AutoLootConfigEntry, or null if no match found</returns>
-        private AutoLootConfigEntry IsOnLootList(Item i)
+        internal AutoLootConfigEntry IsOnLootList(Item i)
         {
             if (!_loaded) return null;
 
-            foreach (AutoLootConfigEntry entry in _autoLootItems)
-                if (entry.Match(i))
-                    return entry;
+            bool oplChecked = false;
+            bool oplAvailable = false;
 
-            return null;
+            // Check cache first
+            if (_matchCache.TryGetValue(i.Serial, out AutoLootConfigEntry cached))
+            {
+                if (cached != null)
+                    return cached; // Positive cache hit — already matched
+
+                // Negative cache hit — check for stale OPL state
+                oplAvailable = _world.OPL.TryGetNameAndData(i.Serial, out _, out _);
+                oplChecked = true;
+                bool hadOplWhenCached = _matchCacheHasOpl.Contains(i.Serial);
+
+                if (!oplAvailable || hadOplWhenCached)
+                    return null; // Valid negative cache
+
+                // OPL is now available but wasn't when we cached — stale, fall through to re-evaluate
+            }
+
+            // Cache miss or stale negative cache — run matching logic
+            if (!oplChecked)
+                oplAvailable = _world.OPL.TryGetNameAndData(i.Serial, out _, out _);
+            AutoLootConfigEntry result = null;
+
+            if (_graphicIndex.TryGetValue(i.Graphic, out List<AutoLootConfigEntry> entries))
+                foreach (AutoLootConfigEntry entry in entries)
+                    if (entry.Match(i))
+                    {
+                        result = entry;
+                        break;
+                    }
+
+            if (result == null)
+                foreach (AutoLootConfigEntry entry in _wildcardEntries)
+                    if (entry.Match(i))
+                    {
+                        result = entry;
+                        break;
+                    }
+
+            // Store result in cache
+            _matchCache[i.Serial] = result;
+
+            if (oplAvailable)
+                _matchCacheHasOpl.Add(i.Serial);
+            else
+                _matchCacheHasOpl.Remove(i.Serial);
+
+            return result;
         }
 
         /// <summary>
@@ -137,6 +217,7 @@ namespace ClassicUO.Game.Managers
                     return entry;
 
             _autoLootItems.Add(item);
+            RebuildGraphicIndex();
 
             return item;
         }
@@ -173,7 +254,11 @@ namespace ClassicUO.Game.Managers
                 if (_autoLootItems[i].Uid == uid)
                     removeAt = i;
 
-            if (removeAt > -1) _autoLootItems.RemoveAt(removeAt);
+            if (removeAt > -1)
+            {
+                _autoLootItems.RemoveAt(removeAt);
+                RebuildGraphicIndex();
+            }
         }
 
         /// <summary>
@@ -218,21 +303,61 @@ namespace ClassicUO.Game.Managers
             EventSink.OnItemUpdated -= OnItemCreatedOrUpdated;
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
+            _nearbyGroundItems.Clear();
+            ClearMatchCache();
             Save();
             Instance = null;
         }
 
-        private void OnPositionChanged(object sender, PositionChangedArgs e)
+        internal void OnPositionChanged(object sender, PositionChangedArgs e)
         {
             if (!_loaded) return;
 
-            if(ProfileManager.CurrentProfile.EnableScavenger)
-                foreach (Item item in _world.Items.Values)
+            if (ProfileManager.CurrentProfile.EnableScavenger)
+            {
+                if (_nearbyGroundItems.Count == 0)
                 {
-                    if (item == null || !item.OnGround || item.IsCorpse || item.IsLocked) continue;
-                    if (item.Distance >= 3) continue;
-                    CheckAndLoot(item);
+                    BootstrapNearbyGroundItems();
+                    return;
                 }
+
+                List<uint> toRemove = null;
+                List<Item> toLoot = null;
+
+                // Snapshot to avoid collection-modified-during-enumeration if CheckAndLoot
+                // triggers events that call OnItemCreatedOrUpdated (which modifies _nearbyGroundItems).
+                uint[] snapshot = new uint[_nearbyGroundItems.Count];
+                _nearbyGroundItems.CopyTo(snapshot);
+
+                foreach (uint serial in snapshot)
+                {
+                    Item item = _world.Items.Get(serial);
+
+                    if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+                    {
+                        (toRemove ??= new List<uint>()).Add(serial);
+                        continue;
+                    }
+
+                    if (item.Distance >= SCAVENGER_TRACKING_RADIUS)
+                    {
+                        (toRemove ??= new List<uint>()).Add(serial);
+                        continue;
+                    }
+
+                    if (item.Distance < ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                        (toLoot ??= new List<Item>()).Add(item);
+                }
+
+                if (toRemove != null)
+                    foreach (uint serial in toRemove)
+                        _nearbyGroundItems.Remove(serial);
+
+                // Loot after iteration is complete to avoid re-entrancy issues
+                if (toLoot != null)
+                    foreach (Item item in toLoot)
+                        CheckAndLoot(item);
+            }
         }
 
         private void OnOpenContainer(object sender, uint e)
@@ -248,16 +373,44 @@ namespace ClassicUO.Game.Managers
 
             if (sender is Item i)
             {
+                _matchCache.Remove(i.Serial);
+                _matchCacheHasOpl.Remove(i.Serial);
+
                 CheckCorpse(i);
 
-                // Check for ground items to auto-loot (scavenger functionality)
-                if (ProfileManager.CurrentProfile.EnableScavenger && i.OnGround && !i.IsCorpse && !i.IsLocked && i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange) CheckAndLoot(i);
+                // Maintain spatial tracking set for scavenger.
+                // Items within range are added to the set and will be checked for looting
+                // during OnPositionChanged, so no immediate CheckAndLoot is needed here.
+                if (ProfileManager.CurrentProfile.EnableScavenger)
+                {
+                    if (IsTrackableGroundItem(i) && i.Distance <= SCAVENGER_TRACKING_RADIUS)
+                    {
+                        _nearbyGroundItems.Add(i.Serial);
+                    }
+                    else
+                    {
+                        _nearbyGroundItems.Remove(i.Serial);
+                    }
+                }
+            }
+        }
+
+        internal void BootstrapNearbyGroundItems()
+        {
+            _nearbyGroundItems.Clear();
+
+            foreach (Item item in _world.Items.Values)
+            {
+                if (IsTrackableGroundItem(item) && item.Distance <= SCAVENGER_TRACKING_RADIUS)
+                    _nearbyGroundItems.Add(item.Serial);
             }
         }
 
         private void OnOPLReceived(object sender, OPLEventArgs e)
         {
             if (!_loaded || !IsEnabled) return;
+            _matchCache.Remove(e.Serial);
+            _matchCacheHasOpl.Remove(e.Serial);
             Item item = _world.Items.Get(e.Serial);
             if (item != null)
                 CheckCorpse(item);
@@ -278,6 +431,7 @@ namespace ClassicUO.Game.Managers
                 if (Time.Ticks > _nextClearRecents)
                 {
                     _recentlyLooted.Clear();
+                    ClearMatchCache();
                     _nextClearRecents = Time.Ticks + 5000;
                 }
                 return;
@@ -365,34 +519,38 @@ namespace ClassicUO.Game.Managers
                 if(File.Exists(oldPath))
                     File.Move(oldPath, _savePath);
 
+                List<AutoLootConfigEntry> loadedItems = null;
+
                 if (!File.Exists(_savePath))
                 {
-                    _autoLootItems = new List<AutoLootConfigEntry>();
+                    loadedItems = new List<AutoLootConfigEntry>();
                     Log.Error("Auto loot save path not found, creating new..");
-                    _loaded = true;
                 }
                 else
                 {
                     Log.Info($"Loading: {_savePath}");
                     try
                     {
-                        JsonHelper.Load(_savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out _autoLootItems);
+                        JsonHelper.Load(_savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out loadedItems);
 
-                        if (_autoLootItems == null)
+                        if (loadedItems == null)
                         {
                             Log.Error("There was an error loading your auto loot config file, defaulted to no configs.");
-                            _autoLootItems = new();
+                            loadedItems = new();
                         }
-
-                        _loaded = true;
                     }
                     catch
                     {
                         Log.Error("There was an error loading your auto loot config file, please check it with a json validator.");
-                        _loaded = false;
+                        return; // Don't set _loaded, leave as false
                     }
-
                 }
+
+                // Assign loaded data and build index in a single batch to avoid
+                // partial state visible to the game thread.
+                _autoLootItems = loadedItems;
+                RebuildGraphicIndex();
+                _loaded = true;
             });
         }
 
@@ -404,6 +562,36 @@ namespace ClassicUO.Game.Managers
                     JsonHelper.SaveAndBackup(_autoLootItems, _savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
                 }
                 catch (Exception e) { Console.WriteLine(e.ToString()); }
+        }
+
+        internal void ClearMatchCache()
+        {
+            _matchCache.Clear();
+            _matchCacheHasOpl.Clear();
+        }
+
+        public void RebuildGraphicIndex()
+        {
+            _graphicIndex.Clear();
+            _wildcardEntries.Clear();
+            ClearMatchCache();
+
+            foreach (AutoLootConfigEntry entry in _autoLootItems)
+            {
+                if (entry.Graphic == -1)
+                {
+                    _wildcardEntries.Add(entry);
+                }
+                else
+                {
+                    if (!_graphicIndex.TryGetValue(entry.Graphic, out List<AutoLootConfigEntry> bucket))
+                    {
+                        bucket = new List<AutoLootConfigEntry>();
+                        _graphicIndex[entry.Graphic] = bucket;
+                    }
+                    bucket.Add(entry);
+                }
+            }
         }
 
         public void ExportToFile(string filePath)
@@ -478,6 +666,7 @@ namespace ClassicUO.Game.Managers
             if (newItems.Count > 0)
             {
                 _autoLootItems.AddRange(newItems);
+                RebuildGraphicIndex();
                 Save();
             }
 
@@ -608,7 +797,7 @@ namespace ClassicUO.Game.Managers
                 string search = "";
                 if (world.OPL.TryGetNameAndData(compareTo, out string name, out string data))
                     search += name + data;
-                else
+                else if (!Client.UnitTestingActive)
                     search = StringHelper.GetPluralAdjustedString(compareTo.ItemData.Name);
 
                 return RegexHelper.GetRegex(RegexSearch, RegexOptions.Multiline).IsMatch(search);
