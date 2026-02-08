@@ -17,6 +17,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool enableProgressBar;
         private bool autoLootHumanCorpses;
 
+        private static readonly string[] _priorityNames = { "High", "Normal", "Low" };
+        private static readonly AutoLootManager.AutoLootPriority[] _priorityValues = { AutoLootManager.AutoLootPriority.High, AutoLootManager.AutoLootPriority.Normal, AutoLootManager.AutoLootPriority.Low };
+
         private string newGraphicInput = "";
         private string newHueInput = "";
         private string newRegexInput = "";
@@ -226,11 +229,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             else
             // Table headers
-            if (ImGui.BeginTable("AutoLootTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+            if (ImGui.BeginTable("AutoLootTable", 7, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
             {
                 ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 52);
                 ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
@@ -286,6 +290,18 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         }
                     }
                     SetTooltip("Set to -1 to match any hue.");
+
+                    ImGui.TableNextColumn();
+                    string[] priorityNames = _priorityNames;
+                    AutoLootManager.AutoLootPriority[] priorityValues = _priorityValues;
+                    int currentPriorityIndex = System.Array.IndexOf(priorityValues, entry.Priority);
+                    if (currentPriorityIndex < 0) currentPriorityIndex = 1; // Default to Normal
+                    ImGui.SetNextItemWidth(75);
+                    if (ImGui.Combo($"##Priority{i}", ref currentPriorityIndex, priorityNames, priorityNames.Length))
+                    {
+                        entry.Priority = priorityValues[currentPriorityIndex];
+                        AutoLootManager.Instance.NotifyMatchCriteriaChanged();
+                    }
 
                     ImGui.TableNextColumn();
                     // Initialize input string if not exists

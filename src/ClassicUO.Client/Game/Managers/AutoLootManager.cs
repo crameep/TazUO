@@ -16,6 +16,7 @@ namespace ClassicUO.Game.Managers
 {
     [JsonSerializable(typeof(AutoLootManager.AutoLootConfigEntry))]
     [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootPriority))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class AutoLootJsonContext : JsonSerializerContext
     {
@@ -40,7 +41,7 @@ namespace ClassicUO.Game.Managers
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
         internal readonly HashSet<uint> _nearbyGroundItems = new();
-        private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
+        private static readonly PriorityQueue<(uint item, AutoLootConfigEntry entry), int> _lootItems = new ();
         internal List<AutoLootConfigEntry> _autoLootItems = new ();
         internal Dictionary<int, List<AutoLootConfigEntry>> _graphicIndex = new();
         internal List<AutoLootConfigEntry> _wildcardEntries = new();
@@ -97,7 +98,8 @@ namespace ClassicUO.Game.Managers
         {
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
 
-            _lootItems.Enqueue((item, entry));
+            int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
+            _lootItems.Enqueue((item.Serial, entry), pri);
             _currentLootTotalCount++;
             _nextClearRecents = Time.Ticks + 5000;
         }
@@ -178,16 +180,20 @@ namespace ClassicUO.Game.Managers
                 foreach (AutoLootConfigEntry entry in entries)
                     if (entry.Match(i))
                     {
-                        result = entry;
-                        break;
+                        if (result == null || entry.Priority > result.Priority)
+                            result = entry;
+                        if (result.Priority == AutoLootPriority.High)
+                            break;
                     }
 
-            if (result == null)
+            if (result == null || result.Priority != AutoLootPriority.High)
                 foreach (AutoLootConfigEntry entry in _wildcardEntries)
                     if (entry.Match(i))
                     {
-                        result = entry;
-                        break;
+                        if (result == null || entry.Priority > result.Priority)
+                            result = entry;
+                        if (result.Priority == AutoLootPriority.High)
+                            break;
                     }
 
             // Store result in cache
@@ -758,6 +764,8 @@ namespace ClassicUO.Game.Managers
             return false;
         }
 
+        public enum AutoLootPriority { Low = 0, Normal = 1, High = 2 }
+
         public class AutoLootConfigEntry
         {
             public string Name { get; set; } = "";
@@ -765,6 +773,7 @@ namespace ClassicUO.Game.Managers
             public ushort Hue { get; set; } = ushort.MaxValue;
             public string RegexSearch { get; set; } = string.Empty;
             public uint DestinationContainer { get; set; } = 0;
+            public AutoLootPriority Priority { get; set; } = AutoLootPriority.Normal;
             private bool RegexMatch => !string.IsNullOrEmpty(RegexSearch);
             /// <summary>
             /// Do not set this manually.
