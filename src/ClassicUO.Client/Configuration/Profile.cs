@@ -780,6 +780,19 @@ namespace ClassicUO.Configuration
             }
         }
 
+        [JsonIgnore]
+        public bool HueCorpseAfterAutoloot
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.HUE_CORPSE_AFTER_AUTOLOOT, value);
+
+                field = value;
+            }
+        }
+
         private long lastSave;
 
         internal void AfterLoad()
@@ -810,6 +823,9 @@ namespace ClassicUO.Configuration
 
                     if (kvp.TryGetValue(Constants.SqlSettings.QUEUE_MANUAL_ITEM_USES, out val) && bool.TryParse(val, out b))
                         QueueManualItemUses = b;
+
+                    if (kvp.TryGetValue(Constants.SqlSettings.HUE_CORPSE_AFTER_AUTOLOOT, out val) && bool.TryParse(val, out b))
+                        HueCorpseAfterAutoloot = b;
                 });
             });
 

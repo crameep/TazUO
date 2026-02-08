@@ -164,6 +164,9 @@ namespace ClassicUO.Game.Managers
 
             for (LinkedObject i = corpse.Items; i != null; i = i.Next)
                 CheckAndLoot((Item)i);
+            
+            if(ProfileManager.CurrentProfile.HueCorpseAfterAutoloot)
+                corpse.Hue = 73;
         }
 
         public void TryRemoveAutoLootEntry(string uid)

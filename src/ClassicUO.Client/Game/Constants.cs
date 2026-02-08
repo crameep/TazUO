@@ -129,6 +129,7 @@ namespace ClassicUO.Game
             public const string QUICK_CURE_SPELL = "quick_cure_spell";
             public const string QUEUE_MANUAL_ITEM_MOVES = "queue_manual_item_moves";
             public const string QUEUE_MANUAL_ITEM_USES = "queue_manual_item_uses";
+            public const string HUE_CORPSE_AFTER_AUTOLOOT = "hue_corpse_after_autoloot";
         }
     }
 }
