@@ -10,6 +10,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private FiltersTabContent _filtersTab;
         private ItemDatabaseTabContent _itemDatabaseTab;
         private MacrosTabContent _macrosTab;
+        private SkillsTabContent _skillsTab;
 
         private AssistantWindow() : base("Legion Assistant")
         {
@@ -21,6 +22,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _filtersTab = new FiltersTabContent();
             _itemDatabaseTab = new ItemDatabaseTabContent();
             _macrosTab = new MacrosTabContent();
+            _skillsTab = new SkillsTabContent();
         }
 
         public override void DrawContent()
@@ -64,6 +66,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.EndTabItem();
                 }
 
+                if (ImGui.BeginTabItem("Skills"))
+                {
+                    _skillsTab.DrawContent();
+                    ImGui.EndTabItem();
+                }
+
                 ImGui.EndTabBar();
             }
         }
@@ -82,6 +90,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _filtersTab?.Dispose();
             _itemDatabaseTab?.Dispose();
             _macrosTab?.Dispose();
+            _skillsTab?.Dispose();
             base.Dispose();
         }
     }
