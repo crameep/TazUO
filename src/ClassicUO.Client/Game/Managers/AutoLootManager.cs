@@ -42,7 +42,6 @@ namespace ClassicUO.Game.Managers
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
         internal readonly HashSet<uint> _nearbyGroundItems = new();
-        private static readonly PriorityQueue<(uint item, AutoLootConfigEntry entry), int> _lootItems = new ();
         internal List<AutoLootConfigEntry> _autoLootItems = new ();
         internal Dictionary<int, List<AutoLootConfigEntry>> _graphicIndex = new();
         internal List<AutoLootConfigEntry> _wildcardEntries = new();
@@ -50,7 +49,6 @@ namespace ClassicUO.Game.Managers
         internal readonly HashSet<uint> _matchCacheHasOpl = new();
         internal bool _loaded = false;
         private readonly string _savePath;
-        private long _nextLootTime = Time.Ticks;
         private long _nextClearRecents = Time.Ticks + 5000;
         private ProgressBarGump _progressBarGump;
         private int _currentLootTotalCount = 0;
@@ -99,8 +97,40 @@ namespace ClassicUO.Game.Managers
         {
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
 
-            int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
-            _lootItems.Enqueue((item.Serial, entry), pri);
+            uint serial = item.Serial;
+            ActionPriority priority = MapPriority(entry?.Priority ?? AutoLootPriority.Normal);
+
+            var queueItem = new ObjectActionQueueItem(
+                () =>
+                {
+                    Item moveItem = _world.Items.Get(serial);
+                    if (moveItem == null) return;
+
+                    if (moveItem.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                    {
+                        Item rc = _world.Items.Get(moveItem.RootContainer);
+                        if (rc != null && rc.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                        {
+                            if (rc.IsCorpse)
+                                World.Instance?.Player?.AutoOpenedCorpses.Remove(rc);
+                            _recentlyLooted.Remove(serial);
+                            return;
+                        }
+                    }
+
+                    uint destinationSerial = DetermineDestination(entry);
+                    if (destinationSerial == 0)
+                    {
+                        GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
+                        return;
+                    }
+
+                    new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).Execute();
+                },
+                (qi) => _quickContainsLookup.Remove(serial)
+            );
+
+            ObjectActionQueue.Instance.Enqueue(queueItem, priority);
             _currentLootTotalCount++;
             _nextClearRecents = Time.Ticks + 5000;
         }
@@ -442,79 +472,56 @@ namespace ClassicUO.Game.Managers
         {
             if (!_loaded || !IsEnabled || !_world.InGame) return;
 
-            if (_nextLootTime > Time.Ticks) return;
+            if (_quickContainsLookup.Count > 0)
+            {
+                CreateProgressBar();
 
-            if (Client.Game.UO.GameCursor.ItemHold.Enabled)
-                return; //Prevent moving stuff while holding an item.
-
-            if (_lootItems.Count == 0)
+                if (_progressBarGump is { IsDisposed: false })
+                    _progressBarGump.CurrentPercentage = 1 - ((double)_quickContainsLookup.Count / (double)_currentLootTotalCount);
+            }
+            else
             {
                 _progressBarGump?.Dispose();
+                _currentLootTotalCount = 0;
+
                 if (Time.Ticks > _nextClearRecents)
                 {
                     _recentlyLooted.Clear();
                     ClearMatchCache();
                     _nextClearRecents = Time.Ticks + 5000;
                 }
-                return;
             }
+        }
 
-            (uint item, AutoLootConfigEntry entry) = _lootItems.Dequeue();
-            if (item == 0) return;
-
-            if (_lootItems.Count == 0) //Que emptied out
-                _currentLootTotalCount = 0;
-
-            _quickContainsLookup.Remove(item);
-
-            Item moveItem = _world.Items.Get(item);
-
-            if (moveItem == null)
-                return;
-
-            CreateProgressBar();
-
-            if (_progressBarGump is { IsDisposed: false }) _progressBarGump.CurrentPercentage = 1 - ((double)_lootItems.Count / (double)_currentLootTotalCount);
-
-            if (moveItem.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
-            {
-                Item rc = _world.Items.Get(moveItem.RootContainer);
-                if (rc != null && rc.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
-                {
-                    if (rc.IsCorpse)
-                        World.Instance?.Player?.AutoOpenedCorpses.Remove(rc); //Allow reopening this corpse, we got too far away to finish looting..
-                    _recentlyLooted.Remove(item);
-                    return;
-                }
-            }
-
-            uint destinationSerial = 0;
-
-            //If this entry has a specific container, use it
+        private uint DetermineDestination(AutoLootConfigEntry entry)
+        {
             if (entry != null && entry.DestinationContainer != 0)
             {
                 Item itemDestContainer = _world.Items.Get(entry.DestinationContainer);
-                if (itemDestContainer != null) destinationSerial = entry.DestinationContainer;
+                if (itemDestContainer != null) return entry.DestinationContainer;
             }
 
-            if (destinationSerial == 0 && ProfileManager.CurrentProfile.GrabBagSerial != 0)
+            if (ProfileManager.CurrentProfile.GrabBagSerial != 0)
             {
                 Item grabBag = _world.Items.Get(ProfileManager.CurrentProfile.GrabBagSerial);
-                if (grabBag != null) destinationSerial = ProfileManager.CurrentProfile.GrabBagSerial;
+                if (grabBag != null) return ProfileManager.CurrentProfile.GrabBagSerial;
             }
 
-            if (destinationSerial == 0)
+            Item backpack = _world.Player?.Backpack;
+            if (backpack != null) return backpack.Serial;
+
+            return 0;
+        }
+
+        private static ActionPriority MapPriority(AutoLootPriority priority)
+        {
+            return priority switch
             {
-                Item backpack = _world.Player.Backpack;
-                if (backpack != null) destinationSerial = backpack.Serial;
-            }
-
-            if (destinationSerial != 0)
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), ActionPriority.LootItem);
-            else
-                GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
-
-            _nextLootTime = Time.Ticks + ProfileManager.CurrentProfile.MoveMultiObjectDelay;
+                AutoLootPriority.High => ActionPriority.LootItemHigh,
+                AutoLootPriority.Normal => ActionPriority.LootItemMedium,
+                AutoLootPriority.Low => ActionPriority.LootItem,
+                _ => ActionPriority.LootItem
+            };
         }
 
         private void CreateProgressBar()

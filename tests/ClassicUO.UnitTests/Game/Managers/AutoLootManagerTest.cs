@@ -1911,91 +1911,26 @@ namespace ClassicUO.UnitTests.Game.Managers
 
         #endregion
 
-        #region Priority Queue Tests
+        #region Priority Mapping Tests
 
         [Fact]
-        public void PriorityQueue_DequeuesHighPriorityFirst()
+        public void ActionPriority_LootItemHigh_IsHigherThanLootItemMedium()
         {
-            // Arrange — simulate the same priority encoding used in LootItem()
-            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
-
-            var lowEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Low", Priority = AutoLootManager.AutoLootPriority.Low };
-            var normalEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Normal", Priority = AutoLootManager.AutoLootPriority.Normal };
-            var highEntry = new AutoLootManager.AutoLootConfigEntry { Name = "High", Priority = AutoLootManager.AutoLootPriority.High };
-
-            // Enqueue in scrambled order: Normal, Low, High, Normal, Low, High
-            pq.Enqueue((1, normalEntry), -(int)normalEntry.Priority);
-            pq.Enqueue((2, lowEntry), -(int)lowEntry.Priority);
-            pq.Enqueue((3, highEntry), -(int)highEntry.Priority);
-            pq.Enqueue((4, normalEntry), -(int)normalEntry.Priority);
-            pq.Enqueue((5, lowEntry), -(int)lowEntry.Priority);
-            pq.Enqueue((6, highEntry), -(int)highEntry.Priority);
-
-            // Act — dequeue all
-            var results = new List<(uint item, AutoLootManager.AutoLootConfigEntry entry)>();
-            while (pq.Count > 0)
-                results.Add(pq.Dequeue());
-
-            // Assert — High items first, then Normal, then Low
-            results.Should().HaveCount(6);
-
-            results[0].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
-            results[1].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
-            results[2].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
-            results[3].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
-            results[4].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Low);
-            results[5].entry.Priority.Should().Be(AutoLootManager.AutoLootPriority.Low);
+            // ActionPriority enum values: lower = higher priority in ObjectActionQueue
+            ((int)ActionPriority.LootItemHigh).Should().BeLessThan((int)ActionPriority.LootItemMedium);
         }
 
         [Fact]
-        public void PriorityQueue_NullEntryDefaultsToNormalPriority()
+        public void ActionPriority_LootItemMedium_IsHigherThanLootItem()
         {
-            // Arrange — when entry is null, LootItem uses -(int)AutoLootPriority.Normal
-            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
-
-            var highEntry = new AutoLootManager.AutoLootConfigEntry { Name = "High", Priority = AutoLootManager.AutoLootPriority.High };
-            var lowEntry = new AutoLootManager.AutoLootConfigEntry { Name = "Low", Priority = AutoLootManager.AutoLootPriority.Low };
-
-            // Null entry with Normal priority encoding
-            int nullPri = -(int)AutoLootManager.AutoLootPriority.Normal;
-            pq.Enqueue((1, null), nullPri);
-            pq.Enqueue((2, highEntry), -(int)highEntry.Priority);
-            pq.Enqueue((3, lowEntry), -(int)lowEntry.Priority);
-
-            // Act
-            var first = pq.Dequeue();
-            var second = pq.Dequeue();
-            var third = pq.Dequeue();
-
-            // Assert — High first, then null (Normal priority), then Low
-            first.entry.Should().Be(highEntry);
-            second.entry.Should().BeNull();
-            third.entry.Should().Be(lowEntry);
+            ((int)ActionPriority.LootItemMedium).Should().BeLessThan((int)ActionPriority.LootItem);
         }
 
         [Fact]
-        public void PriorityQueue_SamePriority_AllDequeued()
+        public void ActionPriority_MoveItem_IsHigherThanAllLootPriorities()
         {
-            // Arrange
-            var pq = new PriorityQueue<(uint item, AutoLootManager.AutoLootConfigEntry entry), int>();
-
-            var entry1 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal A", Priority = AutoLootManager.AutoLootPriority.Normal };
-            var entry2 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal B", Priority = AutoLootManager.AutoLootPriority.Normal };
-            var entry3 = new AutoLootManager.AutoLootConfigEntry { Name = "Normal C", Priority = AutoLootManager.AutoLootPriority.Normal };
-
-            pq.Enqueue((1, entry1), -(int)entry1.Priority);
-            pq.Enqueue((2, entry2), -(int)entry2.Priority);
-            pq.Enqueue((3, entry3), -(int)entry3.Priority);
-
-            // Act
-            var results = new List<(uint item, AutoLootManager.AutoLootConfigEntry entry)>();
-            while (pq.Count > 0)
-                results.Add(pq.Dequeue());
-
-            // Assert — all three should be dequeued (order doesn't matter for same priority)
-            results.Should().HaveCount(3);
-            results.Select(r => r.item).Should().BeEquivalentTo(new uint[] { 1, 2, 3 });
-            results.Should().OnlyContain(r => r.entry.Priority == AutoLootManager.AutoLootPriority.Normal);
+            // Manual item moves should always happen before auto-loot
+            ((int)ActionPriority.MoveItem).Should().BeLessThan((int)ActionPriority.LootItemHigh);
         }
 
         #endregion
