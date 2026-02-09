@@ -140,6 +140,12 @@ internal static class UpdateSkills
                         skill.CapFixed = cap;
                         skill.Lock = locked;
 
+                        if (!isSingleUpdate && !skill.HasLoginBaseline)
+                        {
+                            skill.BaseFixedAtLogin = baseVal;
+                            skill.HasLoginBaseline = true;
+                        }
+
                         if (isSingleUpdate)
                         {
                             if (lastBase != skill.BaseFixed)

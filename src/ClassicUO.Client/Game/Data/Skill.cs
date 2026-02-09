@@ -31,11 +31,17 @@ namespace ClassicUO.Game.Data
 
         public ushort BaseFixed { get; internal set; }
 
+        public ushort BaseFixedAtLogin { get; internal set; }
+
+        public bool HasLoginBaseline { get; internal set; }
+
         public ushort CapFixed { get; internal set; }
 
         public float Value => ValueFixed / 10.0f;
 
         public float Base => BaseFixed / 10.0f;
+
+        public float BaseAtLogin => BaseFixedAtLogin / 10.0f;
 
         public float Cap => CapFixed / 10.0f;
 

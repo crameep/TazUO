@@ -49,9 +49,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             if (!_baselineInitialized || _baselinePlayerSerial != playerSerial)
             {
+                // Don't initialize until the server has sent skill data
+                if (skills.Length == 0 || !skills[0].HasLoginBaseline)
+                    return;
+
                 for (int i = 0; i < skills.Length && i < _baselineBase.Length; i++)
                 {
-                    _baselineBase[i] = skills[i].Base;
+                    _baselineBase[i] = skills[i].BaseAtLogin;
                 }
 
                 _baselinePlayerSerial = playerSerial;
