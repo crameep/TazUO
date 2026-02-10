@@ -117,6 +117,7 @@ namespace ClassicUO.LegionScripting
 
         private ConcurrentBag<uint> ignoreList = new();
         private ConcurrentQueue<PyJournalEntry> journalEntries = new();
+        private ConcurrentQueue<PySoundEntry> soundEntries = new();
         internal World World = Client.UnitTestingActive ? new World() : Client.Game.UO.World;
         private Item backpack;
         private PyPlayer player;
@@ -171,6 +172,7 @@ namespace ClassicUO.LegionScripting
         }
 
         public ConcurrentQueue<PyJournalEntry> JournalEntries => journalEntries;
+        public ConcurrentQueue<PySoundEntry> SoundEntries => soundEntries;
 
         #region Properties
 
@@ -1029,7 +1031,7 @@ namespace ClassicUO.LegionScripting
         /// Say a message outloud.
         /// Example:
         /// ```py
-        /// API.Say("Hello friend!")
+        /// API.Msg("Hello friend!")
         /// ```
         /// </summary>
         /// <param name="message">The message to say</param>
@@ -2756,6 +2758,70 @@ namespace ClassicUO.LegionScripting
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Clear your sound log (This is specific for each script).
+        /// Example:
+        /// ```py
+        /// API.ClearSoundLog()
+        /// ```
+        /// </summary>
+        public void ClearSoundLog()
+        {
+            while (SoundEntries.TryDequeue(out _))
+            {
+            }
+        }
+
+
+        /// <summary>
+        /// Check if the sound log contains a given sound and retrieves it.
+        /// Example:
+        /// ```py
+        /// if API.CheckSoundLog(0x13E):
+        ///   API.SysMsg("Chopped wood!")
+        /// ```
+        /// </summary>
+        /// <param name="idx">The sound effect ID to check for.</param>
+        /// <returns>Sound effect meta information if found, None otherwise</returns>
+        public PySoundEntry CheckSoundLog(int idx)
+        {
+            foreach (PySoundEntry se in SoundEntries.Reverse())
+            {
+                if (se.ID == idx)
+                    return se;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Get all the sound logs of the last X seconds.
+        /// Example:
+        /// ```py
+        /// list = API.GetSoundLog(30)
+        /// if list:
+        ///   for entry in list:
+        ///     entry.idx # Do something with this
+        /// ```
+        /// </summary>
+        /// <param name="seconds"></param>
+        /// <returns>A list of SoundEntry's</returns>
+        public PythonList GetSoundLog(double seconds)
+        {
+            var entries = new PythonList();
+
+            DateTime cutoff = DateTime.Now - TimeSpan.FromSeconds(seconds);
+
+            foreach (PySoundEntry je in SoundEntries)
+            {
+                if (je.Time < cutoff)
+                    continue;
+
+                entries.Add(je);
+            }
+
+            return entries;
         }
 
         /// <summary>

@@ -73,6 +73,12 @@ namespace ClassicUO.Game.Managers
         internal static void InvokeJournalEntryAdded(object sender, JournalEntry e) => JournalEntryAdded?.Invoke(sender, e);
 
         /// <summary>
+        /// Invoked anytime a sound is played
+        /// </summary>
+        internal static event EventHandler<SoundEventArgs> SoundPlayed;
+        internal static void InvokeSoundPlayed(SoundEventArgs e) => SoundPlayed?.Invoke(null, e);
+
+        /// <summary>
         /// Invoked anytime we receive object property list data (Tooltip text for items)
         /// </summary>
         internal static event EventHandler<OPLEventArgs> OPLOnReceive;
@@ -221,5 +227,22 @@ namespace ClassicUO.Game.Managers
         public WeatherType Type { get; }
         public byte Count { get; }
         public byte Temp { get; }
+    }
+
+    public class SoundEventArgs : EventArgs
+    {
+        public SoundEventArgs(int index, int x, int y)
+        {
+            Index = index;
+            X = x;
+            Y = y;
+            Time = DateTime.Now;
+        }
+
+        public int Index;
+        public int X;
+        public int Y;
+
+        public DateTime Time;
     }
 }

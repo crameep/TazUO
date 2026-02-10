@@ -534,6 +534,7 @@ namespace ClassicUO.Configuration
         public bool UseModernShopGump { get; set; } = false;
 
         public int MaxJournalEntries { get; set; } = 250;
+        public int MaxSoundEntries { get; set; } = 250;
         public bool HideJournalBorder { get; set; } = false;
         public bool HideJournalTimestamp { get; set; } = false;
         public bool HideJournalSystemPrefix { get; set; } = false;

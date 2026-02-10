@@ -2364,6 +2364,7 @@ sealed class PacketHandlers
         short z = (short)p.ReadUInt16BE();
 
         Client.Game.Audio.PlaySoundWithDistance(world, index, x, y);
+        EventSink.InvokeSoundPlayed(new SoundEventArgs(index, x, y));
     }
 
     private static void PlayMusic(World world, ref StackDataReader p)

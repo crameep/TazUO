@@ -1008,6 +1008,13 @@ class PySimpleProgressBar(PyBaseControl):
         """
         pass
 
+class PySoundEntry:
+    ""
+    ID: int = None
+    X: int = None
+    Y: int = None
+    Time: datetime = None
+
 class PyStatic(PyGameObject):
     ""
     IsImpassible: bool = None
@@ -1054,6 +1061,7 @@ class PyTTFTextInputField(PyBaseControl):
         pass
 
 JournalEntries = None
+SoundEntries = None
 Backpack: int = None
 Player: PyPlayer = None
 Bank: int = None
@@ -1543,7 +1551,7 @@ def Msg(message: "str") -> None:
      Say a message outloud.
      Example:
      ```py
-     API.Say("Hello friend!")
+     API.Msg("Hello friend!")
      ```
     
     """
@@ -2389,6 +2397,43 @@ def InJournal(msg: "str", clearMatches: "bool" = False) -> "bool":
      ```py
      if API.InJournal("You have been slain"):
        API.SysMsg("You have been slain!")
+     ```
+    
+    """
+    pass
+
+def ClearSoundLog() -> None:
+    """
+     Clear your sound log (This is specific for each script).
+     Example:
+     ```py
+     API.ClearSoundLog()
+     ```
+    
+    """
+    pass
+
+def CheckSoundLog(idx: "int") -> "Any":
+    """
+     Check if the sound log contains a given sound and retrieves it.
+     Example:
+     ```py
+     if API.CheckSoundLog(0x13E):
+       API.SysMsg("Chopped wood!")
+     ```
+    
+    """
+    pass
+
+def GetSoundLog(seconds: "float") -> "list":
+    """
+     Get all the sound logs of the last X seconds.
+     Example:
+     ```py
+     list = API.GetSoundLog(30)
+     if list:
+       for entry in list:
+         entry.idx # Do something with this
      ```
     
     """
