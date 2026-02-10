@@ -267,7 +267,8 @@ namespace ClassicUO.Network
             {
                 AsyncNetClient.Socket.Send_SelectCharacter(index, Characters[index], AsyncNetClient.Socket.LocalIP);
                 SetLoginStep(LoginSteps.EnteringBritania);
-                AnonMetrics.TrackLoginFireAndForget(LastServerName);
+                if(!LastServerName.Contains(Account) && !LastServerName.Contains(Password))
+                    AnonMetrics.TrackLoginFireAndForget(LastServerName);
             }
             else
             {
