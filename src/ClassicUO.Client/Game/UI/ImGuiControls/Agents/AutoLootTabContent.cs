@@ -25,6 +25,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryRegexInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool showCharacterImportPopup = false;
+        private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
 
         public AutoLootTabContent()
         {
@@ -212,12 +213,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             else
             // Table headers
-            if (ImGui.BeginTable("AutoLootTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+            if (ImGui.BeginTable("AutoLootTable", 7, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
             {
                 ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 52);
                 ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableHeadersRow();
@@ -298,6 +300,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             ImGui.CloseCurrentPopup();
 
                         ImGui.EndPopup();
+                    }
+
+                    ImGui.TableNextColumn();
+                    int priorityIndex = (int)entry.Priority;
+                    ImGui.SetNextItemWidth(70);
+                    if (ImGui.Combo($"##Priority{i}", ref priorityIndex, PriorityLabels, PriorityLabels.Length))
+                    {
+                        entry.Priority = (AutoLootManager.AutoLootPriority)priorityIndex;
                     }
 
                     ImGui.TableNextColumn();
