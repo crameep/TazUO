@@ -1,3 +1,4 @@
+using System;
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
@@ -5,17 +6,13 @@ using ClassicUO.Game.GameObjects;
 using ClassicUO.Utility;
 using System.Numerics;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
     public class AutoLootTabContent : TabContent
     {
         private Profile profile;
-        private bool enableAutoLoot;
-        private bool enableScavenger;
-        private bool enableProgressBar;
-        private bool autoLootHumanCorpses;
+        private bool enableAutoLoot, enableScavenger, enableProgressBar, autoLootHumanCorpses, hueAfterProcess;
 
         private static readonly string[] _priorityNames = { "High", "Normal", "Low" };
         private static readonly AutoLootManager.AutoLootPriority[] _priorityValues = { AutoLootManager.AutoLootPriority.High, AutoLootManager.AutoLootPriority.Normal, AutoLootManager.AutoLootPriority.Low };
@@ -23,15 +20,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string newGraphicInput = "";
         private string newHueInput = "";
         private string newRegexInput = "";
-        private int actionDelay = 1000;
 
-        private List<AutoLootManager.AutoLootConfigEntry> lootEntries;
+        private AutoLootManager.AutoLootProfile _selectedProfile;
+        private AutoLootManager.AutoLootProfile _contextMenuProfile;
+        private int _selectedProfileIndex = -1;
+        private int _draggedProfileIndex = -1;
         private bool showAddEntry = false;
         private Dictionary<string, string> entryGraphicInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryHueInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryRegexInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
-        private bool showCharacterImportPopup = false;
+        private bool _showRenamePopup = false;
+        private bool _showDeletePopup = false;
+        private bool _showImportCharPopup = false;
+        private bool _renamePopupOpen = false;
+        private bool _renamePopupFocusInput = false;
+        private string _renameInput = "";
+        private Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> _otherCharConfigs;
+        private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
 
         public AutoLootTabContent()
         {
@@ -41,9 +47,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             enableScavenger = profile.EnableScavenger;
             enableProgressBar = profile.EnableAutoLootProgressBar;
             autoLootHumanCorpses = profile.AutoLootHumanCorpses;
-            actionDelay = profile.MoveMultiObjectDelay;
-
-            lootEntries = AutoLootManager.Instance.AutoLootList;
+            hueAfterProcess = profile.HueCorpseAfterAutoloot;
         }
 
         public override void DrawContent()
@@ -56,9 +60,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // Main settings
             ImGui.Spacing();
             if (ImGui.Checkbox("Enable Auto Loot", ref enableAutoLoot))
-            {
                 profile.EnableAutoLoot = enableAutoLoot;
-            }
             ImGuiComponents.Tooltip("Auto Loot allows you to automatically pick up items from corpses based on configured criteria.");
 
             ImGui.SameLine();
@@ -68,75 +70,386 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 GameActions.Print(Client.Game.UO.World, "Target container to grab items into");
                 Client.Game.UO.World.TargetManager.SetTargeting(CursorTarget.SetGrabBag, 0, TargetType.Neutral);
             }
-            ImGui.SameLine();
-
             ImGuiComponents.Tooltip("Choose a container to grab items into");
 
             ImGui.SeparatorText("Options:");
-
             if (ImGui.Checkbox("Enable Scavenger", ref enableScavenger))
-            {
                 profile.EnableScavenger = enableScavenger;
-            }
-            ImGui.SameLine();
-
             ImGuiComponents.Tooltip("Scavenger option allows to pick objects from ground.");
 
-            if (ImGui.Checkbox("Enable progress bar", ref enableProgressBar))
-            {
-                profile.EnableAutoLootProgressBar = enableProgressBar;
-            }
             ImGui.SameLine();
 
+
+            if (ImGui.Checkbox("Enable progress bar", ref enableProgressBar))
+                profile.EnableAutoLootProgressBar = enableProgressBar;
             ImGuiComponents.Tooltip("Shows a progress bar gump.");
 
 
             if (ImGui.Checkbox("Auto loot human corpses", ref autoLootHumanCorpses))
-            {
                 profile.AutoLootHumanCorpses = autoLootHumanCorpses;
-            }
-            ImGui.SameLine();
-
             ImGuiComponents.Tooltip("Auto loots human corpses.");
 
-            ImGui.SeparatorText("Entries:");
+            ImGui.SameLine();
+            if (ImGui.Checkbox("Hue corpse after processing", ref hueAfterProcess))
+                profile.HueCorpseAfterAutoloot = hueAfterProcess;
+            ImGuiComponents.Tooltip("Hue corpses after processing to make it easier to see if autoloot has processed them.");
 
-            if (ImGui.Button("Import"))
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            // Loading state check
+            if (!AutoLootManager.Instance.Loaded && AutoLootManager.Instance.Profiles.Count == 0)
             {
-                string json = Clipboard.GetClipboardText();
+                ImGui.Text("Loading...");
+                return;
+            }
 
-                if(json.NotNullNotEmpty() && AutoLootManager.Instance.ImportFromJson(json))
+            // Lazy-init: auto-select first profile when profiles become available
+            if (_selectedProfile == null)
+            {
+                var profiles = AutoLootManager.Instance.Profiles;
+                if (profiles.Count > 0)
                 {
-                    GameActions.Print("Imported loot list!", Constants.HUE_SUCCESS);
-                    entryGraphicInputs.Clear();
-                    entryHueInputs.Clear();
-                    entryRegexInputs.Clear();
-                    entryDestinationInputs.Clear();
-                    lootEntries = AutoLootManager.Instance.AutoLootList;
-                    return;
+                    _selectedProfile = profiles[0];
+                    _selectedProfileIndex = 0;
+                    AutoLootManager.Instance.SelectedProfile = _selectedProfile;
+                }
+            }
+
+            // 2-column layout: left = profile sidebar, right = entry table
+            if (ImGui.BeginTable("AutoLootProfileTable", 2, ImGuiTableFlags.Resizable))
+            {
+                ImGui.TableSetupColumn("Profiles", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                DrawProfileSidebar();
+
+                ImGui.TableSetColumnIndex(1);
+                DrawEntryTable();
+
+                ImGui.EndTable();
+            }
+
+            // Rename profile popup
+            if (_showRenamePopup)
+            {
+                ImGui.OpenPopup("Rename Profile");
+                _showRenamePopup = false;
+                _renamePopupOpen = true;
+                _renamePopupFocusInput = true;
+            }
+
+            if (ImGui.BeginPopupModal("Rename Profile", ref _renamePopupOpen, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                ImGui.Text("Enter new profile name:");
+                ImGui.SetNextItemWidth(250);
+
+                if (_renamePopupFocusInput)
+                {
+                    ImGui.SetKeyboardFocusHere();
+                    _renamePopupFocusInput = false;
                 }
 
-                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
-            }
-            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
+                bool enterPressed = ImGui.InputText("##RenameInput", ref _renameInput, 128, ImGuiInputTextFlags.EnterReturnsTrue);
 
-            if (lootEntries.Count > 0)
+                if (ImGui.Button("OK") || enterPressed)
+                {
+                    if (_contextMenuProfile != null && !string.IsNullOrWhiteSpace(_renameInput))
+                    {
+                        AutoLootManager.Instance.RenameProfile(_contextMenuProfile, _renameInput);
+                    }
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
+
+            // Delete profile confirmation popup
+            if (_showDeletePopup)
+            {
+                ImGui.OpenPopup("Delete Profile");
+                _showDeletePopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Delete Profile"))
+            {
+                ImGui.Text($"Delete profile '{_contextMenuProfile?.Name}'?");
+
+                if (ImGui.Button("Confirm"))
+                {
+                    if (_contextMenuProfile != null)
+                    {
+                        bool wasSelected = _contextMenuProfile == _selectedProfile;
+                        AutoLootManager.Instance.DeleteProfile(_contextMenuProfile);
+
+                        if (wasSelected)
+                        {
+                            var profiles = AutoLootManager.Instance.Profiles;
+                            if (profiles.Count > 0)
+                            {
+                                _selectedProfile = profiles[0];
+                                _selectedProfileIndex = 0;
+                                AutoLootManager.Instance.SelectedProfile = _selectedProfile;
+                            }
+                            else
+                            {
+                                _selectedProfile = null;
+                                _selectedProfileIndex = -1;
+                                AutoLootManager.Instance.SelectedProfile = null;
+                            }
+
+                            entryGraphicInputs.Clear();
+                            entryHueInputs.Clear();
+                            entryRegexInputs.Clear();
+                            entryDestinationInputs.Clear();
+                        }
+                    }
+
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
+
+            // Import from Character popup
+            if (_showImportCharPopup)
+            {
+                ImGui.OpenPopup("Import from Character");
+                _showImportCharPopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Import from Character"))
+            {
+                ImGui.Text("This will create a new inactive profile with the imported entries.");
+                ImGui.Spacing();
+
+                if (_otherCharConfigs == null || _otherCharConfigs.Count == 0)
+                {
+                    ImGui.Text("No other characters with autoloot entries found.");
+                }
+                else
+                {
+                    ImGui.Text("Select a character to import from:");
+                    ImGui.Separator();
+
+                    foreach (var kvp in _otherCharConfigs)
+                    {
+                        if (ImGui.Selectable($"{kvp.Key} ({kvp.Value.Count} entries)"))
+                        {
+                            AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportFromOtherCharacter(kvp.Key, kvp.Value);
+                            if (imported != null)
+                            {
+                                int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
+                                if (idx >= 0)
+                                    SelectProfile(imported, idx);
+                            }
+                            ImGui.CloseCurrentPopup();
+                            break;
+                        }
+                    }
+                }
+
+                ImGui.Spacing();
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
+        }
+
+        private void DrawProfileSidebar()
+        {
+            var profiles = AutoLootManager.Instance.Profiles;
+
+            // Profile list
+            int dropTargetIndex = -1;
+
+            for (int i = 0; i < profiles.Count; i++)
+            {
+                AutoLootManager.AutoLootProfile profile = profiles[i];
+                bool isActive = profile.IsActive;
+
+                if (ImGui.Checkbox($"##Active{i}", ref isActive))
+                {
+                    profile.IsActive = isActive;
+                    AutoLootManager.Instance.SaveProfile(profile);
+                    AutoLootManager.Instance.RebuildMergedList();
+                }
+
+                ImGui.SameLine();
+
+                bool isSelected = _selectedProfile == profile;
+                if (ImGui.Selectable(profile.Name + $"##Profile{i}", isSelected))
+                {
+                    SelectProfile(profile, i);
+                }
+
+                // Drag source
+                if (ImGui.BeginDragDropSource(ImGuiDragDropFlags.None))
+                {
+                    _draggedProfileIndex = i;
+                    unsafe
+                    {
+                        fixed (int* ptr = &_draggedProfileIndex)
+                        {
+                            ImGui.SetDragDropPayload("PROFILE", new IntPtr(ptr), sizeof(int));
+                        }
+                    }
+                    ImGui.Text(profile.Name);
+                    ImGui.EndDragDropSource();
+                }
+
+                // Drop target
+                if (ImGui.BeginDragDropTarget())
+                {
+                    dropTargetIndex = i;
+                    unsafe
+                    {
+                        ImGuiPayloadPtr payload = ImGui.AcceptDragDropPayload("PROFILE");
+                        if (payload.NativePtr != null)
+                        {
+                            int fromIndex = *(int*)payload.Data;
+                            if (fromIndex != i)
+                            {
+                                AutoLootManager.Instance.ReorderProfile(fromIndex, i);
+
+                                if (_selectedProfile != null)
+                                {
+                                    _selectedProfileIndex = AutoLootManager.Instance.Profiles.IndexOf(_selectedProfile);
+                                }
+                            }
+                        }
+                    }
+                    ImGui.EndDragDropTarget();
+                }
+
+                // Visual feedback: draw a colored line at the drop target
+                if (dropTargetIndex == i)
+                {
+                    ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+                    Vector2 itemMin = ImGui.GetItemRectMin();
+                    Vector2 itemMax = ImGui.GetItemRectMax();
+                    uint lineColor = ImGui.ColorConvertFloat4ToU32(ImGuiTheme.Current.Primary);
+                    drawList.AddLine(
+                        new Vector2(itemMin.X, itemMax.Y),
+                        new Vector2(itemMax.X, itemMax.Y),
+                        lineColor, 2.0f
+                    );
+                }
+            }
+
+            ImGui.Separator();
+
+            // Action buttons
+            if (ImGui.Button("+"))
+            {
+                AutoLootManager.AutoLootProfile newProfile = AutoLootManager.Instance.CreateProfile("New Profile");
+                SelectProfile(newProfile, profiles.Count - 1);
+            }
+            ImGuiComponents.Tooltip("New Profile");
+
+            if (_selectedProfile != null)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Rename"))
+                {
+                    _contextMenuProfile = _selectedProfile;
+                    _showRenamePopup = true;
+                    _renameInput = _selectedProfile.Name;
+                }
+
+                ImGui.SameLine();
+                bool canDelete = profiles.Count > 1;
+                if (!canDelete) ImGui.BeginDisabled();
+                if (ImGui.Button("X"))
+                {
+                    _contextMenuProfile = _selectedProfile;
+                    _showDeletePopup = true;
+                }
+                ImGuiComponents.Tooltip("Delete Profile");
+                if (!canDelete) ImGui.EndDisabled();
+            }
+
+            if (ImGui.Button("Import Character"))
+            {
+                _otherCharConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
+                _showImportCharPopup = true;
+            }
+
+            if (_selectedProfile != null)
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Export"))
                 {
-                    AutoLootManager.Instance.GetJsonExport()?.CopyToClipboard();
-                    GameActions.Print("Exported loot list to your clipboard!", Constants.HUE_SUCCESS);
+                    string json = AutoLootManager.Instance.GetProfileJsonExport(_selectedProfile);
+                    if (json != null)
+                    {
+                        json.CopyToClipboard();
+                        GameActions.Print($"Exported profile '{_selectedProfile.Name}' to clipboard.", Constants.HUE_SUCCESS);
+                    }
                 }
-                ImGuiComponents.Tooltip("Export your list to your clipboard.");
+                ImGuiComponents.Tooltip("Export to Clipboard");
+
+                ImGui.SameLine();
+                if (ImGui.Button("Paste"))
+                {
+                    string json = Clipboard.GetClipboardText();
+                    AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportProfileFromClipboard(json);
+                    if (imported != null)
+                    {
+                        int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
+                        SelectProfile(imported, idx);
+                        GameActions.Print($"Imported profile '{imported.Name}' from clipboard.", Constants.HUE_SUCCESS);
+                    }
+                    else
+                    {
+                        GameActions.Print("Clipboard does not contain a valid autoloot profile or entry list.", Constants.HUE_ERROR);
+                    }
+                }
+                ImGuiComponents.Tooltip("Import from Clipboard");
+            }
+        }
+
+        private void SelectProfile(AutoLootManager.AutoLootProfile profile, int index)
+        {
+            _selectedProfile = profile;
+            _selectedProfileIndex = index;
+            AutoLootManager.Instance.SelectedProfile = profile;
+
+            entryGraphicInputs.Clear();
+            entryHueInputs.Clear();
+            entryRegexInputs.Clear();
+            entryDestinationInputs.Clear();
+        }
+
+        private void DrawEntryTable()
+        {
+            if (_selectedProfile == null)
+            {
+                ImGui.Text("Select a profile to view entries");
+                return;
             }
 
-            ImGui.SameLine();
-            if (ImGui.Button("Import from Character"))
-            {
-                showCharacterImportPopup = true;
-            }
-            ImGuiComponents.Tooltip("Import autoloot configuration from another character.");
+            ImGui.SeparatorText("Entries:");
 
             if (ImGui.Button("Add Manual Entry"))
             {
@@ -145,14 +458,27 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.SameLine();
             if (ImGui.Button("Add from Target"))
             {
+                AutoLootManager.AutoLootProfile targetProfile = _selectedProfile;
                 World.Instance.TargetManager.SetTargeting((targetedItem) =>
                 {
                     if (targetedItem != null && targetedItem is Entity targetedEntity)
                     {
                         if (SerialHelper.IsItem(targetedEntity))
                         {
-                            AutoLootManager.Instance.AddAutoLootEntry(targetedEntity.Graphic, targetedEntity.Hue, targetedEntity.Name);
-                            lootEntries = AutoLootManager.Instance.AutoLootList;
+                            var newEntry = new AutoLootManager.AutoLootConfigEntry
+                            {
+                                Graphic = targetedEntity.Graphic,
+                                Hue = targetedEntity.Hue,
+                                Name = targetedEntity.Name
+                            };
+
+                            foreach (AutoLootManager.AutoLootConfigEntry existing in targetProfile.Entries)
+                                if (existing.Equals(newEntry))
+                                    return;
+
+                            targetProfile.Entries.Add(newEntry);
+                            AutoLootManager.Instance.RebuildMergedList();
+                            AutoLootManager.Instance.SaveProfile(targetProfile);
                         }
                     }
                 });
@@ -199,15 +525,32 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             ushort.TryParse(newHueInput, out hue);
                         }
 
-                        AutoLootManager.AutoLootConfigEntry entry = AutoLootManager.Instance.AddAutoLootEntry((ushort)graphic, hue, "");
-                        entry.RegexSearch = newRegexInput;
-                        AutoLootManager.Instance.NotifyEntryChanged();
+                        var newEntry = new AutoLootManager.AutoLootConfigEntry
+                        {
+                            Graphic = graphic,
+                            Hue = hue,
+                            RegexSearch = newRegexInput
+                        };
+
+                        bool isDuplicate = false;
+                        foreach (AutoLootManager.AutoLootConfigEntry existing in _selectedProfile.Entries)
+                            if (existing.Equals(newEntry))
+                            {
+                                isDuplicate = true;
+                                break;
+                            }
+
+                        if (!isDuplicate)
+                        {
+                            _selectedProfile.Entries.Add(newEntry);
+                            AutoLootManager.Instance.RebuildMergedList();
+                            AutoLootManager.Instance.SaveProfile(_selectedProfile);
+                        }
 
                         newGraphicInput = "";
                         newHueInput = "";
                         newRegexInput = "";
                         showAddEntry = false;
-                        lootEntries = AutoLootManager.Instance.AutoLootList;
                     }
                 }
                 ImGui.SameLine();
@@ -223,7 +566,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.SeparatorText("Current Auto Loot Entries:");
             // List of current entries
 
-            if (lootEntries.Count == 0)
+            if (_selectedProfile.Entries.Count == 0)
             {
                 ImGui.Text("No entries configured");
             }
@@ -236,13 +579,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableHeadersRow();
 
-                for (int i = lootEntries.Count - 1; i >= 0; i--)
+                for (int i = _selectedProfile.Entries.Count - 1; i >= 0; i--)
                 {
-                    AutoLootManager.AutoLootConfigEntry entry = lootEntries[i];
+                    AutoLootManager.AutoLootConfigEntry entry = _selectedProfile.Entries[i];
                     ImGui.TableNextRow();
 
                     ImGui.TableNextColumn();
@@ -335,6 +679,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     }
 
                     ImGui.TableNextColumn();
+                    int priorityIndex = (int)entry.Priority;
+                    ImGui.SetNextItemWidth(70);
+                    if (ImGui.Combo($"##Priority{i}", ref priorityIndex, PriorityLabels, PriorityLabels.Length))
+                    {
+                        entry.Priority = (AutoLootManager.AutoLootPriority)priorityIndex;
+                    }
+
+                    ImGui.TableNextColumn();
                     // Initialize input string if not exists
                     if (!entryDestinationInputs.ContainsKey(entry.Uid))
                     {
@@ -373,69 +725,18 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.TableNextColumn();
                     if (ImGui.Button($"Delete##Delete{i}"))
                     {
-                        AutoLootManager.Instance.TryRemoveAutoLootEntry(entry.Uid);
+                        _selectedProfile.Entries.Remove(entry);
+                        AutoLootManager.Instance.RebuildMergedList();
+                        AutoLootManager.Instance.SaveProfile(_selectedProfile);
                         // Clean up input dictionaries
                         entryGraphicInputs.Remove(entry.Uid);
                         entryHueInputs.Remove(entry.Uid);
                         entryRegexInputs.Remove(entry.Uid);
                         entryDestinationInputs.Remove(entry.Uid);
-                        lootEntries = AutoLootManager.Instance.AutoLootList;
                     }
                 }
 
                 ImGui.EndTable();
-            }
-
-            // Character import popup
-            if (showCharacterImportPopup)
-            {
-                ImGui.OpenPopup("Import from Character");
-                showCharacterImportPopup = false;
-            }
-
-            if (ImGui.BeginPopupModal("Import from Character"))
-            {
-                Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> otherConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
-
-                if (otherConfigs.Count == 0)
-                {
-                    ImGui.Text("No other character autoloot configurations found.");
-                    if (ImGui.Button("OK"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-                else
-                {
-                    ImGui.Text("Select a character to import autoloot configuration from:");
-                    ImGui.Separator();
-
-                    foreach (KeyValuePair<string, List<AutoLootManager.AutoLootConfigEntry>> characterConfig in otherConfigs.OrderBy(c => c.Key))
-                    {
-                        string characterName = characterConfig.Key;
-                        List<AutoLootManager.AutoLootConfigEntry> configs = characterConfig.Value;
-
-                        if (ImGui.Button($"{characterName} ({configs.Count} items)"))
-                        {
-                            AutoLootManager.Instance.ImportFromOtherCharacter(characterName, configs);
-                            // Clear input dictionaries to refresh with new data
-                            entryGraphicInputs.Clear();
-                            entryHueInputs.Clear();
-                            entryRegexInputs.Clear();
-                            entryDestinationInputs.Clear();
-                            lootEntries = AutoLootManager.Instance.AutoLootList;
-                            ImGui.CloseCurrentPopup();
-                        }
-                    }
-
-                    ImGui.Separator();
-                    if (ImGui.Button("Cancel"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-
-                ImGui.EndPopup();
             }
         }
     }

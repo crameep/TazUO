@@ -843,7 +843,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Item A" },
                 new() { Graphic = 200, Name = "Item B" },
@@ -868,7 +868,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Specific Item" },
                 new() { Graphic = -1, Name = "Wildcard Item 1" },
@@ -891,7 +891,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 0, Name = "Zero Graphic Item" }
             };
@@ -911,7 +911,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Original" }
             };
@@ -919,7 +919,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             manager._graphicIndex.Should().HaveCount(1);
 
             // Act - simulate adding an entry and rebuilding
-            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Added" });
+            manager._mergedEntries.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Added" });
             manager.RebuildGraphicIndex();
 
             // Assert
@@ -935,7 +935,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             // Arrange
             var manager = CreateTestManager();
             var entryToRemove = new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "To Remove" };
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Keep" },
                 entryToRemove
@@ -944,7 +944,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             manager._graphicIndex.Should().HaveCount(2);
 
             // Act - simulate removing an entry and rebuilding
-            manager._autoLootItems.Remove(entryToRemove);
+            manager._mergedEntries.Remove(entryToRemove);
             manager.RebuildGraphicIndex();
 
             // Assert
@@ -958,7 +958,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Existing" }
             };
@@ -972,7 +972,7 @@ namespace ClassicUO.UnitTests.Game.Managers
                 new() { Graphic = 300, Name = "Imported 2" },
                 new() { Graphic = -1, Name = "Imported Wildcard" }
             };
-            manager._autoLootItems.AddRange(imported);
+            manager._mergedEntries.AddRange(imported);
             manager.RebuildGraphicIndex();
 
             // Assert
@@ -989,7 +989,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>();
 
             // Act
             manager.RebuildGraphicIndex();
@@ -1004,7 +1004,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = -1, Name = "Wildcard 1", RegexSearch = ".*gold.*" },
                 new() { Graphic = -1, Name = "Wildcard 2", RegexSearch = ".*silver.*" },
@@ -1024,7 +1024,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Old Item" },
                 new() { Graphic = -1, Name = "Old Wildcard" }
@@ -1034,7 +1034,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             manager._wildcardEntries.Should().HaveCount(1);
 
             // Act - replace all items and rebuild
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 999, Name = "New Item" }
             };
@@ -1052,7 +1052,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 500, Hue = 0, Name = "Item A" },
                 new() { Graphic = 500, Hue = 100, Name = "Item B" },
@@ -1072,43 +1072,19 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             // Arrange
             var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 100, Name = "Item 1" }
             };
             manager.RebuildGraphicIndex();
 
             // Act - add an entry and call NotifyEntryChanged
-            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Item 2" });
+            manager._mergedEntries.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Item 2" });
             manager.NotifyEntryChanged();
 
             // Assert - index should reflect the new entry
             manager._graphicIndex.Should().HaveCount(2);
             manager._graphicIndex.Should().ContainKey(200);
-        }
-
-        [Fact]
-        public void GraphicIndex_AutoLootListSetter_ShouldRebuildIndex()
-        {
-            // Arrange
-            var manager = CreateTestManager();
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
-            {
-                new() { Graphic = 100, Name = "Old" }
-            };
-            manager.RebuildGraphicIndex();
-            manager._graphicIndex.Should().ContainKey(100);
-
-            // Act - set via the property (which calls RebuildGraphicIndex)
-            manager.AutoLootList = new List<AutoLootManager.AutoLootConfigEntry>
-            {
-                new() { Graphic = 999, Name = "New via setter" }
-            };
-
-            // Assert
-            manager._graphicIndex.Should().NotContainKey(100);
-            manager._graphicIndex.Should().ContainKey(999);
-            manager._graphicIndex[999].Should().HaveCount(1);
         }
 
         #endregion
@@ -1166,7 +1142,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             var manager = new AutoLootManager(world);
             manager._loaded = true;
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>();
             manager.RebuildGraphicIndex();
             return manager;
         }
@@ -1491,7 +1467,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             var world = CreateWorldWithPlayer(100, 100);
             var manager = new AutoLootManager(world);
             manager._loaded = false; // Not loaded
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>();
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>();
 
             CreateGroundItem(world, 1, 105, 100);
             manager._nearbyGroundItems.Add(99u); // Stale entry
@@ -1583,7 +1559,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             var manager = new AutoLootManager(world);
             manager._loaded = true;
-            manager._autoLootItems = entries;
+            manager._mergedEntries = entries;
             manager.RebuildGraphicIndex();
             // RebuildGraphicIndex calls ClearMatchCache, so cache starts empty
             return manager;
@@ -1758,7 +1734,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             manager._matchCache.Should().NotBeEmpty();
 
             // Mutate loot list — should clear cache
-            manager._autoLootItems.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 0x1234 });
+            manager._mergedEntries.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 0x1234 });
             manager.RebuildGraphicIndex();
 
             manager._matchCache.Should().BeEmpty("cache should be cleared on loot list mutation");
@@ -1837,7 +1813,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             var world = CreateWorldWithPlayer(100, 100);
             var manager = new AutoLootManager(world);
             manager._loaded = false;
-            manager._autoLootItems = new List<AutoLootManager.AutoLootConfigEntry>
+            manager._mergedEntries = new List<AutoLootManager.AutoLootConfigEntry>
             {
                 new() { Graphic = 0x0EEA, Hue = ushort.MaxValue }
             };
@@ -2138,6 +2114,110 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Should().Be(highEntry, "High priority should win over Normal and Low");
 
             CleanupTestWorld(world);
+        }
+
+        #endregion
+
+        #region AutoLootProfile Serialization Tests
+
+        [Fact]
+        public void AutoLootProfile_Serialization_ShouldPreserveAllFields()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "My Profile",
+                IsActive = true,
+                FileName = "should_not_serialize.json",
+                Entries = new List<AutoLootManager.AutoLootConfigEntry>
+                {
+                    new()
+                    {
+                        Name = "Vanq Katana",
+                        Graphic = 5118,
+                        Hue = 0,
+                        RegexSearch = @".*vanq.*",
+                        Priority = AutoLootManager.AutoLootPriority.High,
+                        DestinationContainer = 12345u
+                    },
+                    new()
+                    {
+                        Name = "Gold Coin",
+                        Graphic = 3821,
+                        Hue = ushort.MaxValue,
+                        RegexSearch = "",
+                        Priority = AutoLootManager.AutoLootPriority.Normal,
+                        DestinationContainer = 0u
+                    }
+                }
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert
+            deserialized.Should().NotBeNull();
+            deserialized.Name.Should().Be("My Profile");
+            deserialized.IsActive.Should().BeTrue();
+            deserialized.Entries.Should().HaveCount(2);
+
+            deserialized.Entries[0].Name.Should().Be("Vanq Katana");
+            deserialized.Entries[0].Graphic.Should().Be(5118);
+            deserialized.Entries[0].RegexSearch.Should().Be(@".*vanq.*");
+            deserialized.Entries[0].Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
+            deserialized.Entries[0].DestinationContainer.Should().Be(12345u);
+
+            deserialized.Entries[1].Name.Should().Be("Gold Coin");
+            deserialized.Entries[1].Graphic.Should().Be(3821);
+            deserialized.Entries[1].Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
+
+            // Verify FileName (JsonIgnore) is not in the serialized JSON
+            json.Should().NotContain("FileName");
+            json.Should().NotContain("should_not_serialize");
+        }
+
+        [Fact]
+        public void AutoLootProfile_Serialization_InactiveProfile_ShouldPreserveIsActive()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "Disabled Profile",
+                IsActive = false,
+                Entries = new List<AutoLootManager.AutoLootConfigEntry>()
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert
+            deserialized.IsActive.Should().BeFalse();
+            deserialized.Name.Should().Be("Disabled Profile");
+            deserialized.Entries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void AutoLootProfile_Serialization_FileNameIsExcluded()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "Test",
+                FileName = "test_file.json"
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert - FileName should not appear anywhere in the JSON
+            json.Should().NotContain("FileName");
+            json.Should().NotContain("test_file");
+
+            // Verify deserialized profile has default FileName
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+            deserialized.FileName.Should().BeEmpty();
         }
 
         #endregion
