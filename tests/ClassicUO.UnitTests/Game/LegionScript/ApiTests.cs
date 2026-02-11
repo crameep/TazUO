@@ -18,7 +18,7 @@ public class ApiTests
     public ApiTests()
     {
         Client.UnitTestingActive = true;
-        api = new API(Python.CreateEngine());
+        api = new API(Python.CreateEngine(), null);
     }
     
     [Fact]

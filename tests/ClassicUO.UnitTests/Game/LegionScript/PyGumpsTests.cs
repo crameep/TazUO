@@ -19,7 +19,7 @@ public class PyGumpsTests
             Client.UnitTestingActive = true;
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result = api.Gumps.CreateGump();
@@ -36,7 +36,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result = api.Gumps.CreateGump();
@@ -56,7 +56,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result = api.Gumps.CreateGump(acceptMouseInput: false);
@@ -75,7 +75,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result = api.Gumps.CreateGump(canMove: false);
@@ -94,7 +94,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
             int initialCount = api.gumps.Count;
 
             // Act
@@ -113,7 +113,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
             int initialCount = api.gumps.Count;
 
             // Act
@@ -132,7 +132,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result = api.Gumps.CreateGump(
@@ -157,7 +157,7 @@ public class PyGumpsTests
 
             // Arrange
             ScriptEngine engine = Python.CreateEngine();
-            var api = new API(engine);
+            var api = new API(engine, null);
 
             // Act
             PyBaseGump result1 = api.Gumps.CreateGump();

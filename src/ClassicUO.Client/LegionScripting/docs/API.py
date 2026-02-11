@@ -1115,6 +1115,8 @@ class PySoundEntry:
 
 JournalEntries = None
 SoundEntries = None
+ScriptName: str = None
+ScriptPath: str = None
 Backpack: int = None
 Player: PyPlayer = None
 Bank: int = None

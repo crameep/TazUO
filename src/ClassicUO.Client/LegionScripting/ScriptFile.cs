@@ -109,7 +109,7 @@ public class ScriptFile
     public void SetupPythonScope()
     {
         PythonScope = PythonEngine.CreateScope();
-        var api = new API(PythonEngine);
+        var api = new API(PythonEngine, this);
         ScopedApi = api;
         PythonEngine.GetBuiltinModule().SetVariable("API", api);
     }

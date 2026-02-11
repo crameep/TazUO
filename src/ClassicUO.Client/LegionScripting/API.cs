@@ -35,10 +35,12 @@ namespace ClassicUO.LegionScripting
     public class API : IDisposable
     {
         private volatile bool disposed = false;
+        private readonly ScriptFile _scriptFile;
 
-        public API(ScriptEngine engine)
+        public API(ScriptEngine engine, ScriptFile script)
         {
             this.engine = engine;
+            _scriptFile = script;
             Events = new PyEvents(engine, this);
             Gumps = new PyGumps(this);
         }
@@ -169,13 +171,22 @@ namespace ClassicUO.LegionScripting
 
             hotkeyCallbacks.Clear();
             pressedKeys.Clear();
-
         }
 
         public ConcurrentQueue<PyJournalEntry> JournalEntries => journalEntries;
         public ConcurrentQueue<PySoundEntry> SoundEntries => soundEntries;
 
         #region Properties
+
+        /// <summary>
+        /// Get this scripts full filename
+        /// </summary>
+        public string ScriptName => _scriptFile != null ? _scriptFile.FileName : string.Empty;
+
+        /// <summary>
+        /// Get the full path to the file, no filename included. Use API.ScriptName to get the script.
+        /// </summary>
+        public string ScriptPath => _scriptFile != null ? _scriptFile.Path : string.Empty;
 
         /// <summary>
         /// Get the player's backpack serial

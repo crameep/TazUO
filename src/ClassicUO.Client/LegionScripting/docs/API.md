@@ -32,6 +32,20 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 **Type:** `ConcurrentQueue<PySoundEntry>`
 
+### `ScriptName`
+
+**Type:** `string`
+
+ Get this scripts full filename
+
+
+### `ScriptPath`
+
+**Type:** `string`
+
+ Get the full path to the file, no filename included. Use API.ScriptName to get the script.
+
+
 ### `Backpack`
 
 **Type:** `uint`
