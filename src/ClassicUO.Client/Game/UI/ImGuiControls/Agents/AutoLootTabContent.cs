@@ -30,6 +30,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private bool _showRenamePopup = false;
         private bool _showDeletePopup = false;
         private bool _showImportCharPopup = false;
+        private bool _renamePopupOpen = false;
+        private bool _renamePopupFocusInput = false;
         private string _renameInput = "";
         private Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> _otherCharConfigs;
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
@@ -89,6 +91,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 profile.HueCorpseAfterAutoloot = hueAfterProcess;
             ImGuiComponents.Tooltip("Hue corpses after processing to make it easier to see if autoloot has processed them.");
 
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
             // Loading state check
             if (!AutoLootManager.Instance.Loaded && AutoLootManager.Instance.Profiles.Count == 0)
             {
@@ -129,15 +135,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 ImGui.OpenPopup("Rename Profile");
                 _showRenamePopup = false;
+                _renamePopupOpen = true;
+                _renamePopupFocusInput = true;
             }
 
-            if (ImGui.BeginPopupModal("Rename Profile"))
+            if (ImGui.BeginPopupModal("Rename Profile", ref _renamePopupOpen, ImGuiWindowFlags.AlwaysAutoResize))
             {
                 ImGui.Text("Enter new profile name:");
                 ImGui.SetNextItemWidth(250);
-                ImGui.InputText("##RenameInput", ref _renameInput, 128);
 
-                if (ImGui.Button("OK"))
+                if (_renamePopupFocusInput)
+                {
+                    ImGui.SetKeyboardFocusHere();
+                    _renamePopupFocusInput = false;
+                }
+
+                bool enterPressed = ImGui.InputText("##RenameInput", ref _renameInput, 128, ImGuiInputTextFlags.EnterReturnsTrue);
+
+                if (ImGui.Button("OK") || enterPressed)
                 {
                     if (_contextMenuProfile != null && !string.IsNullOrWhiteSpace(_renameInput))
                     {
@@ -261,6 +276,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private void DrawProfileSidebar()
         {
             var profiles = AutoLootManager.Instance.Profiles;
+
+            // Profile list
             int dropTargetIndex = -1;
 
             for (int i = 0; i < profiles.Count; i++)
@@ -312,7 +329,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             {
                                 AutoLootManager.Instance.ReorderProfile(fromIndex, i);
 
-                                // Update selection index if needed
                                 if (_selectedProfile != null)
                                 {
                                     _selectedProfileIndex = AutoLootManager.Instance.Profiles.IndexOf(_selectedProfile);
@@ -336,69 +352,77 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         lineColor, 2.0f
                     );
                 }
-
-                if (ImGui.BeginPopupContextItem($"##ProfileCtx{i}"))
-                {
-                    _contextMenuProfile = profile;
-
-                    if (ImGui.MenuItem("Rename"))
-                    {
-                        _showRenamePopup = true;
-                        _renameInput = _contextMenuProfile.Name;
-                    }
-
-                    bool canDelete = profiles.Count > 1;
-                    if (!canDelete) ImGui.BeginDisabled();
-                    if (ImGui.MenuItem("Delete"))
-                    {
-                        _showDeletePopup = true;
-                    }
-                    if (!canDelete) ImGui.EndDisabled();
-
-                    ImGui.Separator();
-
-                    if (ImGui.MenuItem("Export to Clipboard"))
-                    {
-                        string json = AutoLootManager.Instance.GetProfileJsonExport(_contextMenuProfile);
-                        if (json != null)
-                        {
-                            json.CopyToClipboard();
-                            GameActions.Print($"Exported profile '{_contextMenuProfile.Name}' to clipboard.", Constants.HUE_SUCCESS);
-                        }
-                    }
-
-                    if (ImGui.MenuItem("Import from Clipboard"))
-                    {
-                        string json = Clipboard.GetClipboardText();
-                        AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportProfileFromClipboard(json);
-                        if (imported != null)
-                        {
-                            int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
-                            SelectProfile(imported, idx);
-                            GameActions.Print($"Imported profile '{imported.Name}' from clipboard.", Constants.HUE_SUCCESS);
-                        }
-                        else
-                        {
-                            GameActions.Print("Clipboard does not contain a valid autoloot profile or entry list.", Constants.HUE_ERROR);
-                        }
-                    }
-
-                    ImGui.EndPopup();
-                }
             }
 
             ImGui.Separator();
 
-            if (ImGui.Button("New Profile"))
+            // Action buttons
+            if (ImGui.Button("+"))
             {
                 AutoLootManager.AutoLootProfile newProfile = AutoLootManager.Instance.CreateProfile("New Profile");
                 SelectProfile(newProfile, profiles.Count - 1);
             }
+            ImGuiComponents.Tooltip("New Profile");
 
-            if (ImGui.Button("Import from Character"))
+            if (_selectedProfile != null)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Rename"))
+                {
+                    _contextMenuProfile = _selectedProfile;
+                    _showRenamePopup = true;
+                    _renameInput = _selectedProfile.Name;
+                }
+
+                ImGui.SameLine();
+                bool canDelete = profiles.Count > 1;
+                if (!canDelete) ImGui.BeginDisabled();
+                if (ImGui.Button("X"))
+                {
+                    _contextMenuProfile = _selectedProfile;
+                    _showDeletePopup = true;
+                }
+                ImGuiComponents.Tooltip("Delete Profile");
+                if (!canDelete) ImGui.EndDisabled();
+            }
+
+            if (ImGui.Button("Import Character"))
             {
                 _otherCharConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
                 _showImportCharPopup = true;
+            }
+
+            if (_selectedProfile != null)
+            {
+                ImGui.SameLine();
+                if (ImGui.Button("Export"))
+                {
+                    string json = AutoLootManager.Instance.GetProfileJsonExport(_selectedProfile);
+                    if (json != null)
+                    {
+                        json.CopyToClipboard();
+                        GameActions.Print($"Exported profile '{_selectedProfile.Name}' to clipboard.", Constants.HUE_SUCCESS);
+                    }
+                }
+                ImGuiComponents.Tooltip("Export to Clipboard");
+
+                ImGui.SameLine();
+                if (ImGui.Button("Paste"))
+                {
+                    string json = Clipboard.GetClipboardText();
+                    AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportProfileFromClipboard(json);
+                    if (imported != null)
+                    {
+                        int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
+                        SelectProfile(imported, idx);
+                        GameActions.Print($"Imported profile '{imported.Name}' from clipboard.", Constants.HUE_SUCCESS);
+                    }
+                    else
+                    {
+                        GameActions.Print("Clipboard does not contain a valid autoloot profile or entry list.", Constants.HUE_ERROR);
+                    }
+                }
+                ImGuiComponents.Tooltip("Import from Clipboard");
             }
         }
 

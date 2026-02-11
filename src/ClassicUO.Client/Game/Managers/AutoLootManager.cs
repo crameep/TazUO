@@ -770,7 +770,7 @@ namespace ClassicUO.Game.Managers
             if (profile == null || string.IsNullOrWhiteSpace(newName))
                 return;
 
-            string uniqueName = GetUniqueName(newName);
+            string uniqueName = GetUniqueName(newName, profile);
             string newFileName = SanitizeFileName(uniqueName, profile.FileName);
 
             // Delete old files from disk
@@ -1040,11 +1040,11 @@ namespace ClassicUO.Game.Managers
             return max + 1;
         }
 
-        public string GetUniqueName(string baseName)
+        public string GetUniqueName(string baseName, AutoLootProfile excludeProfile = null)
         {
             string name = baseName;
             int i = 1;
-            while (Profiles.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+            while (Profiles.Any(p => p != excludeProfile && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
                 name = $"{baseName} ({i++})";
             return name;
         }
