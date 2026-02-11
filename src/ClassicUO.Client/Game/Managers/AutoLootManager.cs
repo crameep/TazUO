@@ -44,6 +44,7 @@ namespace ClassicUO.Game.Managers
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
         private List<AutoLootConfigEntry> _autoLootItems = new ();
         private volatile bool _loaded = false;
+        public bool Loaded => _loaded;
         private readonly string _savePath;
         private readonly string _profilesDir;
 

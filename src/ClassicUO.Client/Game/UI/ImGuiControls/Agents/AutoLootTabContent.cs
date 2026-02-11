@@ -18,7 +18,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string newHueInput = "";
         private string newRegexInput = "";
 
-        private List<AutoLootManager.AutoLootConfigEntry> lootEntries;
+        private AutoLootManager.AutoLootProfile _selectedProfile;
+        private int _selectedProfileIndex = -1;
         private bool showAddEntry = false;
         private Dictionary<string, string> entryGraphicInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryHueInputs = new Dictionary<string, string>();
@@ -36,8 +37,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             enableProgressBar = profile.EnableAutoLootProgressBar;
             autoLootHumanCorpses = profile.AutoLootHumanCorpses;
             hueAfterProcess = profile.HueCorpseAfterAutoloot;
-
-            lootEntries = AutoLootManager.Instance.AutoLootList;
         }
 
         public override void DrawContent()
@@ -49,8 +48,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             // Main settings
             ImGui.Spacing();
-            if (ImGui.Checkbox("Enable Auto Loot", ref enableAutoLoot))            
-                profile.EnableAutoLoot = enableAutoLoot;            
+            if (ImGui.Checkbox("Enable Auto Loot", ref enableAutoLoot))
+                profile.EnableAutoLoot = enableAutoLoot;
             ImGuiComponents.Tooltip("Auto Loot allows you to automatically pick up items from corpses based on configured criteria.");
 
             ImGui.SameLine();
@@ -63,26 +62,125 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGuiComponents.Tooltip("Choose a container to grab items into");
 
             ImGui.SeparatorText("Options:");
-            if (ImGui.Checkbox("Enable Scavenger", ref enableScavenger))            
-                profile.EnableScavenger = enableScavenger;            
+            if (ImGui.Checkbox("Enable Scavenger", ref enableScavenger))
+                profile.EnableScavenger = enableScavenger;
             ImGuiComponents.Tooltip("Scavenger option allows to pick objects from ground.");
 
             ImGui.SameLine();
 
 
-            if (ImGui.Checkbox("Enable progress bar", ref enableProgressBar))            
-                profile.EnableAutoLootProgressBar = enableProgressBar;            
+            if (ImGui.Checkbox("Enable progress bar", ref enableProgressBar))
+                profile.EnableAutoLootProgressBar = enableProgressBar;
             ImGuiComponents.Tooltip("Shows a progress bar gump.");
 
 
-            if (ImGui.Checkbox("Auto loot human corpses", ref autoLootHumanCorpses))            
-                profile.AutoLootHumanCorpses = autoLootHumanCorpses;            
+            if (ImGui.Checkbox("Auto loot human corpses", ref autoLootHumanCorpses))
+                profile.AutoLootHumanCorpses = autoLootHumanCorpses;
             ImGuiComponents.Tooltip("Auto loots human corpses.");
 
             ImGui.SameLine();
             if (ImGui.Checkbox("Hue corpse after processing", ref hueAfterProcess))
                 profile.HueCorpseAfterAutoloot = hueAfterProcess;
             ImGuiComponents.Tooltip("Hue corpses after processing to make it easier to see if autoloot has processed them.");
+
+            // Loading state check
+            if (!AutoLootManager.Instance.Loaded && AutoLootManager.Instance.Profiles.Count == 0)
+            {
+                ImGui.Text("Loading...");
+                return;
+            }
+
+            // Lazy-init: auto-select first profile when profiles become available
+            if (_selectedProfile == null)
+            {
+                var profiles = AutoLootManager.Instance.Profiles;
+                if (profiles.Count > 0)
+                {
+                    _selectedProfile = profiles[0];
+                    _selectedProfileIndex = 0;
+                    AutoLootManager.Instance.SelectedProfile = _selectedProfile;
+                }
+            }
+
+            // 2-column layout: left = profile sidebar, right = entry table
+            if (ImGui.BeginTable("AutoLootProfileTable", 2, ImGuiTableFlags.Resizable))
+            {
+                ImGui.TableSetupColumn("Profiles", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Details", ImGuiTableColumnFlags.WidthStretch);
+
+                ImGui.TableNextRow();
+                ImGui.TableSetColumnIndex(0);
+                ImGui.Text("Profiles list here");
+
+                ImGui.TableSetColumnIndex(1);
+                DrawEntryTable();
+
+                ImGui.EndTable();
+            }
+
+            // Character import popup
+            if (showCharacterImportPopup)
+            {
+                ImGui.OpenPopup("Import from Character");
+                showCharacterImportPopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Import from Character"))
+            {
+                Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> otherConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
+
+                if (otherConfigs.Count == 0)
+                {
+                    ImGui.Text("No other character autoloot configurations found.");
+                    if (ImGui.Button("OK"))
+                    {
+                        ImGui.CloseCurrentPopup();
+                    }
+                }
+                else
+                {
+                    ImGui.Text("Select a character to import autoloot configuration from:");
+                    ImGui.Separator();
+
+                    foreach (KeyValuePair<string, List<AutoLootManager.AutoLootConfigEntry>> characterConfig in otherConfigs.OrderBy(c => c.Key))
+                    {
+                        string characterName = characterConfig.Key;
+                        List<AutoLootManager.AutoLootConfigEntry> configs = characterConfig.Value;
+
+                        if (ImGui.Button($"{characterName} ({configs.Count} items)"))
+                        {
+                            AutoLootManager.Instance.ImportFromOtherCharacter(characterName, configs);
+                            // Clear input dictionaries to refresh with new data
+                            entryGraphicInputs.Clear();
+                            entryHueInputs.Clear();
+                            entryRegexInputs.Clear();
+                            entryDestinationInputs.Clear();
+                            ImGui.CloseCurrentPopup();
+                        }
+                    }
+
+                    ImGui.Separator();
+                    if (ImGui.Button("Cancel"))
+                    {
+                        ImGui.CloseCurrentPopup();
+                    }
+                }
+
+                ImGui.EndPopup();
+            }
+        }
+
+        private void DrawEntryTable()
+        {
+            if (_selectedProfile == null)
+            {
+                ImGui.Text("Select a profile to view entries");
+                return;
+            }
+
+            List<AutoLootManager.AutoLootConfigEntry> lootEntries = _selectedProfile.Entries;
+
+            ImGui.Text("Entry table here");
 
             ImGui.SeparatorText("Entries:");
 
@@ -97,7 +195,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     entryHueInputs.Clear();
                     entryRegexInputs.Clear();
                     entryDestinationInputs.Clear();
-                    lootEntries = AutoLootManager.Instance.AutoLootList;
                     return;
                 }
 
@@ -137,7 +234,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         if (SerialHelper.IsItem(targetedEntity))
                         {
                             AutoLootManager.Instance.AddAutoLootEntry(targetedEntity.Graphic, targetedEntity.Hue, targetedEntity.Name);
-                            lootEntries = AutoLootManager.Instance.AutoLootList;
                         }
                     }
                 });
@@ -191,7 +287,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         newHueInput = "";
                         newRegexInput = "";
                         showAddEntry = false;
-                        lootEntries = AutoLootManager.Instance.AutoLootList;
                     }
                 }
                 ImGui.SameLine();
@@ -355,63 +450,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         entryHueInputs.Remove(entry.Uid);
                         entryRegexInputs.Remove(entry.Uid);
                         entryDestinationInputs.Remove(entry.Uid);
-                        lootEntries = AutoLootManager.Instance.AutoLootList;
                     }
                 }
 
                 ImGui.EndTable();
-            }
-
-            // Character import popup
-            if (showCharacterImportPopup)
-            {
-                ImGui.OpenPopup("Import from Character");
-                showCharacterImportPopup = false;
-            }
-
-            if (ImGui.BeginPopupModal("Import from Character"))
-            {
-                Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> otherConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
-
-                if (otherConfigs.Count == 0)
-                {
-                    ImGui.Text("No other character autoloot configurations found.");
-                    if (ImGui.Button("OK"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-                else
-                {
-                    ImGui.Text("Select a character to import autoloot configuration from:");
-                    ImGui.Separator();
-
-                    foreach (KeyValuePair<string, List<AutoLootManager.AutoLootConfigEntry>> characterConfig in otherConfigs.OrderBy(c => c.Key))
-                    {
-                        string characterName = characterConfig.Key;
-                        List<AutoLootManager.AutoLootConfigEntry> configs = characterConfig.Value;
-
-                        if (ImGui.Button($"{characterName} ({configs.Count} items)"))
-                        {
-                            AutoLootManager.Instance.ImportFromOtherCharacter(characterName, configs);
-                            // Clear input dictionaries to refresh with new data
-                            entryGraphicInputs.Clear();
-                            entryHueInputs.Clear();
-                            entryRegexInputs.Clear();
-                            entryDestinationInputs.Clear();
-                            lootEntries = AutoLootManager.Instance.AutoLootList;
-                            ImGui.CloseCurrentPopup();
-                        }
-                    }
-
-                    ImGui.Separator();
-                    if (ImGui.Button("Cancel"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-
-                ImGui.EndPopup();
             }
         }
     }
