@@ -27,7 +27,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool _showRenamePopup = false;
         private bool _showDeletePopup = false;
+        private bool _showImportCharPopup = false;
         private string _renameInput = "";
+        private Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> _otherCharConfigs;
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
 
         public AutoLootTabContent()
@@ -205,6 +207,53 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndPopup();
             }
+
+            // Import from Character popup
+            if (_showImportCharPopup)
+            {
+                ImGui.OpenPopup("Import from Character");
+                _showImportCharPopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Import from Character"))
+            {
+                ImGui.Text("This will create a new inactive profile with the imported entries.");
+                ImGui.Spacing();
+
+                if (_otherCharConfigs == null || _otherCharConfigs.Count == 0)
+                {
+                    ImGui.Text("No other characters with autoloot entries found.");
+                }
+                else
+                {
+                    ImGui.Text("Select a character to import from:");
+                    ImGui.Separator();
+
+                    foreach (var kvp in _otherCharConfigs)
+                    {
+                        if (ImGui.Selectable($"{kvp.Key} ({kvp.Value.Count} entries)"))
+                        {
+                            AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportFromOtherCharacter(kvp.Key, kvp.Value);
+                            if (imported != null)
+                            {
+                                int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
+                                if (idx >= 0)
+                                    SelectProfile(imported, idx);
+                            }
+                            ImGui.CloseCurrentPopup();
+                            break;
+                        }
+                    }
+                }
+
+                ImGui.Spacing();
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
         }
 
         private void DrawProfileSidebar()
@@ -287,6 +336,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 AutoLootManager.AutoLootProfile newProfile = AutoLootManager.Instance.CreateProfile("New Profile");
                 SelectProfile(newProfile, profiles.Count - 1);
+            }
+
+            if (ImGui.Button("Import from Character"))
+            {
+                _otherCharConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
+                _showImportCharPopup = true;
             }
         }
 

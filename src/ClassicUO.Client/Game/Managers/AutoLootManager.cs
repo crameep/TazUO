@@ -784,18 +784,36 @@ namespace ClassicUO.Game.Managers
         }
 
 
-        public void ImportFromOtherCharacter(string characterName, List<AutoLootConfigEntry> entries)
+        public AutoLootProfile ImportFromOtherCharacter(string characterName, List<AutoLootConfigEntry> entries)
         {
             try
             {
-                if (entries != null && entries.Count > 0)
-                    ImportEntries(entries, $"character: {characterName}");
-                else
+                if (entries == null || entries.Count == 0)
+                {
                     GameActions.Print($"No autoloot entries found for character: {characterName}", Constants.HUE_ERROR);
+                    return null;
+                }
+
+                string name = GetUniqueName($"Import - {characterName}");
+                var profile = new AutoLootProfile
+                {
+                    Name = name,
+                    IsActive = false,
+                    Entries = entries,
+                    FileName = SanitizeFileName(name)
+                };
+
+                Profiles.Add(profile);
+                SaveProfile(profile);
+                RebuildMergedList();
+
+                GameActions.Print($"Imported {entries.Count} entries from {characterName} into new profile '{name}'.", 0x48);
+                return profile;
             }
             catch (Exception e)
             {
                 GameActions.Print($"Error importing from other character: {e.Message}", Constants.HUE_ERROR);
+                return null;
             }
         }
 
