@@ -743,6 +743,8 @@ namespace ClassicUO.Game.Managers
 
             if (SelectedProfile == profile)
                 SelectedProfile = Profiles.Count > 0 ? Profiles[0] : null;
+
+            RebuildMergedList();
         }
 
         public void RenameProfile(AutoLootProfile profile, string newName)
