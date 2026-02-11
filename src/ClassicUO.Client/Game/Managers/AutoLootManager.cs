@@ -430,6 +430,60 @@ namespace ClassicUO.Game.Managers
             });
         }
 
+        private void LoadProfiles()
+        {
+            Task.Factory.StartNew(() =>
+            {
+                try
+                {
+                    Directory.CreateDirectory(_profilesDir);
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to create auto loot profiles directory: {e.Message}");
+                    return;
+                }
+
+                string[] files;
+                try
+                {
+                    files = Directory.GetFiles(_profilesDir, "*.json");
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to scan auto loot profiles directory: {e.Message}");
+                    return;
+                }
+
+                var loadedProfiles = new List<AutoLootProfile>();
+
+                foreach (string file in files)
+                {
+                    try
+                    {
+                        string json = File.ReadAllText(file);
+                        AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+                        if (profile == null)
+                        {
+                            Log.Error($"Failed to deserialize auto loot profile: {file}");
+                            continue;
+                        }
+
+                        profile.FileName = Path.GetFileName(file);
+                        loadedProfiles.Add(profile);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error($"Error loading auto loot profile '{file}': {e.Message}");
+                    }
+                }
+
+                Profiles = loadedProfiles;
+                _loaded = true;
+            });
+        }
+
         public void Save()
         {
             if (_loaded)
@@ -471,6 +525,28 @@ namespace ClassicUO.Game.Managers
             {
                 SaveProfile(profile);
             }
+        }
+
+        public AutoLootProfile CreateProfile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                name = "New Profile";
+
+            string uniqueName = GetUniqueName(name);
+            string fileName = SanitizeFileName(uniqueName);
+
+            var profile = new AutoLootProfile
+            {
+                Name = uniqueName,
+                IsActive = true,
+                Entries = new List<AutoLootConfigEntry>(),
+                FileName = fileName
+            };
+
+            Profiles.Add(profile);
+            SaveProfile(profile);
+
+            return profile;
         }
 
         public void ExportToFile(string filePath)
