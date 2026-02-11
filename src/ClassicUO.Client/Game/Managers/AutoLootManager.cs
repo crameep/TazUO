@@ -18,6 +18,7 @@ namespace ClassicUO.Game.Managers
     [JsonSerializable(typeof(AutoLootManager.AutoLootConfigEntry))]
     [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
     [JsonSerializable(typeof(AutoLootManager.AutoLootPriority))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootProfile))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class AutoLootJsonContext : JsonSerializerContext
     {
@@ -644,6 +645,16 @@ namespace ClassicUO.Game.Managers
             }
 
             public bool Equals(AutoLootConfigEntry other) => other.Graphic == Graphic && other.Hue == Hue && RegexSearch == other.RegexSearch;
+        }
+
+        public class AutoLootProfile
+        {
+            public string Name { get; set; } = "";
+            public bool IsActive { get; set; } = true;
+            public List<AutoLootConfigEntry> Entries { get; set; } = new();
+
+            [JsonIgnore]
+            public string FileName { get; set; } = "";
         }
     }
 }
