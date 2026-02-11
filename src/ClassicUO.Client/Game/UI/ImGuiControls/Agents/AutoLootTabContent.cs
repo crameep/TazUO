@@ -110,7 +110,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.TableNextRow();
                 ImGui.TableSetColumnIndex(0);
-                ImGui.Text("Profiles list here");
+                DrawProfileSidebar();
 
                 ImGui.TableSetColumnIndex(1);
                 DrawEntryTable();
@@ -168,6 +168,52 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndPopup();
             }
+        }
+
+        private void DrawProfileSidebar()
+        {
+            var profiles = AutoLootManager.Instance.Profiles;
+
+            for (int i = 0; i < profiles.Count; i++)
+            {
+                AutoLootManager.AutoLootProfile profile = profiles[i];
+                bool isActive = profile.IsActive;
+
+                if (ImGui.Checkbox($"##Active{i}", ref isActive))
+                {
+                    profile.IsActive = isActive;
+                    AutoLootManager.Instance.SaveProfile(profile);
+                    AutoLootManager.Instance.RebuildMergedList();
+                }
+
+                ImGui.SameLine();
+
+                bool isSelected = _selectedProfile == profile;
+                if (ImGui.Selectable(profile.Name + $"##Profile{i}", isSelected))
+                {
+                    SelectProfile(profile, i);
+                }
+            }
+
+            ImGui.Separator();
+
+            if (ImGui.Button("New Profile"))
+            {
+                AutoLootManager.AutoLootProfile newProfile = AutoLootManager.Instance.CreateProfile("New Profile");
+                SelectProfile(newProfile, profiles.Count - 1);
+            }
+        }
+
+        private void SelectProfile(AutoLootManager.AutoLootProfile profile, int index)
+        {
+            _selectedProfile = profile;
+            _selectedProfileIndex = index;
+            AutoLootManager.Instance.SelectedProfile = profile;
+
+            entryGraphicInputs.Clear();
+            entryHueInputs.Clear();
+            entryRegexInputs.Clear();
+            entryDestinationInputs.Clear();
         }
 
         private void DrawEntryTable()
