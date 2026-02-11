@@ -27,6 +27,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryRegexInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool showCharacterImportPopup = false;
+        private bool _showRenamePopup = false;
+        private string _renameInput = "";
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
 
         public AutoLootTabContent()
@@ -169,6 +171,38 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndPopup();
             }
+
+            // Rename profile popup
+            if (_showRenamePopup)
+            {
+                ImGui.OpenPopup("Rename Profile");
+                _showRenamePopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Rename Profile"))
+            {
+                ImGui.Text("Enter new profile name:");
+                ImGui.SetNextItemWidth(250);
+                ImGui.InputText("##RenameInput", ref _renameInput, 128);
+
+                if (ImGui.Button("OK"))
+                {
+                    if (_contextMenuProfile != null && !string.IsNullOrWhiteSpace(_renameInput))
+                    {
+                        AutoLootManager.Instance.RenameProfile(_contextMenuProfile, _renameInput);
+                    }
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
         }
 
         private void DrawProfileSidebar()
@@ -201,6 +235,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                     if (ImGui.MenuItem("Rename"))
                     {
+                        _showRenamePopup = true;
+                        _renameInput = _contextMenuProfile.Name;
                     }
 
                     if (ImGui.MenuItem("Delete", null, false, profiles.Count > 1))
