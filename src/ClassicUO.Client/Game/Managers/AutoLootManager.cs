@@ -45,7 +45,7 @@ namespace ClassicUO.Game.Managers
         private readonly HashSet<uint> _recentlyLooted = new();
         internal readonly HashSet<uint> _nearbyGroundItems = new();
         private static readonly PriorityQueue<(uint item, AutoLootConfigEntry entry), int> _lootItems = new ();
-        private volatile List<AutoLootConfigEntry> _mergedEntries = new ();
+        internal volatile List<AutoLootConfigEntry> _mergedEntries = new ();
         private volatile int _activeProfileCount = 0;
         internal Dictionary<int, List<AutoLootConfigEntry>> _graphicIndex = new();
         internal List<AutoLootConfigEntry> _wildcardEntries = new();

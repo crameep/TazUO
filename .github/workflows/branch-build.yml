@@ -53,23 +53,27 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Get submodules
+        run: |
+          git config --global url."https://".insteadOf git://
+          git submodule update --init --recursive
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - run: dotnet publish src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -r ${{ matrix.rid }} --self-contained
+      - run: dotnet publish src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -o build/dist -r ${{ matrix.rid }} --self-contained
       - name: Write version
         shell: bash
         env:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           SANITIZED=$(echo "${GITHUB_REF_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g')
-          echo "branch-${SANITIZED}.$(date +%Y%m%d).${COMMIT_SHA:0:7}" > bin/Release/net10.0/${{ matrix.rid }}/publish/v.txt
+          echo "branch-${SANITIZED}.$(date +%Y%m%d).${COMMIT_SHA:0:7}" > build/dist/v.txt
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}
-          path: bin/Release/net10.0/${{ matrix.rid }}/publish/
+          path: build/dist/
 
   release:
     needs: build
