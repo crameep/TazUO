@@ -6,7 +6,7 @@ tableOfContents:
   maxHeadingLevel: 4
 ---
 
-This is automatically generated documentation for the Python API scripting.  
+This is automatically generated documentation for the Python API scripting.
 
 :::note[Usage]
 All methods, properties, enums, etc need to pre prefaced with `API.` for example:
@@ -14,12 +14,12 @@ All methods, properties, enums, etc need to pre prefaced with `API.` for example
 :::
 
 :::tip[API.py File]
-If you download the [API.py](https://github.com/PlayTazUO/TazUO/blob/dev/src/ClassicUO.Client/LegionScripting/docs/API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.  
+If you download the [API.py](https://github.com/PlayTazUO/TazUO/blob/dev/src/ClassicUO.Client/LegionScripting/docs/API.py) file, put it in the same folder as your python scripts and add `import API` to your script, that will enable some mild form of autocomplete in an editor like VS Code.
 
 You can now type `-updateapi` in game to download the latest API.py file.
 :::
 
-[Additional notes](../notes/)  
+[Additional notes](../notes/)
 
 *This was generated on `2/10/26`.*
 
@@ -27,10 +27,6 @@ You can now type `-updateapi` in game to download the latest API.py file.
 ### `JournalEntries`
 
 **Type:** `ConcurrentQueue<PyJournalEntry>`
-
-### `SoundEntries`
-
-**Type:** `ConcurrentQueue<PySoundEntry>`
 
 ### `Backpack`
 
@@ -200,7 +196,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `key` | `string` | ❌ No | Key combination to listen for, e.g. "CTRL+SHIFT+F1". |
-| `callback` | `object` | ✅ Yes | Python function to invoke when the hotkey is pressed.  
+| `callback` | `object` | ✅ Yes | Python function to invoke when the hotkey is pressed.
          If <c>null</c> , the hotkey will be unregistered. |
 
 **Return Type:** `void` *(Does not return anything)*
@@ -865,7 +861,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
  Say a message outloud.
  Example:
  ```py
- API.Msg("Hello friend!")
+ API.Say("Hello friend!")
  ```
 
 
@@ -1673,7 +1669,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
-| `timeout` | `double` | ✅ Yes | The maximum time, in seconds, to wait for a valid target selection.  
+| `timeout` | `double` | ✅ Yes | The maximum time, in seconds, to wait for a valid target selection.
          If the timeout expires without a selection, the method returns <c>null</c> . |
 
 **Return Type:** `PyGameObject`
@@ -2249,61 +2245,6 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | `clearMatches` | `bool` | ✅ Yes |  |
 
 **Return Type:** `bool`
-
----
-
-### ClearSoundLog
-
- Clear your sound log (This is specific for each script).
- Example:
- ```py
- API.ClearSoundLog()
- ```
-
-
-**Return Type:** `void` *(Does not return anything)*
-
----
-
-### CheckSoundLog
-`(idx)`
- Check if the sound log contains a given sound and retrieves it.
- Example:
- ```py
- if API.CheckSoundLog(0x13E):
-   API.SysMsg("Chopped wood!")
- ```
-
-
-**Parameters:**
-
-| Name | Type | Optional | Description |
-| --- | --- | --- | --- |
-| `idx` | `int` | ❌ No | The sound effect ID to check for. |
-
-**Return Type:** `PySoundEntry`
-
----
-
-### GetSoundLog
-`(seconds)`
- Get all the sound logs of the last X seconds.
- Example:
- ```py
- list = API.GetSoundLog(30)
- if list:
-   for entry in list:
-     entry.ID # Do something with this
- ```
-
-
-**Parameters:**
-
-| Name | Type | Optional | Description |
-| --- | --- | --- | --- |
-| `seconds` | `double` | ❌ No |  |
-
-**Return Type:** `PythonList`
 
 ---
 
@@ -3431,4 +3372,3 @@ You can now type `-updateapi` in game to download the latest API.py file.
 **Return Type:** `void` *(Does not return anything)*
 
 ---
-
