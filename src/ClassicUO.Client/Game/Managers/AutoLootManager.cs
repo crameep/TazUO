@@ -44,6 +44,10 @@ namespace ClassicUO.Game.Managers
         private List<AutoLootConfigEntry> _autoLootItems = new ();
         private bool _loaded = false;
         private readonly string _savePath;
+        private readonly string _profilesDir;
+
+        public List<AutoLootProfile> Profiles { get; set; } = new();
+        public AutoLootProfile SelectedProfile { get; set; }
         private long _nextLootTime = Time.Ticks;
         private long _nextClearRecents = Time.Ticks + 5000;
         private ProgressBarGump _progressBarGump;
@@ -56,6 +60,7 @@ namespace ClassicUO.Game.Managers
         {
             _world = Client.Game.UO.World;
             _savePath = Path.Combine(ProfileManager.ProfilePath, "AutoLoot.json");
+            _profilesDir = Path.Combine(ProfileManager.ProfilePath, "AutoLootProfiles");
         }
 
         public bool IsBeingLooted(uint serial) => _quickContainsLookup.Contains(serial);
