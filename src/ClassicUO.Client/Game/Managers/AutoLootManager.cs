@@ -231,6 +231,7 @@ namespace ClassicUO.Game.Managers
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
             Save();
+            SaveAll();
             Instance = null;
         }
 
@@ -437,6 +438,39 @@ namespace ClassicUO.Game.Managers
                     JsonHelper.SaveAndBackup(_autoLootItems, _savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
                 }
                 catch (Exception e) { Console.WriteLine(e.ToString()); }
+        }
+
+        public void SaveProfile(AutoLootProfile profile)
+        {
+            if (profile == null || string.IsNullOrWhiteSpace(profile.FileName))
+            {
+                Log.Error($"Cannot save profile: {(profile == null ? "null profile" : "empty FileName")}");
+                return;
+            }
+
+            try
+            {
+                if (!Directory.Exists(_profilesDir))
+                    Directory.CreateDirectory(_profilesDir);
+
+                string fullPath = Path.Combine(_profilesDir, profile.FileName);
+                JsonHelper.SaveAndBackup(profile, fullPath, AutoLootJsonContext.Default.AutoLootProfile);
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error saving profile '{profile.Name}': {e.Message}");
+            }
+        }
+
+        public void SaveAll()
+        {
+            if (!_loaded)
+                return;
+
+            foreach (AutoLootProfile profile in Profiles)
+            {
+                SaveProfile(profile);
+            }
         }
 
         public void ExportToFile(string filePath)
