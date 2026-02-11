@@ -2486,7 +2486,7 @@ def GetSoundLog(seconds: "float") -> "list":
      list = API.GetSoundLog(30)
      if list:
        for entry in list:
-         entry.idx # Do something with this
+         entry.ID # Do something with this
      ```
     
     """
