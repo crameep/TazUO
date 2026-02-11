@@ -547,6 +547,7 @@ namespace ClassicUO.Game.Managers
                     }
                 }
 
+                loadedProfiles.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
                 Profiles = loadedProfiles;
                 // Build merged list before marking as loaded so other threads
                 // see a populated _mergedEntries when they check _loaded.
@@ -679,6 +680,22 @@ namespace ClassicUO.Game.Managers
             _mergedEntries = newList;
         }
 
+        public void ReorderProfile(int fromIndex, int toIndex)
+        {
+            if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0
+                || fromIndex >= Profiles.Count || toIndex >= Profiles.Count)
+                return;
+
+            AutoLootProfile profile = Profiles[fromIndex];
+            Profiles.RemoveAt(fromIndex);
+            Profiles.Insert(toIndex, profile);
+
+            for (int i = 0; i < Profiles.Count; i++)
+                Profiles[i].DisplayOrder = i;
+
+            SaveAll();
+        }
+
         public void SaveAll()
         {
             if (!_loaded)
@@ -703,7 +720,8 @@ namespace ClassicUO.Game.Managers
                 Name = uniqueName,
                 IsActive = true,
                 Entries = new List<AutoLootConfigEntry>(),
-                FileName = fileName
+                FileName = fileName,
+                DisplayOrder = GetNextDisplayOrder()
             };
 
             Profiles.Add(profile);
@@ -800,7 +818,8 @@ namespace ClassicUO.Game.Managers
                     Name = name,
                     IsActive = false,
                     Entries = entries,
-                    FileName = SanitizeFileName(name)
+                    FileName = SanitizeFileName(name),
+                    DisplayOrder = GetNextDisplayOrder()
                 };
 
                 Profiles.Add(profile);
@@ -1005,10 +1024,20 @@ namespace ClassicUO.Game.Managers
             profile.Name = GetUniqueName(string.IsNullOrWhiteSpace(profile.Name) ? "Imported" : profile.Name);
             profile.IsActive = false;
             profile.FileName = SanitizeFileName(profile.Name);
+            profile.DisplayOrder = GetNextDisplayOrder();
             Profiles.Add(profile);
             RebuildMergedList();
             SaveProfile(profile);
             return profile;
+        }
+
+        private int GetNextDisplayOrder()
+        {
+            int max = -1;
+            foreach (AutoLootProfile p in Profiles)
+                if (p.DisplayOrder > max)
+                    max = p.DisplayOrder;
+            return max + 1;
         }
 
         public string GetUniqueName(string baseName)
@@ -1105,6 +1134,7 @@ namespace ClassicUO.Game.Managers
         {
             public string Name { get; set; } = "";
             public bool IsActive { get; set; } = true;
+            public int DisplayOrder { get; set; } = 0;
             public List<AutoLootConfigEntry> Entries { get; set; } = new();
 
             [JsonIgnore]

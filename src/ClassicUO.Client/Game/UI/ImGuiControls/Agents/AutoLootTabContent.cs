@@ -1,3 +1,4 @@
+using System;
 using ImGuiNET;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
@@ -20,6 +21,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private AutoLootManager.AutoLootProfile _selectedProfile;
         private AutoLootManager.AutoLootProfile _contextMenuProfile;
         private int _selectedProfileIndex = -1;
+        private int _draggedProfileIndex = -1;
         private bool showAddEntry = false;
         private Dictionary<string, string> entryGraphicInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryHueInputs = new Dictionary<string, string>();
@@ -259,6 +261,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private void DrawProfileSidebar()
         {
             var profiles = AutoLootManager.Instance.Profiles;
+            int dropTargetIndex = -1;
 
             for (int i = 0; i < profiles.Count; i++)
             {
@@ -278,6 +281,60 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (ImGui.Selectable(profile.Name + $"##Profile{i}", isSelected))
                 {
                     SelectProfile(profile, i);
+                }
+
+                // Drag source
+                if (ImGui.BeginDragDropSource(ImGuiDragDropFlags.None))
+                {
+                    _draggedProfileIndex = i;
+                    unsafe
+                    {
+                        fixed (int* ptr = &_draggedProfileIndex)
+                        {
+                            ImGui.SetDragDropPayload("PROFILE", new IntPtr(ptr), sizeof(int));
+                        }
+                    }
+                    ImGui.Text(profile.Name);
+                    ImGui.EndDragDropSource();
+                }
+
+                // Drop target
+                if (ImGui.BeginDragDropTarget())
+                {
+                    dropTargetIndex = i;
+                    unsafe
+                    {
+                        ImGuiPayloadPtr payload = ImGui.AcceptDragDropPayload("PROFILE");
+                        if (payload.NativePtr != null)
+                        {
+                            int fromIndex = *(int*)payload.Data;
+                            if (fromIndex != i)
+                            {
+                                AutoLootManager.Instance.ReorderProfile(fromIndex, i);
+
+                                // Update selection index if needed
+                                if (_selectedProfile != null)
+                                {
+                                    _selectedProfileIndex = AutoLootManager.Instance.Profiles.IndexOf(_selectedProfile);
+                                }
+                            }
+                        }
+                    }
+                    ImGui.EndDragDropTarget();
+                }
+
+                // Visual feedback: draw a colored line at the drop target
+                if (dropTargetIndex == i)
+                {
+                    ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+                    Vector2 itemMin = ImGui.GetItemRectMin();
+                    Vector2 itemMax = ImGui.GetItemRectMax();
+                    uint lineColor = ImGui.ColorConvertFloat4ToU32(ImGuiTheme.Current.Primary);
+                    drawList.AddLine(
+                        new Vector2(itemMin.X, itemMax.Y),
+                        new Vector2(itemMax.X, itemMax.Y),
+                        lineColor, 2.0f
+                    );
                 }
 
                 if (ImGui.BeginPopupContextItem($"##ProfileCtx{i}"))
