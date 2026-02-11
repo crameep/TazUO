@@ -37,12 +37,13 @@ namespace ClassicUO.Game.Managers
             }
             private set => field = value;
         }
-        public List<AutoLootConfigEntry> AutoLootList { get => _autoLootItems; set => _autoLootItems = value; }
+        public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; set => _autoLootItems = value; }
 
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
         private List<AutoLootConfigEntry> _autoLootItems = new ();
+        private volatile List<AutoLootConfigEntry> _mergedEntries = new ();
         private volatile bool _loaded = false;
         public bool Loaded => _loaded;
         private readonly string _savePath;
@@ -526,6 +527,17 @@ namespace ClassicUO.Game.Managers
                 }
 
                 Profiles = loadedProfiles;
+                // Build merged list before marking as loaded so other threads
+                // see a populated _mergedEntries when they check _loaded.
+                // Note: RebuildMergedList() checks _loaded, so we temporarily
+                // build the list directly here.
+                var newList = new List<AutoLootConfigEntry>();
+                foreach (AutoLootProfile profile in loadedProfiles)
+                {
+                    if (profile.IsActive)
+                        newList.AddRange(profile.Entries);
+                }
+                _mergedEntries = newList;
                 _loaded = true;
             });
         }
@@ -564,10 +576,23 @@ namespace ClassicUO.Game.Managers
 
         /// <summary>
         /// Rebuilds the merged entry list from all active profiles.
-        /// Stub — will be replaced by TazUo-mol-1rs with full _mergedEntries implementation.
+        /// Uses atomic reference swap to prevent ConcurrentModificationException
+        /// when IsOnLootList iterates on the network thread while the UI triggers a rebuild.
         /// </summary>
         public void RebuildMergedList()
         {
+            if (!_loaded)
+                return;
+
+            var newList = new List<AutoLootConfigEntry>();
+
+            foreach (AutoLootProfile profile in Profiles)
+            {
+                if (profile.IsActive)
+                    newList.AddRange(profile.Entries);
+            }
+
+            _mergedEntries = newList;
         }
 
         public void SaveAll()
