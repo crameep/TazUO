@@ -449,7 +449,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
-            ImGui.SeparatorText("Entries:");
+            ImGui.SeparatorText($"Editing: {_selectedProfile.Name}");
 
             if (ImGui.Button("Add Manual Entry"))
             {
