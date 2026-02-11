@@ -28,6 +28,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
         private bool showCharacterImportPopup = false;
         private bool _showRenamePopup = false;
+        private bool _showDeletePopup = false;
         private string _renameInput = "";
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
 
@@ -203,6 +204,60 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndPopup();
             }
+
+            // Delete profile confirmation popup
+            if (_showDeletePopup)
+            {
+                ImGui.OpenPopup("Delete Profile");
+                _showDeletePopup = false;
+            }
+
+            if (ImGui.BeginPopupModal("Delete Profile"))
+            {
+                ImGui.Text($"Delete profile '{_contextMenuProfile?.Name}'?");
+
+                if (ImGui.Button("Confirm"))
+                {
+                    if (_contextMenuProfile != null)
+                    {
+                        bool wasSelected = _contextMenuProfile == _selectedProfile;
+                        AutoLootManager.Instance.DeleteProfile(_contextMenuProfile);
+
+                        if (wasSelected)
+                        {
+                            var profiles = AutoLootManager.Instance.Profiles;
+                            if (profiles.Count > 0)
+                            {
+                                _selectedProfile = profiles[0];
+                                _selectedProfileIndex = 0;
+                                AutoLootManager.Instance.SelectedProfile = _selectedProfile;
+                            }
+                            else
+                            {
+                                _selectedProfile = null;
+                                _selectedProfileIndex = -1;
+                                AutoLootManager.Instance.SelectedProfile = null;
+                            }
+
+                            entryGraphicInputs.Clear();
+                            entryHueInputs.Clear();
+                            entryRegexInputs.Clear();
+                            entryDestinationInputs.Clear();
+                        }
+                    }
+
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
         }
 
         private void DrawProfileSidebar()
@@ -239,9 +294,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         _renameInput = _contextMenuProfile.Name;
                     }
 
-                    if (ImGui.MenuItem("Delete", null, false, profiles.Count > 1))
+                    bool canDelete = profiles.Count > 1;
+                    if (!canDelete) ImGui.BeginDisabled();
+                    if (ImGui.MenuItem("Delete"))
                     {
+                        _showDeletePopup = true;
                     }
+                    if (!canDelete) ImGui.EndDisabled();
 
                     ImGui.Separator();
 
