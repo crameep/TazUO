@@ -542,8 +542,11 @@ namespace ClassicUO.Game.Managers
                     }
                 }
 
-                // If migration was flagged, the actual migration task will handle it.
-                // For now, just load whatever .json files exist in the directory.
+                // Perform migration if a legacy file was detected
+                if (_migrationSourcePath != null)
+                {
+                    files = MigrateToDefaultProfile(files);
+                }
                 var loadedProfiles = new List<AutoLootProfile>();
 
                 foreach (string file in files)
@@ -594,6 +597,57 @@ namespace ClassicUO.Game.Managers
                 FileName = "Default.json"
             };
             return profile;
+        }
+
+        /// <summary>
+        /// Migrates entries from a legacy AutoLoot.json into a new Default profile.
+        /// Reads the legacy file via JsonHelper.Load (which tries backup files too),
+        /// creates a Default profile with those entries, and saves it to the profiles directory.
+        /// The original legacy file is left untouched.
+        /// </summary>
+        /// <param name="currentFiles">The current array of .json files in the profiles directory</param>
+        /// <returns>Updated files array including the newly created Default.json</returns>
+        private string[] MigrateToDefaultProfile(string[] currentFiles)
+        {
+            List<AutoLootConfigEntry> legacyEntries = null;
+
+            try
+            {
+                if (JsonHelper.Load(_migrationSourcePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out legacyEntries))
+                {
+                    legacyEntries ??= new List<AutoLootConfigEntry>();
+                }
+                else
+                {
+                    Log.Error($"Failed to load legacy AutoLoot.json from '{_migrationSourcePath}', creating empty Default profile.");
+                    legacyEntries = new List<AutoLootConfigEntry>();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error reading legacy AutoLoot.json from '{_migrationSourcePath}': {e.Message}");
+                legacyEntries = new List<AutoLootConfigEntry>();
+            }
+
+            var defaultProfile = new AutoLootProfile
+            {
+                Name = "Default",
+                IsActive = true,
+                Entries = legacyEntries,
+                FileName = "Default.json"
+            };
+
+            SaveProfile(defaultProfile);
+
+            int entryCount = legacyEntries.Count;
+            Log.Info($"Migrated {entryCount} entries from AutoLoot.json to Default profile.");
+            GameActions.Print($"Migrated {entryCount} auto loot entries to Default profile.", 0x48);
+
+            _migrationSourcePath = null;
+
+            // currentFiles is always empty during migration (states 3/4 only trigger
+            // when no .json files exist in the profiles dir), so just return the new file
+            return new[] { Path.Combine(_profilesDir, defaultProfile.FileName) };
         }
 
         public void Save()
