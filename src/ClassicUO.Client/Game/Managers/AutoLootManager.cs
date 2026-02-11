@@ -839,6 +839,46 @@ namespace ClassicUO.Game.Managers
 
         public List<AutoLootConfigEntry> LoadOtherCharacterConfig(string characterPath)
         {
+            // Try profile directory first (new format)
+            string profilesDir = Path.Combine(characterPath, "AutoLootProfiles");
+            if (Directory.Exists(profilesDir))
+            {
+                var allEntries = new List<AutoLootConfigEntry>();
+                try
+                {
+                    string[] files = Directory.GetFiles(profilesDir, "*.json");
+                    foreach (string file in files)
+                    {
+                        try
+                        {
+                            string json = File.ReadAllText(file);
+                            AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+                            if (profile == null)
+                            {
+                                Log.Error($"Failed to deserialize auto loot profile: {file}");
+                                continue;
+                            }
+
+                            if (profile.Entries != null)
+                            {
+                                allEntries.AddRange(profile.Entries);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Log.Error($"Error loading auto loot profile '{file}' from other character: {e.Message}");
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    GameActions.Print($"Error scanning autoloot profiles from {profilesDir}: {e.Message}", Constants.HUE_ERROR);
+                }
+                return allEntries;
+            }
+
+            // Fall back to legacy AutoLoot.json
             try
             {
                 string configPath = Path.Combine(characterPath, "AutoLoot.json");
