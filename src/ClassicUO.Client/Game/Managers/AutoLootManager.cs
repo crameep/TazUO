@@ -17,6 +17,7 @@ namespace ClassicUO.Game.Managers
 {
     [JsonSerializable(typeof(AutoLootManager.AutoLootConfigEntry))]
     [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootPriority))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class AutoLootJsonContext : JsonSerializerContext
     {
@@ -351,7 +352,15 @@ namespace ClassicUO.Game.Managers
             }
 
             if (destinationSerial != 0)
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), ActionPriority.LootItem);
+            {
+                ActionPriority lootPriority = entry?.Priority switch
+                {
+                    AutoLootPriority.High => ActionPriority.LootItemHigh,
+                    AutoLootPriority.Low => ActionPriority.LootItem,
+                    _ => ActionPriority.LootItemMedium,
+                };
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), lootPriority);
+            }
             else
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
 
@@ -586,6 +595,8 @@ namespace ClassicUO.Game.Managers
             return false;
         }
 
+        public enum AutoLootPriority { Low = 0, Normal = 1, High = 2 }
+
         public class AutoLootConfigEntry
         {
             public string Name { get; set; } = "";
@@ -593,6 +604,7 @@ namespace ClassicUO.Game.Managers
             public ushort Hue { get; set; } = ushort.MaxValue;
             public string RegexSearch { get; set; } = string.Empty;
             public uint DestinationContainer { get; set; } = 0;
+            public AutoLootPriority Priority { get; set; } = AutoLootPriority.Normal;
             private bool RegexMatch => !string.IsNullOrEmpty(RegexSearch);
             /// <summary>
             /// Do not set this manually.
