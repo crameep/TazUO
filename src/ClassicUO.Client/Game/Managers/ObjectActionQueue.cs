@@ -98,7 +98,10 @@ public enum ActionPriority
     OpenCorpse,
     EquipItem,
     MoveItem,
-    LootItemHigh,   //Auto-loot: High priority items (still lower than manual moves)
-    LootItemMedium, //Auto-loot: Normal priority items
-    LootItem,       //Auto-loot: Low priority items - lowest overall priority
+    LootItemHigh,      //Auto-loot: High priority corpse loot
+    LootItemMedium,    //Auto-loot: Normal priority corpse loot
+    LootItem,          //Auto-loot: Low priority corpse loot
+    ScavengeItemHigh,  //Scavenger: High priority ground items
+    ScavengeItemMedium,//Scavenger: Normal priority ground items
+    ScavengeItem,      //Scavenger: Low priority ground items
 }

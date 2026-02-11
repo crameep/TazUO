@@ -557,12 +557,25 @@ namespace ClassicUO.Game.Managers
 
             if (destinationSerial != 0)
             {
-                ActionPriority lootPriority = entry?.Priority switch
+                ActionPriority lootPriority;
+                if (moveItem.OnGround)
                 {
-                    AutoLootPriority.High => ActionPriority.LootItemHigh,
-                    AutoLootPriority.Low => ActionPriority.LootItem,
-                    _ => ActionPriority.LootItemMedium,
-                };
+                    lootPriority = entry?.Priority switch
+                    {
+                        AutoLootPriority.High => ActionPriority.ScavengeItemHigh,
+                        AutoLootPriority.Low => ActionPriority.ScavengeItem,
+                        _ => ActionPriority.ScavengeItemMedium,
+                    };
+                }
+                else
+                {
+                    lootPriority = entry?.Priority switch
+                    {
+                        AutoLootPriority.High => ActionPriority.LootItemHigh,
+                        AutoLootPriority.Low => ActionPriority.LootItem,
+                        _ => ActionPriority.LootItemMedium,
+                    };
+                }
                 ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), lootPriority);
             }
             else
