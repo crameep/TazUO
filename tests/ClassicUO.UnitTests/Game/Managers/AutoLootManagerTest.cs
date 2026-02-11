@@ -736,5 +736,109 @@ namespace ClassicUO.UnitTests.Game.Managers
         }
 
         #endregion
+
+        #region AutoLootProfile Serialization Tests
+
+        [Fact]
+        public void AutoLootProfile_Serialization_ShouldPreserveAllFields()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "My Profile",
+                IsActive = true,
+                FileName = "should_not_serialize.json",
+                Entries = new List<AutoLootManager.AutoLootConfigEntry>
+                {
+                    new()
+                    {
+                        Name = "Vanq Katana",
+                        Graphic = 5118,
+                        Hue = 0,
+                        RegexSearch = @".*vanq.*",
+                        Priority = AutoLootManager.AutoLootPriority.High,
+                        DestinationContainer = 12345u
+                    },
+                    new()
+                    {
+                        Name = "Gold Coin",
+                        Graphic = 3821,
+                        Hue = ushort.MaxValue,
+                        RegexSearch = "",
+                        Priority = AutoLootManager.AutoLootPriority.Normal,
+                        DestinationContainer = 0u
+                    }
+                }
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert
+            deserialized.Should().NotBeNull();
+            deserialized.Name.Should().Be("My Profile");
+            deserialized.IsActive.Should().BeTrue();
+            deserialized.Entries.Should().HaveCount(2);
+
+            deserialized.Entries[0].Name.Should().Be("Vanq Katana");
+            deserialized.Entries[0].Graphic.Should().Be(5118);
+            deserialized.Entries[0].RegexSearch.Should().Be(@".*vanq.*");
+            deserialized.Entries[0].Priority.Should().Be(AutoLootManager.AutoLootPriority.High);
+            deserialized.Entries[0].DestinationContainer.Should().Be(12345u);
+
+            deserialized.Entries[1].Name.Should().Be("Gold Coin");
+            deserialized.Entries[1].Graphic.Should().Be(3821);
+            deserialized.Entries[1].Priority.Should().Be(AutoLootManager.AutoLootPriority.Normal);
+
+            // Verify FileName (JsonIgnore) is not in the serialized JSON
+            json.Should().NotContain("FileName");
+            json.Should().NotContain("should_not_serialize");
+        }
+
+        [Fact]
+        public void AutoLootProfile_Serialization_InactiveProfile_ShouldPreserveIsActive()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "Disabled Profile",
+                IsActive = false,
+                Entries = new List<AutoLootManager.AutoLootConfigEntry>()
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert
+            deserialized.IsActive.Should().BeFalse();
+            deserialized.Name.Should().Be("Disabled Profile");
+            deserialized.Entries.Should().BeEmpty();
+        }
+
+        [Fact]
+        public void AutoLootProfile_Serialization_FileNameIsExcluded()
+        {
+            // Arrange
+            var profile = new AutoLootManager.AutoLootProfile
+            {
+                Name = "Test",
+                FileName = "test_file.json"
+            };
+
+            // Act
+            string json = JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
+
+            // Assert - FileName should not appear anywhere in the JSON
+            json.Should().NotContain("FileName");
+            json.Should().NotContain("test_file");
+
+            // Verify deserialized profile has default FileName
+            AutoLootManager.AutoLootProfile deserialized = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+            deserialized.FileName.Should().BeEmpty();
+        }
+
+        #endregion
     }
 }
