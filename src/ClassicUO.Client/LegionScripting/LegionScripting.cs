@@ -469,7 +469,7 @@ namespace ClassicUO.LegionScripting
                 GameActions.Print(_world, e.Message, Constants.HUE_ERROR);
 
             if (e.InnerException != null)
-                ShowScriptError(script, e);
+                ShowScriptError(script, e.InnerException);
         }
 
         private static string GetContents(string[] lines, int line, int outerLines = 1)
