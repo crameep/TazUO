@@ -37,12 +37,11 @@ namespace ClassicUO.Game.Managers
             }
             private set => field = value;
         }
-        public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; set => _autoLootItems = value; }
+        public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; }
 
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
-        private List<AutoLootConfigEntry> _autoLootItems = new ();
         private volatile List<AutoLootConfigEntry> _mergedEntries = new ();
         private volatile int _activeProfileCount = 0;
         private volatile bool _loaded = false;
@@ -284,7 +283,7 @@ namespace ClassicUO.Game.Managers
 
         public void OnSceneLoad()
         {
-            Load();
+            LoadProfiles();
             EventSink.OPLOnReceive += OnOPLReceived;
             EventSink.OnItemCreated += OnItemCreatedOrUpdated;
             EventSink.OnItemUpdated += OnItemCreatedOrUpdated;
@@ -299,7 +298,6 @@ namespace ClassicUO.Game.Managers
             EventSink.OnItemUpdated -= OnItemCreatedOrUpdated;
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
-            Save();
             SaveAll();
             Instance = null;
         }
@@ -456,47 +454,6 @@ namespace ClassicUO.Game.Managers
                 _progressBarGump.CenterXInViewPort();
                 UIManager.Add(_progressBarGump);
             }
-        }
-
-        private void Load()
-        {
-            if (_loaded) return;
-
-            Task.Factory.StartNew(() =>
-            {
-                string oldPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles", "AutoLoot.json");
-                if(File.Exists(oldPath))
-                    File.Move(oldPath, _savePath);
-
-                if (!File.Exists(_savePath))
-                {
-                    _autoLootItems = new List<AutoLootConfigEntry>();
-                    Log.Error("Auto loot save path not found, creating new..");
-                    _loaded = true;
-                }
-                else
-                {
-                    Log.Info($"Loading: {_savePath}");
-                    try
-                    {
-                        JsonHelper.Load(_savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out _autoLootItems);
-
-                        if (_autoLootItems == null)
-                        {
-                            Log.Error("There was an error loading your auto loot config file, defaulted to no configs.");
-                            _autoLootItems = new();
-                        }
-
-                        _loaded = true;
-                    }
-                    catch
-                    {
-                        Log.Error("There was an error loading your auto loot config file, please check it with a json validator.");
-                        _loaded = false;
-                    }
-
-                }
-            });
         }
 
         private void LoadProfiles()
@@ -674,16 +631,6 @@ namespace ClassicUO.Game.Managers
             return new[] { Path.Combine(_profilesDir, defaultProfile.FileName) };
         }
 
-        public void Save()
-        {
-            if (_loaded)
-                try
-                {
-                    JsonHelper.SaveAndBackup(_autoLootItems, _savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
-                }
-                catch (Exception e) { Console.WriteLine(e.ToString()); }
-        }
-
         public void SaveProfile(AutoLootProfile profile)
         {
             if (profile == null || string.IsNullOrWhiteSpace(profile.FileName))
@@ -850,15 +797,22 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        private void ImportEntries(List<AutoLootConfigEntry> entries, string source)
+        private void ImportEntries(List<AutoLootConfigEntry> entries, string source, AutoLootProfile targetProfile = null)
         {
+            targetProfile ??= EnsureSelectedProfile();
+            if (targetProfile == null)
+            {
+                GameActions.Print("No profile available to import into.", Constants.HUE_ERROR);
+                return;
+            }
+
             var newItems = new List<AutoLootConfigEntry>();
             int duplicateCount = 0;
 
             foreach (AutoLootConfigEntry importedItem in entries)
             {
                 bool isDuplicate = false;
-                foreach (AutoLootConfigEntry existingItem in _autoLootItems)
+                foreach (AutoLootConfigEntry existingItem in targetProfile.Entries)
                     if (existingItem.Equals(importedItem))
                     {
                         isDuplicate = true;
@@ -871,8 +825,9 @@ namespace ClassicUO.Game.Managers
 
             if (newItems.Count > 0)
             {
-                _autoLootItems.AddRange(newItems);
-                Save();
+                targetProfile.Entries.AddRange(newItems);
+                RebuildMergedList();
+                SaveProfile(targetProfile);
             }
 
             string message = $"Imported {newItems.Count} new autoloot entries from {source}";
@@ -930,9 +885,13 @@ namespace ClassicUO.Game.Managers
         #nullable enable
         public string? GetJsonExport()
         {
+            AutoLootProfile profile = SelectedProfile;
+            if (profile == null)
+                return null;
+
             try
             {
-                return JsonSerializer.Serialize(_autoLootItems, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                return JsonSerializer.Serialize(profile.Entries, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
             }
             catch (Exception e)
             {
