@@ -48,6 +48,9 @@ namespace ClassicUO.Game.Managers
         public bool Loaded => _loaded;
         private readonly string _savePath;
         private readonly string _profilesDir;
+        private string _migrationSourcePath;
+        public bool NeedsMigration => _migrationSourcePath != null;
+        public string MigrationSourcePath => _migrationSourcePath;
 
         public List<AutoLootProfile> Profiles { get; set; } = new();
         public AutoLootProfile SelectedProfile { get; set; }
@@ -491,6 +494,7 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
+                // Migration state detection: check conditions in priority order
                 string[] files;
                 try
                 {
@@ -502,6 +506,44 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
+                if (files.Length > 0)
+                {
+                    // State 1: Directory has .json files — normal load, no migration
+                    Log.Info("AutoLoot profiles directory found with existing profiles, loading normally.");
+                }
+                else
+                {
+                    // Directory is empty (or only has .backup files).
+                    // Check for legacy AutoLoot.json files to migrate.
+                    string ancientPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles", "AutoLoot.json");
+
+                    if (File.Exists(_savePath))
+                    {
+                        // State 3: AutoLoot.json at ProfileManager.ProfilePath — flag for migration
+                        _migrationSourcePath = _savePath;
+                        Log.Info($"Legacy AutoLoot.json found at profile path, flagged for migration: {_savePath}");
+
+                        if (File.Exists(ancientPath))
+                            Log.Warn($"Legacy AutoLoot.json also exists at ancient path ({ancientPath}), using profile path version.");
+                    }
+                    else if (File.Exists(ancientPath))
+                    {
+                        // State 4: AutoLoot.json at ancient executable path — READ only, flag for migration
+                        _migrationSourcePath = ancientPath;
+                        Log.Info($"Legacy AutoLoot.json found at ancient path, flagged for migration: {ancientPath}");
+                    }
+                    else
+                    {
+                        // State 2/5: No legacy files exist — create empty Default profile
+                        Log.Info("No existing auto loot data found, creating Default profile.");
+                        var defaultProfile = CreateDefaultProfile();
+                        SaveProfile(defaultProfile);
+                        files = new[] { Path.Combine(_profilesDir, defaultProfile.FileName) };
+                    }
+                }
+
+                // If migration was flagged, the actual migration task will handle it.
+                // For now, just load whatever .json files exist in the directory.
                 var loadedProfiles = new List<AutoLootProfile>();
 
                 foreach (string file in files)
@@ -540,6 +582,18 @@ namespace ClassicUO.Game.Managers
                 _mergedEntries = newList;
                 _loaded = true;
             });
+        }
+
+        private AutoLootProfile CreateDefaultProfile()
+        {
+            var profile = new AutoLootProfile
+            {
+                Name = "Default",
+                IsActive = true,
+                Entries = new List<AutoLootConfigEntry>(),
+                FileName = "Default.json"
+            };
+            return profile;
         }
 
         public void Save()
