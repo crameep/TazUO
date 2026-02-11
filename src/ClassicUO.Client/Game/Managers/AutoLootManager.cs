@@ -43,7 +43,7 @@ namespace ClassicUO.Game.Managers
         private readonly HashSet<uint> _recentlyLooted = new();
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
         private List<AutoLootConfigEntry> _autoLootItems = new ();
-        private bool _loaded = false;
+        private volatile bool _loaded = false;
         private readonly string _savePath;
         private readonly string _profilesDir;
 
@@ -132,6 +132,7 @@ namespace ClassicUO.Game.Managers
 
         /// <summary>
         /// Add an entry for auto looting to match against when opening corpses.
+        /// Routes to SelectedProfile's entry list.
         /// </summary>
         /// <param name="graphic"></param>
         /// <param name="hue"></param>
@@ -139,15 +140,42 @@ namespace ClassicUO.Game.Managers
         /// <returns></returns>
         public AutoLootConfigEntry AddAutoLootEntry(ushort graphic = 0, ushort hue = ushort.MaxValue, string name = "")
         {
+            AutoLootProfile profile = EnsureSelectedProfile();
+            if (profile == null)
+                return null;
+
             var item = new AutoLootConfigEntry() { Graphic = graphic, Hue = hue, Name = name };
 
-            foreach (AutoLootConfigEntry entry in _autoLootItems)
+            foreach (AutoLootConfigEntry entry in profile.Entries)
                 if (entry.Equals(item))
                     return entry;
 
-            _autoLootItems.Add(item);
+            profile.Entries.Add(item);
+            RebuildMergedList();
+            SaveProfile(profile);
 
             return item;
+        }
+
+        private AutoLootProfile EnsureSelectedProfile()
+        {
+            if (SelectedProfile != null)
+                return SelectedProfile;
+
+            if (!_loaded)
+            {
+                Log.Warn("AddAutoLootEntry called before profiles are loaded");
+                return null;
+            }
+
+            if (Profiles.Count > 0)
+            {
+                SelectedProfile = Profiles[0];
+                return SelectedProfile;
+            }
+
+            SelectedProfile = CreateProfile("Default");
+            return SelectedProfile;
         }
 
         /// <summary>
@@ -514,6 +542,14 @@ namespace ClassicUO.Game.Managers
             {
                 Log.Error($"Error saving profile '{profile.Name}': {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// Rebuilds the merged entry list from all active profiles.
+        /// Stub — will be replaced by TazUo-mol-1rs with full _mergedEntries implementation.
+        /// </summary>
+        public void RebuildMergedList()
+        {
         }
 
         public void SaveAll()
