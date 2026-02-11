@@ -26,7 +26,7 @@ public class ObjectActionQueue : ConcurrentPriorityQueue<ObjectActionQueueItem, 
                 continue;
             }
 
-            if (priority == ActionPriority.MoveItem && Client.Game.UO.GameCursor.ItemHold.Enabled)
+            if (priority >= ActionPriority.MoveItem && Client.Game.UO.GameCursor.ItemHold.Enabled)
             {
                 Enqueue(item,  priority, sequence); //Return to queue to retry again when not holding an item
                 return;
@@ -98,5 +98,7 @@ public enum ActionPriority
     OpenCorpse,
     EquipItem,
     MoveItem,
-    LootItem, //Same as Moveitem, but lower priority in case user tries to manually move an item, it will happen before auto loot continues
+    LootItemHigh,   //Auto-loot: High priority items (still lower than manual moves)
+    LootItemMedium, //Auto-loot: Normal priority items
+    LootItem,       //Auto-loot: Low priority items - lowest overall priority
 }

@@ -6,6 +6,23 @@ class Buff:
     Type = None
     Title: str = None
 
+class PyLand(PyGameObject):
+    ""
+    __class__: str = None
+
+class PyMulti(PyGameObject):
+    ""
+    __class__: str = None
+
+class PyProfile:
+    ""
+    CharacterName: str = None
+    ServerName: str = None
+    LootBagSerial: int = None
+    FavoriteBagSerial: int = None
+    MoveItemDelay: int = None
+    AutoLootEnabled: bool = None
+
 class PyAlphaBlendControl(PyBaseControl):
     ""
     Hue: int = None
@@ -800,10 +817,6 @@ class PyLabel(PyBaseControl):
     Text: str = None
     Hue: int = None
 
-class PyLand(PyGameObject):
-    ""
-    __class__: str = None
-
 class PyMenuItem:
     ""
     Index: int = None
@@ -860,10 +873,6 @@ class PyMobile(PyEntity):
         
         """
         pass
-
-class PyMulti(PyGameObject):
-    ""
-    __class__: str = None
 
 class PyNiceButton(PyBaseControl):
     ""
@@ -1011,15 +1020,6 @@ class PyPlayer(PyMobile):
     InWarMode: bool = None
     __class__: str = None
 
-class PyProfile:
-    ""
-    CharacterName: str = None
-    ServerName: str = None
-    LootBagSerial: int = None
-    FavoriteBagSerial: int = None
-    MoveItemDelay: int = None
-    AutoLootEnabled: bool = None
-
 class PyRadioButton(PyCheckbox):
     ""
     GroupIndex: int = None
@@ -1077,22 +1077,6 @@ class PyStatic(PyGameObject):
     Name: str = None
     __class__: str = None
 
-class PyTextBox(PyBaseControl):
-    ""
-    Text: str = None
-    Hue: int = None
-    Font: str = None
-    FontSize: float = None
-    MultiLine: bool = None
-
-    def SetText(self, text: "str") -> None:
-        pass
-
-class PyTiledGumpPic(PyBaseControl):
-    ""
-    Graphic: int = None
-    Hue: int = None
-
 class PyTTFTextInputField(PyBaseControl):
     ""
     Text: str = None
@@ -1112,6 +1096,22 @@ class PyTTFTextInputField(PyBaseControl):
 
     def UpdateSize(self, width: "int", height: "int") -> None:
         pass
+
+class PyTextBox(PyBaseControl):
+    ""
+    Text: str = None
+    Hue: int = None
+    Font: str = None
+    FontSize: float = None
+    MultiLine: bool = None
+
+    def SetText(self, text: "str") -> None:
+        pass
+
+class PyTiledGumpPic(PyBaseControl):
+    ""
+    Graphic: int = None
+    Hue: int = None
 
 JournalEntries = None
 SoundEntries = None
