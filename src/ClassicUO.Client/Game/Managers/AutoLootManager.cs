@@ -207,13 +207,30 @@ namespace ClassicUO.Game.Managers
 
         public void TryRemoveAutoLootEntry(string uid)
         {
+            if (!_loaded)
+                return;
+
+            AutoLootProfile profile = SelectedProfile;
+            if (profile == null)
+                return;
+
             int removeAt = -1;
 
-            for (int i = 0; i < _autoLootItems.Count; i++)
-                if (_autoLootItems[i].Uid == uid)
+            for (int i = 0; i < profile.Entries.Count; i++)
+            {
+                if (profile.Entries[i].Uid == uid)
+                {
                     removeAt = i;
+                    break;
+                }
+            }
 
-            if (removeAt > -1) _autoLootItems.RemoveAt(removeAt);
+            if (removeAt > -1)
+            {
+                profile.Entries.RemoveAt(removeAt);
+                RebuildMergedList();
+                SaveProfile(profile);
+            }
         }
 
         /// <summary>
@@ -654,40 +671,6 @@ namespace ClassicUO.Game.Managers
             SaveProfile(profile);
         }
 
-        public void ExportToFile(string filePath)
-        {
-            try
-            {
-                string fileData = JsonSerializer.Serialize(_autoLootItems, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
-                File.WriteAllText(filePath, fileData);
-                GameActions.Print($"Autoloot configuration exported to: {filePath}", 0x48);
-            }
-            catch (Exception e)
-            {
-                GameActions.Print($"Error exporting autoloot configuration: {e.Message}", Constants.HUE_ERROR);
-            }
-        }
-
-        public void ImportFromFile(string filePath)
-        {
-            try
-            {
-                if (!File.Exists(filePath))
-                {
-                    GameActions.Print($"File not found: {filePath}", Constants.HUE_ERROR);
-                    return;
-                }
-
-                string data = File.ReadAllText(filePath);
-                List<AutoLootConfigEntry> importedItems = JsonSerializer.Deserialize(data, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
-
-                if (importedItems != null) ImportEntries(importedItems, $"file: {filePath}");
-            }
-            catch (Exception e)
-            {
-                GameActions.Print($"Error importing autoloot configuration: {e.Message}", Constants.HUE_ERROR);
-            }
-        }
 
         public void ImportFromOtherCharacter(string characterName, List<AutoLootConfigEntry> entries)
         {
