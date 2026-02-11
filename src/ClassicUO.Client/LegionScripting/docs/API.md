@@ -21,7 +21,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `2.10.26`.*
+*This was generated on `2.11.26`.*
 
 ## Properties
 ### `JournalEntries`
@@ -2293,7 +2293,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
  list = API.GetSoundLog(30)
  if list:
    for entry in list:
-     entry.idx # Do something with this
+     entry.ID # Do something with this
  ```
 
 
