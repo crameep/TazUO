@@ -579,7 +579,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
                 ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableHeadersRow();
@@ -676,14 +675,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             ImGui.CloseCurrentPopup();
 
                         ImGui.EndPopup();
-                    }
-
-                    ImGui.TableNextColumn();
-                    int priorityIndex = (int)entry.Priority;
-                    ImGui.SetNextItemWidth(70);
-                    if (ImGui.Combo($"##Priority{i}", ref priorityIndex, PriorityLabels, PriorityLabels.Length))
-                    {
-                        entry.Priority = (AutoLootManager.AutoLootPriority)priorityIndex;
                     }
 
                     ImGui.TableNextColumn();
