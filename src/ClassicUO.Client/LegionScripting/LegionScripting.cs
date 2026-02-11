@@ -47,6 +47,7 @@ namespace ClassicUO.LegionScripting
             if (!_loaded)
             {
                 EventSink.JournalEntryAdded += EventSink_JournalEntryAdded;
+                EventSink.SoundPlayed += EventSink_SoundPlayed;
                 _loaded = true;
             }
 
@@ -161,6 +162,19 @@ namespace ClassicUO.LegionScripting
                 script?.ScopedApi?.JournalEntries.Enqueue(new PyJournalEntry(e));
 
                 while (script?.ScopedApi?.JournalEntries.Count > ProfileManager.CurrentProfile.MaxJournalEntries) script.ScopedApi?.JournalEntries.TryDequeue(out _);
+            }
+        }
+
+        private static void EventSink_SoundPlayed(object sender, SoundEventArgs e)
+        {
+            if (e is null)
+                return;
+
+            foreach (ScriptFile script in RunningScripts)
+            {
+                script?.ScopedApi?.SoundEntries.Enqueue(new PySoundEntry(e));
+
+                while (script?.ScopedApi?.SoundEntries.Count > ProfileManager.CurrentProfile.MaxSoundEntries) script.ScopedApi?.SoundEntries.TryDequeue(out _);
             }
         }
 
