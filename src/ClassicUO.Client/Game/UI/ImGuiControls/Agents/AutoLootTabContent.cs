@@ -19,6 +19,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string newRegexInput = "";
 
         private AutoLootManager.AutoLootProfile _selectedProfile;
+        private AutoLootManager.AutoLootProfile _contextMenuProfile;
         private int _selectedProfileIndex = -1;
         private bool showAddEntry = false;
         private Dictionary<string, string> entryGraphicInputs = new Dictionary<string, string>();
@@ -192,6 +193,31 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (ImGui.Selectable(profile.Name + $"##Profile{i}", isSelected))
                 {
                     SelectProfile(profile, i);
+                }
+
+                if (ImGui.BeginPopupContextItem($"##ProfileCtx{i}"))
+                {
+                    _contextMenuProfile = profile;
+
+                    if (ImGui.MenuItem("Rename"))
+                    {
+                    }
+
+                    if (ImGui.MenuItem("Delete", null, false, profiles.Count > 1))
+                    {
+                    }
+
+                    ImGui.Separator();
+
+                    if (ImGui.MenuItem("Export to Clipboard"))
+                    {
+                    }
+
+                    if (ImGui.MenuItem("Import from Clipboard"))
+                    {
+                    }
+
+                    ImGui.EndPopup();
                 }
             }
 
