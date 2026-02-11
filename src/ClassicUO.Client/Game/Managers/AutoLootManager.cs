@@ -9,6 +9,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Linq;
 using System.Threading.Tasks;
 using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Utility.Logging;
@@ -599,6 +600,45 @@ namespace ClassicUO.Game.Managers
             }
 
             return false;
+        }
+
+        public string GetUniqueName(string baseName)
+        {
+            string name = baseName;
+            int i = 1;
+            while (Profiles.Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+                name = $"{baseName} ({i++})";
+            return name;
+        }
+
+        public string SanitizeFileName(string name, string existingFileName = null)
+        {
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            string sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray());
+
+            if (string.IsNullOrWhiteSpace(sanitized))
+                sanitized = "profile";
+
+            string fileName = sanitized + ".json";
+
+            if (!Directory.Exists(_profilesDir))
+                return fileName;
+
+            int counter = 1;
+            while (counter < 10000)
+            {
+                string fullPath = Path.Combine(_profilesDir, fileName);
+                if (!File.Exists(fullPath))
+                    return fileName;
+
+                if (existingFileName != null && string.Equals(fileName, existingFileName, StringComparison.OrdinalIgnoreCase))
+                    return fileName;
+
+                fileName = $"{sanitized}_{counter}.json";
+                counter++;
+            }
+
+            return $"{sanitized}_{DateTime.Now.Ticks}.json";
         }
 
         public enum AutoLootPriority { Low = 0, Normal = 1, High = 2 }
