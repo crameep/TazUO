@@ -70,6 +70,12 @@ jobs:
         run: |
           SANITIZED=$(echo "${GITHUB_REF_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g')
           echo "branch-${SANITIZED}.$(date +%Y%m%d).${COMMIT_SHA:0:7}" > build/dist/v.txt
+      - name: Bundle script updater
+        shell: bash
+        run: |
+          mkdir -p build/dist/LegionScripts
+          curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
+            -o build/dist/LegionScripts/Script_Updater.py
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}

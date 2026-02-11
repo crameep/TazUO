@@ -46,6 +46,13 @@ jobs:
         shell: bash
         run: echo "${{ github.ref_name }}" > ${{ env.CUO_OUTPUT_PATH }}/v.txt
 
+      - name: Bundle script updater
+        shell: bash
+        run: |
+          mkdir -p ${{ env.CUO_OUTPUT_PATH }}/LegionScripts
+          curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
+            -o ${{ env.CUO_OUTPUT_PATH }}/LegionScripts/Script_Updater.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}

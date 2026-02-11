@@ -39,6 +39,12 @@ jobs:
       - name: Write version
         shell: bash
         run: echo "0.0.0-dev.$(date +%Y%m%d).$(echo ${{ github.sha }} | cut -c1-7)" > build/dist/v.txt
+      - name: Bundle script updater
+        shell: bash
+        run: |
+          mkdir -p build/dist/LegionScripts
+          curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
+            -o build/dist/LegionScripts/Script_Updater.py
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}
