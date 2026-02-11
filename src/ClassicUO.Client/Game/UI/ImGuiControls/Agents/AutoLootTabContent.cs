@@ -5,7 +5,6 @@ using ClassicUO.Game.GameObjects;
 using ClassicUO.Utility;
 using System.Numerics;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace ClassicUO.Game.UI.ImGuiControls
 {
@@ -26,7 +25,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private Dictionary<string, string> entryHueInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryRegexInputs = new Dictionary<string, string>();
         private Dictionary<string, string> entryDestinationInputs = new Dictionary<string, string>();
-        private bool showCharacterImportPopup = false;
         private bool _showRenamePopup = false;
         private bool _showDeletePopup = false;
         private string _renameInput = "";
@@ -120,57 +118,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 DrawEntryTable();
 
                 ImGui.EndTable();
-            }
-
-            // Character import popup
-            if (showCharacterImportPopup)
-            {
-                ImGui.OpenPopup("Import from Character");
-                showCharacterImportPopup = false;
-            }
-
-            if (ImGui.BeginPopupModal("Import from Character"))
-            {
-                Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> otherConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
-
-                if (otherConfigs.Count == 0)
-                {
-                    ImGui.Text("No other character autoloot configurations found.");
-                    if (ImGui.Button("OK"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-                else
-                {
-                    ImGui.Text("Select a character to import autoloot configuration from:");
-                    ImGui.Separator();
-
-                    foreach (KeyValuePair<string, List<AutoLootManager.AutoLootConfigEntry>> characterConfig in otherConfigs.OrderBy(c => c.Key))
-                    {
-                        string characterName = characterConfig.Key;
-                        List<AutoLootManager.AutoLootConfigEntry> configs = characterConfig.Value;
-
-                        if (ImGui.Button($"{characterName} ({configs.Count} items)"))
-                        {
-                            AutoLootManager.Instance.ImportFromOtherCharacter(characterName, configs);
-                            // Clear input dictionaries to refresh with new data
-                            entryGraphicInputs.Clear();
-                            entryHueInputs.Clear();
-                            entryRegexInputs.Clear();
-                            entryDestinationInputs.Clear();
-                            ImGui.CloseCurrentPopup();
-                        }
-                    }
-
-                    ImGui.Separator();
-                    if (ImGui.Button("Cancel"))
-                    {
-                        ImGui.CloseCurrentPopup();
-                    }
-                }
-
-                ImGui.EndPopup();
             }
 
             // Rename profile popup
@@ -306,10 +253,28 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                     if (ImGui.MenuItem("Export to Clipboard"))
                     {
+                        string json = AutoLootManager.Instance.GetProfileJsonExport(_contextMenuProfile);
+                        if (json != null)
+                        {
+                            json.CopyToClipboard();
+                            GameActions.Print($"Exported profile '{_contextMenuProfile.Name}' to clipboard.", Constants.HUE_SUCCESS);
+                        }
                     }
 
                     if (ImGui.MenuItem("Import from Clipboard"))
                     {
+                        string json = Clipboard.GetClipboardText();
+                        AutoLootManager.AutoLootProfile imported = AutoLootManager.Instance.ImportProfileFromClipboard(json);
+                        if (imported != null)
+                        {
+                            int idx = AutoLootManager.Instance.Profiles.IndexOf(imported);
+                            SelectProfile(imported, idx);
+                            GameActions.Print($"Imported profile '{imported.Name}' from clipboard.", Constants.HUE_SUCCESS);
+                        }
+                        else
+                        {
+                            GameActions.Print("Clipboard does not contain a valid autoloot profile or entry list.", Constants.HUE_ERROR);
+                        }
                     }
 
                     ImGui.EndPopup();
@@ -346,42 +311,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
 
             ImGui.SeparatorText("Entries:");
-
-            if (ImGui.Button("Import"))
-            {
-                string json = Clipboard.GetClipboardText();
-
-                if(json.NotNullNotEmpty() && AutoLootManager.Instance.ImportFromJson(json))
-                {
-                    GameActions.Print("Imported loot list!", Constants.HUE_SUCCESS);
-                    entryGraphicInputs.Clear();
-                    entryHueInputs.Clear();
-                    entryRegexInputs.Clear();
-                    entryDestinationInputs.Clear();
-                    return;
-                }
-
-                GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
-            }
-            ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
-
-            if (_selectedProfile.Entries.Count > 0)
-            {
-                ImGui.SameLine();
-                if (ImGui.Button("Export"))
-                {
-                    AutoLootManager.Instance.GetJsonExport()?.CopyToClipboard();
-                    GameActions.Print("Exported loot list to your clipboard!", Constants.HUE_SUCCESS);
-                }
-                ImGuiComponents.Tooltip("Export your list to your clipboard.");
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("Import from Character"))
-            {
-                showCharacterImportPopup = true;
-            }
-            ImGuiComponents.Tooltip("Import autoloot configuration from another character.");
 
             if (ImGui.Button("Add Manual Entry"))
             {

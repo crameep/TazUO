@@ -885,43 +885,72 @@ namespace ClassicUO.Game.Managers
         }
 
         #nullable enable
-        public string? GetJsonExport()
+        public string? GetProfileJsonExport(AutoLootProfile profile)
         {
-            AutoLootProfile profile = SelectedProfile;
             if (profile == null)
                 return null;
 
             try
             {
-                return JsonSerializer.Serialize(profile.Entries, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                return JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
             }
             catch (Exception e)
             {
-                Log.Error($"Error exporting autoloot to JSON: {e}");
+                Log.Error($"Error exporting autoloot profile to JSON: {e}");
             }
 
             return null;
         }
         #nullable disable
 
-        public bool ImportFromJson(string json)
+        public AutoLootProfile ImportProfileFromClipboard(string json)
         {
+            if (string.IsNullOrWhiteSpace(json) || !_loaded)
+                return null;
+
+            // Try new format: full AutoLootProfile
             try
             {
-                List<AutoLootConfigEntry> importedItems = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+                if (profile != null && profile.Entries != null)
+                    return FinalizeImportedProfile(profile);
+            }
+            catch (Exception e)
+            {
+                Log.Trace($"Clipboard is not an AutoLootProfile: {e.Message}");
+            }
 
-                if (importedItems != null)
+            // Try legacy format: List<AutoLootConfigEntry>
+            try
+            {
+                List<AutoLootConfigEntry> entries = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                if (entries != null)
                 {
-                    ImportEntries(importedItems, "clipboard");
-                    return true;
+                    var profile = new AutoLootProfile
+                    {
+                        Name = "Imported",
+                        Entries = entries
+                    };
+                    return FinalizeImportedProfile(profile);
                 }
             }
             catch (Exception e)
             {
-                Log.Error($"Error importing autoloot from JSON: {e}");
+                Log.Trace($"Clipboard is not a List<AutoLootConfigEntry>: {e.Message}");
             }
 
-            return false;
+            return null;
+        }
+
+        private AutoLootProfile FinalizeImportedProfile(AutoLootProfile profile)
+        {
+            profile.Name = GetUniqueName(string.IsNullOrWhiteSpace(profile.Name) ? "Imported" : profile.Name);
+            profile.IsActive = false;
+            profile.FileName = SanitizeFileName(profile.Name);
+            Profiles.Add(profile);
+            RebuildMergedList();
+            SaveProfile(profile);
+            return profile;
         }
 
         public string GetUniqueName(string baseName)
