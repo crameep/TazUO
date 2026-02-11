@@ -549,6 +549,39 @@ namespace ClassicUO.Game.Managers
             return profile;
         }
 
+        public void DeleteProfile(AutoLootProfile profile)
+        {
+            if (profile == null || Profiles.Count <= 1)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(profile.FileName))
+            {
+                string basePath = Path.Combine(_profilesDir, profile.FileName);
+
+                try
+                {
+                    if (File.Exists(basePath))
+                        File.Delete(basePath);
+
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        string backupPath = basePath + ".backup" + i;
+                        if (File.Exists(backupPath))
+                            File.Delete(backupPath);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Error deleting profile files for '{profile.Name}': {e.Message}");
+                }
+            }
+
+            Profiles.Remove(profile);
+
+            if (SelectedProfile == profile)
+                SelectedProfile = Profiles.Count > 0 ? Profiles[0] : null;
+        }
+
         public void ExportToFile(string filePath)
         {
             try
