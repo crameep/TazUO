@@ -44,6 +44,7 @@ namespace ClassicUO.Game.Managers
         private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
         private List<AutoLootConfigEntry> _autoLootItems = new ();
         private volatile List<AutoLootConfigEntry> _mergedEntries = new ();
+        private volatile int _activeProfileCount = 0;
         private volatile bool _loaded = false;
         public bool Loaded => _loaded;
         private readonly string _savePath;
@@ -121,6 +122,8 @@ namespace ClassicUO.Game.Managers
 
         /// <summary>
         /// Check if an item is on the auto loot list.
+        /// Single active profile: returns first match (fast path).
+        /// Multiple active profiles: returns the match with highest Priority.
         /// </summary>
         /// <param name="i">The item to check the loot list against</param>
         /// <returns>The matched AutoLootConfigEntry, or null if no match found</returns>
@@ -128,11 +131,27 @@ namespace ClassicUO.Game.Managers
         {
             if (!_loaded) return null;
 
-            foreach (AutoLootConfigEntry entry in _autoLootItems)
-                if (entry.Match(i))
-                    return entry;
+            List<AutoLootConfigEntry> entries = _mergedEntries;
+            bool multipleActiveProfiles = _activeProfileCount > 1;
 
-            return null;
+            if (!multipleActiveProfiles)
+            {
+                foreach (AutoLootConfigEntry entry in entries)
+                    if (entry.Match(i))
+                        return entry;
+
+                return null;
+            }
+
+            AutoLootConfigEntry bestMatch = null;
+
+            foreach (AutoLootConfigEntry entry in entries)
+            {
+                if (entry.Match(i) && (bestMatch == null || entry.Priority > bestMatch.Priority))
+                    bestMatch = entry;
+            }
+
+            return bestMatch;
         }
 
         /// <summary>
@@ -577,11 +596,16 @@ namespace ClassicUO.Game.Managers
                 // Note: RebuildMergedList() checks _loaded, so we temporarily
                 // build the list directly here.
                 var newList = new List<AutoLootConfigEntry>();
+                int activeCount = 0;
                 foreach (AutoLootProfile profile in loadedProfiles)
                 {
                     if (profile.IsActive)
+                    {
                         newList.AddRange(profile.Entries);
+                        activeCount++;
+                    }
                 }
+                _activeProfileCount = activeCount;
                 _mergedEntries = newList;
                 _loaded = true;
             });
@@ -693,13 +717,18 @@ namespace ClassicUO.Game.Managers
                 return;
 
             var newList = new List<AutoLootConfigEntry>();
+            int activeCount = 0;
 
             foreach (AutoLootProfile profile in Profiles)
             {
                 if (profile.IsActive)
+                {
                     newList.AddRange(profile.Entries);
+                    activeCount++;
+                }
             }
 
+            _activeProfileCount = activeCount;
             _mergedEntries = newList;
         }
 
