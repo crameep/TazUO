@@ -1,0 +1,72 @@
+name: Stable Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  CUO_OUTPUT_PATH: 'build/dist'
+  CUO_PROJECT_PATH: 'src/ClassicUO.Client/ClassicUO.Client.csproj'
+  DOTNET_NOLOGO: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get submodules
+        run: |
+          git config --global url."https://".insteadOf git://
+          git submodule update --init --recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build executable
+        run: dotnet publish ${{ env.CUO_PROJECT_PATH }} -c Release -o ${{ env.CUO_OUTPUT_PATH }} -r ${{ matrix.rid }} --self-contained
+
+      - name: Write version
+        shell: bash
+        run: echo "${{ github.ref_name }}" > ${{ env.CUO_OUTPUT_PATH }}/v.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TazUO-${{ matrix.rid }}
+          path: ${{ env.CUO_OUTPUT_PATH }}/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Zip artifacts
+        run: |
+          for dir in TazUO-*/; do
+            name="${dir%/}"
+            (cd "$dir" && zip -r "../${name}.zip" .)
+          done
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: TazUO-*.zip
+          generate_release_notes: true
