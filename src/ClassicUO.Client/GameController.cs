@@ -68,7 +68,7 @@ namespace ClassicUO
 
             Window.ClientSizeChanged += WindowOnClientSizeChanged;
             Window.AllowUserResizing = true;
-            Window.Title = $"TazUO Legion - {CUOEnviroment.Version}";
+            Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build";
             IsMouseVisible = Settings.GlobalSettings.RunMouseInASeparateThread;
 
             IsFixedTimeStep = false; // Settings.GlobalSettings.FixedTimeStep;
@@ -240,17 +240,17 @@ namespace ClassicUO
             if (string.IsNullOrEmpty(title))
             {
 #if DEV_BUILD
-                Window.Title = $"TazUO Legion [dev] - {CUOEnviroment.Version}";
+                Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build [dev]";
 #else
-                Window.Title = $"[TazUO Legion {CUOEnviroment.Version}]";
+                Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build";
 #endif
             }
             else
             {
 #if DEV_BUILD
-                Window.Title = $"{title} - TazUO Legion [dev] - {CUOEnviroment.Version}";
+                Window.Title = $"{title} - [TazUO {CUOEnviroment.Version}] crameeps build [dev]";
 #else
-                Window.Title = $"{title} - [TazUO Legion {CUOEnviroment.Version}]";
+                Window.Title = $"{title} - [TazUO {CUOEnviroment.Version}] crameeps build";
 #endif
             }
         }
