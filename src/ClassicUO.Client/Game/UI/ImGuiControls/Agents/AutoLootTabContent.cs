@@ -224,10 +224,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
-            List<AutoLootManager.AutoLootConfigEntry> lootEntries = _selectedProfile.Entries;
-
-            ImGui.Text("Entry table here");
-
             ImGui.SeparatorText("Entries:");
 
             if (ImGui.Button("Import"))
@@ -248,7 +244,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("Import from your clipboard, must have a valid export copied.");
 
-            if (lootEntries.Count > 0)
+            if (_selectedProfile.Entries.Count > 0)
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Export"))
@@ -273,13 +269,27 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.SameLine();
             if (ImGui.Button("Add from Target"))
             {
+                AutoLootManager.AutoLootProfile targetProfile = _selectedProfile;
                 World.Instance.TargetManager.SetTargeting((targetedItem) =>
                 {
                     if (targetedItem != null && targetedItem is Entity targetedEntity)
                     {
                         if (SerialHelper.IsItem(targetedEntity))
                         {
-                            AutoLootManager.Instance.AddAutoLootEntry(targetedEntity.Graphic, targetedEntity.Hue, targetedEntity.Name);
+                            var newEntry = new AutoLootManager.AutoLootConfigEntry
+                            {
+                                Graphic = targetedEntity.Graphic,
+                                Hue = targetedEntity.Hue,
+                                Name = targetedEntity.Name
+                            };
+
+                            foreach (AutoLootManager.AutoLootConfigEntry existing in targetProfile.Entries)
+                                if (existing.Equals(newEntry))
+                                    return;
+
+                            targetProfile.Entries.Add(newEntry);
+                            AutoLootManager.Instance.RebuildMergedList();
+                            AutoLootManager.Instance.SaveProfile(targetProfile);
                         }
                     }
                 });
@@ -326,8 +336,27 @@ namespace ClassicUO.Game.UI.ImGuiControls
                             ushort.TryParse(newHueInput, out hue);
                         }
 
-                        AutoLootManager.AutoLootConfigEntry entry = AutoLootManager.Instance.AddAutoLootEntry((ushort)graphic, hue, "");
-                        entry.RegexSearch = newRegexInput;
+                        var newEntry = new AutoLootManager.AutoLootConfigEntry
+                        {
+                            Graphic = graphic,
+                            Hue = hue,
+                            RegexSearch = newRegexInput
+                        };
+
+                        bool isDuplicate = false;
+                        foreach (AutoLootManager.AutoLootConfigEntry existing in _selectedProfile.Entries)
+                            if (existing.Equals(newEntry))
+                            {
+                                isDuplicate = true;
+                                break;
+                            }
+
+                        if (!isDuplicate)
+                        {
+                            _selectedProfile.Entries.Add(newEntry);
+                            AutoLootManager.Instance.RebuildMergedList();
+                            AutoLootManager.Instance.SaveProfile(_selectedProfile);
+                        }
 
                         newGraphicInput = "";
                         newHueInput = "";
@@ -348,7 +377,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.SeparatorText("Current Auto Loot Entries:");
             // List of current entries
 
-            if (lootEntries.Count == 0)
+            if (_selectedProfile.Entries.Count == 0)
             {
                 ImGui.Text("No entries configured");
             }
@@ -365,9 +394,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableHeadersRow();
 
-                for (int i = lootEntries.Count - 1; i >= 0; i--)
+                for (int i = _selectedProfile.Entries.Count - 1; i >= 0; i--)
                 {
-                    AutoLootManager.AutoLootConfigEntry entry = lootEntries[i];
+                    AutoLootManager.AutoLootConfigEntry entry = _selectedProfile.Entries[i];
                     ImGui.TableNextRow();
 
                     ImGui.TableNextColumn();
@@ -490,7 +519,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.TableNextColumn();
                     if (ImGui.Button($"Delete##Delete{i}"))
                     {
-                        AutoLootManager.Instance.TryRemoveAutoLootEntry(entry.Uid);
+                        _selectedProfile.Entries.Remove(entry);
+                        AutoLootManager.Instance.RebuildMergedList();
+                        AutoLootManager.Instance.SaveProfile(_selectedProfile);
                         // Clean up input dictionaries
                         entryGraphicInputs.Remove(entry.Uid);
                         entryHueInputs.Remove(entry.Uid);
