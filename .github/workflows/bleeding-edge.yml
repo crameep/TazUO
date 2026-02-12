@@ -57,6 +57,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
+      - name: Read version from build artifact
+        run: echo "CLIENT_VERSION=$(cat TazUO-linux-x64/v.txt)" >> $GITHUB_ENV
       - name: Zip artifacts
         run: |
           for dir in TazUO-*/; do
@@ -72,3 +74,4 @@ jobs:
           body: |
             Automated bleeding-edge build from dev branch.
             Commit: ${{ github.sha }}
+            Version: ${{ env.CLIENT_VERSION }}
