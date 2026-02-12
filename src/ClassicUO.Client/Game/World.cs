@@ -118,6 +118,8 @@ namespace ClassicUO.Game
         // Separate collection for corpses to optimize iteration in TryOpenCorpses
         private readonly HashSet<Item> _corpses = new HashSet<Item>();
         private readonly object _corpsesLock = new object();
+        private Item[] _corpseSnapshotCache = Array.Empty<Item>();
+        private bool _corpseSnapshotDirty = true;
 
         public Map.Map Map
         {
@@ -235,7 +237,8 @@ namespace ClassicUO.Game
             {
                 lock (_corpsesLock)
                 {
-                    _corpses.Add(item);
+                    if (_corpses.Add(item))
+                        _corpseSnapshotDirty = true;
                 }
             }
         }
@@ -250,20 +253,27 @@ namespace ClassicUO.Game
             {
                 lock (_corpsesLock)
                 {
-                    _corpses.Remove(item);
+                    if (_corpses.Remove(item))
+                        _corpseSnapshotDirty = true;
                 }
             }
         }
 
         /// <summary>
-        /// Gets a snapshot of corpses for iteration.
+        /// Gets a cached snapshot of corpses for iteration.
+        /// Only rebuilds the array when the collection has changed.
         /// Thread-safe.
         /// </summary>
         public Item[] GetCorpseSnapshot()
         {
             lock (_corpsesLock)
             {
-                return _corpses.ToArray();
+                if (_corpseSnapshotDirty)
+                {
+                    _corpseSnapshotCache = _corpses.Count > 0 ? _corpses.ToArray() : Array.Empty<Item>();
+                    _corpseSnapshotDirty = false;
+                }
+                return _corpseSnapshotCache;
             }
         }
 
@@ -924,6 +934,8 @@ namespace ClassicUO.Game
             lock (_corpsesLock)
             {
                 _corpses.Clear();
+                _corpseSnapshotCache = Array.Empty<Item>();
+                _corpseSnapshotDirty = false;
             }
             Player?.Destroy();
             Player = null;

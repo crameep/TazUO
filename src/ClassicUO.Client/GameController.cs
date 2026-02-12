@@ -49,7 +49,7 @@ namespace ClassicUO
         private bool _pluginsInitialized;
         private Rectangle bufferRect = Rectangle.Empty;
         private RenderTarget2D _screenRenderTarget;
-        private bool _useScreenRenderTarget = true; // Re-enabling to debug rendering issues
+        private bool _useScreenRenderTarget = false;
 
         private static Vector3 bgHueShader = new(0, 0, 0.3f);
         private bool drawScene;
