@@ -53,10 +53,87 @@ jobs:
           curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
             -o ${{ env.CUO_OUTPUT_PATH }}/LegionScripts/Script_Updater.py
 
+      - name: Generate macOS icon
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        run: |
+          sips -s format png src/ClassicUO.Client/cuoicon.ico --out icon_base.png
+          mkdir -p icon.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size icon_base.png --out icon.iconset/icon_${size}x${size}.png
+          done
+          for size in 16 32 128 256; do
+            double=$((size * 2))
+            cp icon.iconset/icon_${double}x${double}.png icon.iconset/icon_${size}x${size}@2x.png
+          done
+          sips -z 1024 1024 icon_base.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o icon.icns
+          cp icon.icns ${{ env.CUO_OUTPUT_PATH }}/icon.icns
+
+      - name: Create macOS .app bundle
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          APP="TazUO.app"
+          CONTENTS="$APP/Contents"
+          MACOS="$CONTENTS/MacOS"
+          RESOURCES="$CONTENTS/Resources"
+
+          mkdir -p "$MACOS" "$RESOURCES"
+
+          # Copy all published files into MacOS/
+          cp -a ${{ env.CUO_OUTPUT_PATH }}/. "$MACOS/"
+
+          # Use pre-generated icon
+          cp icon.icns "$RESOURCES/icon.icns"
+
+          # Info.plist
+          cat > "$CONTENTS/Info.plist" << PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>TazUO</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.crameep.tazuo</string>
+            <key>CFBundleName</key>
+            <string>TazUO</string>
+            <key>CFBundleIconFile</key>
+            <string>icon</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${VERSION}</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          # PkgInfo
+          echo -n "APPL????" > "$CONTENTS/PkgInfo"
+
+          # Ad-hoc codesign
+          codesign --force --deep --sign - "$APP"
+
+          # Zip the .app bundle
+          zip -r -y "TazUO-${{ matrix.rid }}.app.zip" "$APP"
+
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}
           path: ${{ env.CUO_OUTPUT_PATH }}/
+
+      - name: Upload macOS .app artifact
+        if: startsWith(matrix.rid, 'osx-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: TazUO-${{ matrix.rid }}-app
+          path: TazUO-${{ matrix.rid }}.app.zip
 
   release:
     needs: build
@@ -70,7 +147,14 @@ jobs:
         run: |
           for dir in TazUO-*/; do
             name="${dir%/}"
+            # Skip -app directories (already zipped)
+            [[ "$name" == *-app ]] && continue
             (cd "$dir" && zip -r "../${name}.zip" .)
+          done
+          # Copy .app.zip files from app artifact dirs
+          for dir in TazUO-*-app/; do
+            [ -d "$dir" ] || continue
+            cp "$dir"/*.app.zip . 2>/dev/null || true
           done
 
       - uses: softprops/action-gh-release@v2
