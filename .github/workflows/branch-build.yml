@@ -1,0 +1,110 @@
+name: Branch Build
+
+on:
+  push:
+    branches-ignore: [main]
+    tags-ignore: ['**']
+  delete:
+
+concurrency:
+  group: branch-build-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete branch release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_REF: ${{ github.event.ref }}
+        run: |
+          SANITIZED=$(echo "${BRANCH_REF}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          BRANCH_TAG="branch-${SANITIZED}"
+          echo "Cleaning up release for branch: ${BRANCH_REF} (tag: ${BRANCH_TAG})"
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${BRANCH_TAG} --jq '.id' 2>/dev/null || echo "")
+          if [ -n "$RELEASE_ID" ]; then
+            gh api -X DELETE repos/${{ github.repository }}/releases/${RELEASE_ID}
+            gh api -X DELETE repos/${{ github.repository }}/git/refs/tags/${BRANCH_TAG} 2>/dev/null || true
+            echo "Release and tag deleted"
+          else
+            echo "No release found for tag ${BRANCH_TAG}"
+          fi
+
+  build:
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get submodules
+        run: |
+          git config --global url."https://".insteadOf git://
+          git submodule update --init --recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet publish src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -o build/dist -r ${{ matrix.rid }} --self-contained
+      - name: Write version
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          SANITIZED=$(echo "${GITHUB_REF_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "branch-${SANITIZED}.$(date +%Y%m%d).${COMMIT_SHA:0:7}" > build/dist/v.txt
+      - name: Bundle script updater
+        shell: bash
+        run: |
+          mkdir -p build/dist/LegionScripts
+          curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
+            -o build/dist/LegionScripts/Script_Updater.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TazUO-${{ matrix.rid }}
+          path: build/dist/
+
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Zip artifacts
+        run: |
+          for dir in TazUO-*/; do
+            name="${dir%/}"
+            (cd "$dir" && zip -r "../${name}.zip" .)
+          done
+      - name: Sanitize branch name
+        id: sanitize
+        run: echo "name=$(echo '${{ github.ref_name }}' | sed 's/[^a-zA-Z0-9._-]/-/g')" >> $GITHUB_OUTPUT
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: branch-${{ steps.sanitize.outputs.name }}
+          prerelease: true
+          make_latest: false
+          files: TazUO-*.zip
+          name: "Branch: ${{ github.ref_name }}"
+          body: |
+            Feature branch build: ${{ github.ref_name }}
+            Commit: ${{ github.sha }}

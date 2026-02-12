@@ -908,11 +908,12 @@ namespace ClassicUO.Game.Scenes
             //     _time_cleanup = Time.Ticks + 500;
             // }
 
-            // Update WalkableManager for chunk generation
-            WalkableManager.Instance.Update();
-
-            // Update LongDistancePathfinder
-            LongDistancePathfinder.Update();
+            // Only update pathfinding systems when long-distance pathfinding is enabled/active
+            if (_world.Player?.Pathfinder?.UseLongDistancePathfinding == true)
+            {
+                WalkableManager.Instance.Update();
+                LongDistancePathfinder.Update();
+            }
 
             SharedStore.SendMegaCliLocRequests(_world);
 
@@ -958,9 +959,10 @@ namespace ClassicUO.Game.Scenes
                     && _world.Player.IsHidden
             )
             {
-                ObjectActionQueue.Instance.ClearByPriority(ActionPriority.OpenCorpse);
+                CorpseOpenQueue.Clear();
             }
 
+            CorpseOpenQueue.Update();
             ObjectActionQueue.Instance.Update();
             AutoLootManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);

@@ -583,7 +583,7 @@ internal static class GameActions
         Socket.Send_AttackRequest(serial);
     }
 
-    internal static void QueueOpenCorpse(uint serial) => ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.OpenCorpse);
+    internal static void QueueOpenCorpse(uint serial) => CorpseOpenQueue.Enqueue(serial);
 
     internal static void DoubleClickQueued(uint serial) => ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(serial), ActionPriority.UseItem);
 

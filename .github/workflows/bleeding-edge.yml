@@ -1,0 +1,74 @@
+name: Bleeding Edge
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ['**']
+
+concurrency:
+  group: bleeding-edge
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-15-intel
+            rid: osx-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get submodules
+        run: |
+          git config --global url."https://".insteadOf git://
+          git submodule update --init --recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet publish src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -o build/dist -r ${{ matrix.rid }} --self-contained
+      - name: Write version
+        shell: bash
+        run: echo "0.0.0-dev.$(date +%Y%m%d).$(echo ${{ github.sha }} | cut -c1-7)" > build/dist/v.txt
+      - name: Bundle script updater
+        shell: bash
+        run: |
+          mkdir -p build/dist/LegionScripts
+          curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
+            -o build/dist/LegionScripts/Script_Updater.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TazUO-${{ matrix.rid }}
+          path: build/dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Zip artifacts
+        run: |
+          for dir in TazUO-*/; do
+            name="${dir%/}"
+            (cd "$dir" && zip -r "../${name}.zip" .)
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: TazUO-BleedingEdge
+          prerelease: true
+          make_latest: false
+          files: TazUO-*.zip
+          body: |
+            Automated bleeding-edge build from main branch.
+            Commit: ${{ github.sha }}

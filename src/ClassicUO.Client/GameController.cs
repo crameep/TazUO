@@ -49,7 +49,7 @@ namespace ClassicUO
         private bool _pluginsInitialized;
         private Rectangle bufferRect = Rectangle.Empty;
         private RenderTarget2D _screenRenderTarget;
-        private bool _useScreenRenderTarget = true; // Re-enabling to debug rendering issues
+        private bool _useScreenRenderTarget = false;
 
         private static Vector3 bgHueShader = new(0, 0, 0.3f);
         private bool drawScene;
@@ -68,7 +68,7 @@ namespace ClassicUO
 
             Window.ClientSizeChanged += WindowOnClientSizeChanged;
             Window.AllowUserResizing = true;
-            Window.Title = $"TazUO - {CUOEnviroment.Version}";
+            Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build";
             IsMouseVisible = Settings.GlobalSettings.RunMouseInASeparateThread;
 
             IsFixedTimeStep = false; // Settings.GlobalSettings.FixedTimeStep;
@@ -240,17 +240,17 @@ namespace ClassicUO
             if (string.IsNullOrEmpty(title))
             {
 #if DEV_BUILD
-                Window.Title = $"TazUO [dev] - {CUOEnviroment.Version}";
+                Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build [dev]";
 #else
-                Window.Title = $"[TazUO {CUOEnviroment.Version}]";
+                Window.Title = $"[TazUO {CUOEnviroment.Version}] crameeps build";
 #endif
             }
             else
             {
 #if DEV_BUILD
-                Window.Title = $"{title} - TazUO [dev] - {CUOEnviroment.Version}";
+                Window.Title = $"{title} - [TazUO {CUOEnviroment.Version}] crameeps build [dev]";
 #else
-                Window.Title = $"{title} - [TazUO {CUOEnviroment.Version}]";
+                Window.Title = $"{title} - [TazUO {CUOEnviroment.Version}] crameeps build";
 #endif
             }
         }

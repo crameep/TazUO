@@ -9,6 +9,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Linq;
 using System.Threading.Tasks;
 using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Utility.Logging;
@@ -18,6 +19,7 @@ namespace ClassicUO.Game.Managers
     [JsonSerializable(typeof(AutoLootManager.AutoLootConfigEntry))]
     [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
     [JsonSerializable(typeof(AutoLootManager.AutoLootPriority))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootProfile))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class AutoLootJsonContext : JsonSerializerContext
     {
@@ -35,14 +37,30 @@ namespace ClassicUO.Game.Managers
             }
             private set => field = value;
         }
-        public List<AutoLootConfigEntry> AutoLootList { get => _autoLootItems; set => _autoLootItems = value; }
+        public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; }
+
+        private const int SCAVENGER_TRACKING_RADIUS = 20;
 
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
-        private static readonly Queue<(uint item, AutoLootConfigEntry entry)> _lootItems = new ();
-        private List<AutoLootConfigEntry> _autoLootItems = new ();
-        private bool _loaded = false;
+        internal readonly HashSet<uint> _nearbyGroundItems = new();
+        private static readonly PriorityQueue<(uint item, AutoLootConfigEntry entry), int> _lootItems = new ();
+        internal volatile List<AutoLootConfigEntry> _mergedEntries = new ();
+        private volatile int _activeProfileCount = 0;
+        internal Dictionary<int, List<AutoLootConfigEntry>> _graphicIndex = new();
+        internal List<AutoLootConfigEntry> _wildcardEntries = new();
+        internal readonly Dictionary<uint, AutoLootConfigEntry> _matchCache = new();
+        internal readonly HashSet<uint> _matchCacheHasOpl = new();
+        private volatile bool _loaded = false;
+        public bool Loaded => _loaded;
         private readonly string _savePath;
+        private readonly string _profilesDir;
+        private string _migrationSourcePath;
+        public bool NeedsMigration => _migrationSourcePath != null;
+        public string MigrationSourcePath => _migrationSourcePath;
+
+        public List<AutoLootProfile> Profiles { get; set; } = new();
+        public AutoLootProfile SelectedProfile { get; set; }
         private long _nextLootTime = Time.Ticks;
         private long _nextClearRecents = Time.Ticks + 5000;
         private ProgressBarGump _progressBarGump;
@@ -55,7 +73,31 @@ namespace ClassicUO.Game.Managers
         {
             _world = Client.Game.UO.World;
             _savePath = Path.Combine(ProfileManager.ProfilePath, "AutoLoot.json");
+            _profilesDir = Path.Combine(ProfileManager.ProfilePath, "AutoLootProfiles");
         }
+
+        /// <summary>
+        /// Internal constructor for unit testing. Does not initialize world or save path.
+        /// </summary>
+        internal AutoLootManager(bool testMode)
+        {
+        }
+
+        /// <summary>
+        /// Internal constructor for unit testing with a World instance.
+        /// </summary>
+        internal AutoLootManager(World world)
+        {
+            _world = world;
+        }
+
+        public void NotifyEntryChanged() => RebuildMergedList();
+
+        /// <summary>
+        /// Lighter-weight notification for changes that don't affect graphic bucketing
+        /// (e.g. hue or regex changes). Only clears the match cache so items are re-evaluated.
+        /// </summary>
+        public void NotifyMatchCriteriaChanged() => ClearMatchCache();
 
         public bool IsBeingLooted(uint serial) => _quickContainsLookup.Contains(serial);
 
@@ -69,7 +111,13 @@ namespace ClassicUO.Game.Managers
         {
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
 
-            _lootItems.Enqueue((item, entry));
+            int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
+            // Corpse items get a priority boost so they're dequeued before ground items
+            // of the same AutoLootPriority. This is handled here (not in the ObjectActionQueue)
+            // to avoid OAQ priority starvation where ground items would never be processed
+            // while corpse items keep flowing in.
+            if (!item.OnGround) pri -= 100;
+            _lootItems.Enqueue((item.Serial, entry), pri);
             _currentLootTotalCount++;
             _nextClearRecents = Time.Ticks + 5000;
         }
@@ -81,6 +129,11 @@ namespace ClassicUO.Game.Managers
             if (cont == null) return;
 
             for (LinkedObject i = cont.Items; i != null; i = i.Next) CheckAndLoot((Item)i);
+        }
+
+        internal static bool IsTrackableGroundItem(Item item)
+        {
+            return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
         }
 
         /// <summary>
@@ -109,22 +162,74 @@ namespace ClassicUO.Game.Managers
 
         /// <summary>
         /// Check if an item is on the auto loot list.
+        /// Uses graphic index for O(1) lookup by graphic ID, with match cache for repeated checks.
+        /// Multiple active profiles: returns the match with highest Priority.
         /// </summary>
         /// <param name="i">The item to check the loot list against</param>
         /// <returns>The matched AutoLootConfigEntry, or null if no match found</returns>
-        private AutoLootConfigEntry IsOnLootList(Item i)
+        internal AutoLootConfigEntry IsOnLootList(Item i)
         {
             if (!_loaded) return null;
 
-            foreach (AutoLootConfigEntry entry in _autoLootItems)
-                if (entry.Match(i))
-                    return entry;
+            bool oplChecked = false;
+            bool oplAvailable = false;
 
-            return null;
+            // Check cache first
+            if (_matchCache.TryGetValue(i.Serial, out AutoLootConfigEntry cached))
+            {
+                if (cached != null)
+                    return cached; // Positive cache hit — already matched
+
+                // Negative cache hit — check for stale OPL state
+                oplAvailable = _world.OPL.TryGetNameAndData(i.Serial, out _, out _);
+                oplChecked = true;
+                bool hadOplWhenCached = _matchCacheHasOpl.Contains(i.Serial);
+
+                if (!oplAvailable || hadOplWhenCached)
+                    return null; // Valid negative cache
+
+                // OPL is now available but wasn't when we cached — stale, fall through to re-evaluate
+            }
+
+            // Cache miss or stale negative cache — run matching logic
+            if (!oplChecked)
+                oplAvailable = _world.OPL.TryGetNameAndData(i.Serial, out _, out _);
+            AutoLootConfigEntry result = null;
+
+            if (_graphicIndex.TryGetValue(i.Graphic, out List<AutoLootConfigEntry> entries))
+                foreach (AutoLootConfigEntry entry in entries)
+                    if (entry.Match(i))
+                    {
+                        if (result == null || entry.Priority > result.Priority)
+                            result = entry;
+                        if (result.Priority == AutoLootPriority.High)
+                            break;
+                    }
+
+            if (result == null || result.Priority != AutoLootPriority.High)
+                foreach (AutoLootConfigEntry entry in _wildcardEntries)
+                    if (entry.Match(i))
+                    {
+                        if (result == null || entry.Priority > result.Priority)
+                            result = entry;
+                        if (result.Priority == AutoLootPriority.High)
+                            break;
+                    }
+
+            // Store result in cache
+            _matchCache[i.Serial] = result;
+
+            if (oplAvailable)
+                _matchCacheHasOpl.Add(i.Serial);
+            else
+                _matchCacheHasOpl.Remove(i.Serial);
+
+            return result;
         }
 
         /// <summary>
         /// Add an entry for auto looting to match against when opening corpses.
+        /// Routes to SelectedProfile's entry list.
         /// </summary>
         /// <param name="graphic"></param>
         /// <param name="hue"></param>
@@ -132,15 +237,42 @@ namespace ClassicUO.Game.Managers
         /// <returns></returns>
         public AutoLootConfigEntry AddAutoLootEntry(ushort graphic = 0, ushort hue = ushort.MaxValue, string name = "")
         {
+            AutoLootProfile profile = EnsureSelectedProfile();
+            if (profile == null)
+                return null;
+
             var item = new AutoLootConfigEntry() { Graphic = graphic, Hue = hue, Name = name };
 
-            foreach (AutoLootConfigEntry entry in _autoLootItems)
+            foreach (AutoLootConfigEntry entry in profile.Entries)
                 if (entry.Equals(item))
                     return entry;
 
-            _autoLootItems.Add(item);
+            profile.Entries.Add(item);
+            RebuildMergedList();
+            SaveProfile(profile);
 
             return item;
+        }
+
+        private AutoLootProfile EnsureSelectedProfile()
+        {
+            if (SelectedProfile != null)
+                return SelectedProfile;
+
+            if (!_loaded)
+            {
+                Log.Warn("AddAutoLootEntry called before profiles are loaded");
+                return null;
+            }
+
+            if (Profiles.Count > 0)
+            {
+                SelectedProfile = Profiles[0];
+                return SelectedProfile;
+            }
+
+            SelectedProfile = CreateProfile("Default");
+            return SelectedProfile;
         }
 
         /// <summary>
@@ -165,20 +297,37 @@ namespace ClassicUO.Game.Managers
 
             for (LinkedObject i = corpse.Items; i != null; i = i.Next)
                 CheckAndLoot((Item)i);
-            
+
             if(ProfileManager.CurrentProfile.HueCorpseAfterAutoloot)
                 corpse.Hue = 73;
         }
 
         public void TryRemoveAutoLootEntry(string uid)
         {
+            if (!_loaded)
+                return;
+
+            AutoLootProfile profile = SelectedProfile;
+            if (profile == null)
+                return;
+
             int removeAt = -1;
 
-            for (int i = 0; i < _autoLootItems.Count; i++)
-                if (_autoLootItems[i].Uid == uid)
+            for (int i = 0; i < profile.Entries.Count; i++)
+            {
+                if (profile.Entries[i].Uid == uid)
+                {
                     removeAt = i;
+                    break;
+                }
+            }
 
-            if (removeAt > -1) _autoLootItems.RemoveAt(removeAt);
+            if (removeAt > -1)
+            {
+                profile.Entries.RemoveAt(removeAt);
+                RebuildMergedList();
+                SaveProfile(profile);
+            }
         }
 
         /// <summary>
@@ -208,7 +357,7 @@ namespace ClassicUO.Game.Managers
 
         public void OnSceneLoad()
         {
-            Load();
+            LoadProfiles();
             EventSink.OPLOnReceive += OnOPLReceived;
             EventSink.OnItemCreated += OnItemCreatedOrUpdated;
             EventSink.OnItemUpdated += OnItemCreatedOrUpdated;
@@ -223,30 +372,61 @@ namespace ClassicUO.Game.Managers
             EventSink.OnItemUpdated -= OnItemCreatedOrUpdated;
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
-            Save();
+            _nearbyGroundItems.Clear();
+            ClearMatchCache();
+            SaveAll();
             Instance = null;
         }
 
-        /// <summary>
-        /// Invoked whenever the player changes position.
-        ///
-        /// The other looter entry points are item update events but those are not enough;
-        /// If the player opens a corpse and walks away a few steps, there wouldn't be any new events firing.
-        ///
-        /// This handler effectively allows re-triggering as soon as the corpses are back in range.
-        ///
-        /// Note that this venue kicks in only when distance is less than 3.
-        /// </summary>
-        /// <param name="sender">The source event sink</param>
-        /// <param name="e">The position change event arguments</param>
-        private void OnPositionChanged(object sender, PositionChangedArgs e)
+        internal void OnPositionChanged(object sender, PositionChangedArgs e)
         {
             if (!_loaded) return;
 
             if (ProfileManager.CurrentProfile.EnableScavenger)
-                foreach (Item item in _world.Items.Values)
-                    if (item != null && item.OnGround && !item.IsLocked && !item.IsCorpse && item.Distance < 3)
+            {
+                if (_nearbyGroundItems.Count == 0)
+                {
+                    BootstrapNearbyGroundItems();
+                    return;
+                }
+
+                List<uint> toRemove = null;
+                List<Item> toLoot = null;
+
+                // Snapshot to avoid collection-modified-during-enumeration if CheckAndLoot
+                // triggers events that call OnItemCreatedOrUpdated (which modifies _nearbyGroundItems).
+                uint[] snapshot = new uint[_nearbyGroundItems.Count];
+                _nearbyGroundItems.CopyTo(snapshot);
+
+                foreach (uint serial in snapshot)
+                {
+                    Item item = _world.Items.Get(serial);
+
+                    if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+                    {
+                        (toRemove ??= new List<uint>()).Add(serial);
+                        continue;
+                    }
+
+                    if (item.Distance >= SCAVENGER_TRACKING_RADIUS)
+                    {
+                        (toRemove ??= new List<uint>()).Add(serial);
+                        continue;
+                    }
+
+                    if (item.Distance < ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                        (toLoot ??= new List<Item>()).Add(item);
+                }
+
+                if (toRemove != null)
+                    foreach (uint serial in toRemove)
+                        _nearbyGroundItems.Remove(serial);
+
+                // Loot after iteration is complete to avoid re-entrancy issues
+                if (toLoot != null)
+                    foreach (Item item in toLoot)
                         CheckAndLoot(item);
+            }
 
             if (IsEnabled)
                 foreach (Item corpse in _world.GetCorpseSnapshot())
@@ -266,16 +446,44 @@ namespace ClassicUO.Game.Managers
 
             if (sender is Item i)
             {
+                _matchCache.Remove(i.Serial);
+                _matchCacheHasOpl.Remove(i.Serial);
+
                 CheckCorpse(i);
 
-                // Check for ground items to auto-loot (scavenger functionality)
-                if (ProfileManager.CurrentProfile.EnableScavenger && i.OnGround && !i.IsCorpse && !i.IsLocked && i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange) CheckAndLoot(i);
+                // Maintain spatial tracking set for scavenger.
+                // Items within range are added to the set and will be checked for looting
+                // during OnPositionChanged, so no immediate CheckAndLoot is needed here.
+                if (ProfileManager.CurrentProfile.EnableScavenger)
+                {
+                    if (IsTrackableGroundItem(i) && i.Distance <= SCAVENGER_TRACKING_RADIUS)
+                    {
+                        _nearbyGroundItems.Add(i.Serial);
+                    }
+                    else
+                    {
+                        _nearbyGroundItems.Remove(i.Serial);
+                    }
+                }
+            }
+        }
+
+        internal void BootstrapNearbyGroundItems()
+        {
+            _nearbyGroundItems.Clear();
+
+            foreach (Item item in _world.Items.Values)
+            {
+                if (IsTrackableGroundItem(item) && item.Distance <= SCAVENGER_TRACKING_RADIUS)
+                    _nearbyGroundItems.Add(item.Serial);
             }
         }
 
         private void OnOPLReceived(object sender, OPLEventArgs e)
         {
             if (!_loaded || !IsEnabled) return;
+            _matchCache.Remove(e.Serial);
+            _matchCacheHasOpl.Remove(e.Serial);
             Item item = _world.Items.Get(e.Serial);
             if (item != null)
                 CheckCorpse(item);
@@ -296,6 +504,7 @@ namespace ClassicUO.Game.Managers
                 if (Time.Ticks > _nextClearRecents)
                 {
                     _recentlyLooted.Clear();
+                    ClearMatchCache();
                     _nextClearRecents = Time.Ticks + 5000;
                 }
                 return;
@@ -381,116 +590,433 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        private void Load()
+        private void LoadProfiles()
         {
-            if (_loaded) return;
-
             Task.Factory.StartNew(() =>
             {
-                string oldPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles", "AutoLoot.json");
-                if(File.Exists(oldPath))
-                    File.Move(oldPath, _savePath);
-
-                if (!File.Exists(_savePath))
-                {
-                    _autoLootItems = new List<AutoLootConfigEntry>();
-                    Log.Error("Auto loot save path not found, creating new..");
-                    _loaded = true;
-                }
-                else
-                {
-                    Log.Info($"Loading: {_savePath}");
-                    try
-                    {
-                        JsonHelper.Load(_savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out _autoLootItems);
-
-                        if (_autoLootItems == null)
-                        {
-                            Log.Error("There was an error loading your auto loot config file, defaulted to no configs.");
-                            _autoLootItems = new();
-                        }
-
-                        _loaded = true;
-                    }
-                    catch
-                    {
-                        Log.Error("There was an error loading your auto loot config file, please check it with a json validator.");
-                        _loaded = false;
-                    }
-
-                }
-            });
-        }
-
-        public void Save()
-        {
-            if (_loaded)
                 try
                 {
-                    JsonHelper.SaveAndBackup(_autoLootItems, _savePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                    Directory.CreateDirectory(_profilesDir);
                 }
-                catch (Exception e) { Console.WriteLine(e.ToString()); }
-        }
-
-        public void ExportToFile(string filePath)
-        {
-            try
-            {
-                string fileData = JsonSerializer.Serialize(_autoLootItems, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
-                File.WriteAllText(filePath, fileData);
-                GameActions.Print($"Autoloot configuration exported to: {filePath}", 0x48);
-            }
-            catch (Exception e)
-            {
-                GameActions.Print($"Error exporting autoloot configuration: {e.Message}", Constants.HUE_ERROR);
-            }
-        }
-
-        public void ImportFromFile(string filePath)
-        {
-            try
-            {
-                if (!File.Exists(filePath))
+                catch (Exception e)
                 {
-                    GameActions.Print($"File not found: {filePath}", Constants.HUE_ERROR);
+                    Log.Error($"Failed to create auto loot profiles directory: {e.Message}");
                     return;
                 }
 
-                string data = File.ReadAllText(filePath);
-                List<AutoLootConfigEntry> importedItems = JsonSerializer.Deserialize(data, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                // Migration state detection: check conditions in priority order
+                string[] files;
+                try
+                {
+                    files = Directory.GetFiles(_profilesDir, "*.json");
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Failed to scan auto loot profiles directory: {e.Message}");
+                    return;
+                }
 
-                if (importedItems != null) ImportEntries(importedItems, $"file: {filePath}");
+                if (files.Length > 0)
+                {
+                    // State 1: Directory has .json files — normal load, no migration
+                    Log.Info("AutoLoot profiles directory found with existing profiles, loading normally.");
+                }
+                else
+                {
+                    // Directory is empty (or only has .backup files).
+                    // Check for legacy AutoLoot.json files to migrate.
+                    string ancientPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles", "AutoLoot.json");
+
+                    if (File.Exists(_savePath))
+                    {
+                        // State 3: AutoLoot.json at ProfileManager.ProfilePath — flag for migration
+                        _migrationSourcePath = _savePath;
+                        Log.Info($"Legacy AutoLoot.json found at profile path, flagged for migration: {_savePath}");
+
+                        if (File.Exists(ancientPath))
+                            Log.Warn($"Legacy AutoLoot.json also exists at ancient path ({ancientPath}), using profile path version.");
+                    }
+                    else if (File.Exists(ancientPath))
+                    {
+                        // State 4: AutoLoot.json at ancient executable path — READ only, flag for migration
+                        _migrationSourcePath = ancientPath;
+                        Log.Info($"Legacy AutoLoot.json found at ancient path, flagged for migration: {ancientPath}");
+                    }
+                    else
+                    {
+                        // State 2/5: No legacy files exist — create empty Default profile
+                        Log.Info("No existing auto loot data found, creating Default profile.");
+                        var defaultProfile = CreateDefaultProfile();
+                        SaveProfile(defaultProfile);
+                        files = new[] { Path.Combine(_profilesDir, defaultProfile.FileName) };
+                    }
+                }
+
+                // Perform migration if a legacy file was detected
+                if (_migrationSourcePath != null)
+                {
+                    files = MigrateToDefaultProfile(files);
+                }
+                var loadedProfiles = new List<AutoLootProfile>();
+
+                foreach (string file in files)
+                {
+                    try
+                    {
+                        string json = File.ReadAllText(file);
+                        AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+                        if (profile == null)
+                        {
+                            Log.Error($"Failed to deserialize auto loot profile: {file}");
+                            continue;
+                        }
+
+                        profile.FileName = Path.GetFileName(file);
+                        loadedProfiles.Add(profile);
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error($"Error loading auto loot profile '{file}': {e.Message}");
+                    }
+                }
+
+                loadedProfiles.Sort((a, b) => a.DisplayOrder.CompareTo(b.DisplayOrder));
+                Profiles = loadedProfiles;
+                // Build merged list before marking as loaded so other threads
+                // see a populated _mergedEntries when they check _loaded.
+                var newList = new List<AutoLootConfigEntry>();
+                int activeCount = 0;
+                foreach (AutoLootProfile profile in loadedProfiles)
+                {
+                    if (profile.IsActive)
+                    {
+                        newList.AddRange(profile.Entries);
+                        activeCount++;
+                    }
+                }
+                _activeProfileCount = activeCount;
+                _mergedEntries = newList;
+                RebuildGraphicIndex();
+                _loaded = true;
+            });
+        }
+
+        private AutoLootProfile CreateDefaultProfile()
+        {
+            var profile = new AutoLootProfile
+            {
+                Name = "Default",
+                IsActive = true,
+                Entries = new List<AutoLootConfigEntry>(),
+                FileName = "Default.json"
+            };
+            return profile;
+        }
+
+        /// <summary>
+        /// Migrates entries from a legacy AutoLoot.json into a new Default profile.
+        /// Reads the legacy file via JsonHelper.Load (which tries backup files too),
+        /// creates a Default profile with those entries, and saves it to the profiles directory.
+        /// The original legacy file is left untouched.
+        /// </summary>
+        /// <param name="currentFiles">The current array of .json files in the profiles directory</param>
+        /// <returns>Updated files array including the newly created Default.json</returns>
+        private string[] MigrateToDefaultProfile(string[] currentFiles)
+        {
+            List<AutoLootConfigEntry> legacyEntries = null;
+
+            try
+            {
+                if (JsonHelper.Load(_migrationSourcePath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out legacyEntries))
+                {
+                    legacyEntries ??= new List<AutoLootConfigEntry>();
+                }
+                else
+                {
+                    Log.Error($"Failed to load legacy AutoLoot.json from '{_migrationSourcePath}', creating empty Default profile.");
+                    legacyEntries = new List<AutoLootConfigEntry>();
+                }
             }
             catch (Exception e)
             {
-                GameActions.Print($"Error importing autoloot configuration: {e.Message}", Constants.HUE_ERROR);
+                Log.Error($"Error reading legacy AutoLoot.json from '{_migrationSourcePath}': {e.Message}");
+                legacyEntries = new List<AutoLootConfigEntry>();
+            }
+
+            var defaultProfile = new AutoLootProfile
+            {
+                Name = "Default",
+                IsActive = true,
+                Entries = legacyEntries,
+                FileName = "Default.json"
+            };
+
+            SaveProfile(defaultProfile);
+
+            int entryCount = legacyEntries.Count;
+            Log.Info($"Migrated {entryCount} entries from AutoLoot.json to Default profile.");
+            GameActions.Print($"Migrated {entryCount} auto loot entries to Default profile.", 0x48);
+
+            _migrationSourcePath = null;
+
+            // currentFiles is always empty during migration (states 3/4 only trigger
+            // when no .json files exist in the profiles dir), so just return the new file
+            return new[] { Path.Combine(_profilesDir, defaultProfile.FileName) };
+        }
+
+        public void SaveProfile(AutoLootProfile profile)
+        {
+            if (profile == null || string.IsNullOrWhiteSpace(profile.FileName))
+            {
+                Log.Error($"Cannot save profile: {(profile == null ? "null profile" : "empty FileName")}");
+                return;
+            }
+
+            try
+            {
+                if (!Directory.Exists(_profilesDir))
+                    Directory.CreateDirectory(_profilesDir);
+
+                string fullPath = Path.Combine(_profilesDir, profile.FileName);
+                JsonHelper.SaveAndBackup(profile, fullPath, AutoLootJsonContext.Default.AutoLootProfile);
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error saving profile '{profile.Name}': {e.Message}");
             }
         }
 
-        public void ImportFromOtherCharacter(string characterName, List<AutoLootConfigEntry> entries)
+        /// <summary>
+        /// Rebuilds the merged entry list from all active profiles, then rebuilds
+        /// the graphic index and clears the match cache.
+        /// Uses atomic reference swap to prevent ConcurrentModificationException
+        /// when IsOnLootList iterates on the network thread while the UI triggers a rebuild.
+        /// </summary>
+        public void RebuildMergedList()
+        {
+            if (!_loaded)
+                return;
+
+            var newList = new List<AutoLootConfigEntry>();
+            int activeCount = 0;
+
+            foreach (AutoLootProfile profile in Profiles)
+            {
+                if (profile.IsActive)
+                {
+                    newList.AddRange(profile.Entries);
+                    activeCount++;
+                }
+            }
+
+            _activeProfileCount = activeCount;
+            _mergedEntries = newList;
+            RebuildGraphicIndex();
+        }
+
+        internal void ClearMatchCache()
+        {
+            _matchCache.Clear();
+            _matchCacheHasOpl.Clear();
+        }
+
+        public void RebuildGraphicIndex()
+        {
+            _graphicIndex.Clear();
+            _wildcardEntries.Clear();
+            ClearMatchCache();
+
+            foreach (AutoLootConfigEntry entry in _mergedEntries)
+            {
+                if (entry.Graphic == -1)
+                {
+                    _wildcardEntries.Add(entry);
+                }
+                else
+                {
+                    if (!_graphicIndex.TryGetValue(entry.Graphic, out List<AutoLootConfigEntry> bucket))
+                    {
+                        bucket = new List<AutoLootConfigEntry>();
+                        _graphicIndex[entry.Graphic] = bucket;
+                    }
+                    bucket.Add(entry);
+                }
+            }
+        }
+
+        public void ReorderProfile(int fromIndex, int toIndex)
+        {
+            if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0
+                || fromIndex >= Profiles.Count || toIndex >= Profiles.Count)
+                return;
+
+            AutoLootProfile profile = Profiles[fromIndex];
+            Profiles.RemoveAt(fromIndex);
+            Profiles.Insert(toIndex, profile);
+
+            for (int i = 0; i < Profiles.Count; i++)
+                Profiles[i].DisplayOrder = i;
+
+            SaveAll();
+        }
+
+        public void SaveAll()
+        {
+            if (!_loaded)
+                return;
+
+            foreach (AutoLootProfile profile in Profiles)
+            {
+                SaveProfile(profile);
+            }
+        }
+
+        public AutoLootProfile CreateProfile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                name = "New Profile";
+
+            string uniqueName = GetUniqueName(name);
+            string fileName = SanitizeFileName(uniqueName);
+
+            var profile = new AutoLootProfile
+            {
+                Name = uniqueName,
+                IsActive = true,
+                Entries = new List<AutoLootConfigEntry>(),
+                FileName = fileName,
+                DisplayOrder = GetNextDisplayOrder()
+            };
+
+            Profiles.Add(profile);
+            SaveProfile(profile);
+
+            return profile;
+        }
+
+        public void DeleteProfile(AutoLootProfile profile)
+        {
+            if (profile == null || Profiles.Count <= 1)
+                return;
+
+            if (!string.IsNullOrWhiteSpace(profile.FileName))
+            {
+                string basePath = Path.Combine(_profilesDir, profile.FileName);
+
+                try
+                {
+                    if (File.Exists(basePath))
+                        File.Delete(basePath);
+
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        string backupPath = basePath + ".backup" + i;
+                        if (File.Exists(backupPath))
+                            File.Delete(backupPath);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Error deleting profile files for '{profile.Name}': {e.Message}");
+                }
+            }
+
+            Profiles.Remove(profile);
+
+            if (SelectedProfile == profile)
+                SelectedProfile = Profiles.Count > 0 ? Profiles[0] : null;
+
+            RebuildMergedList();
+        }
+
+        public void RenameProfile(AutoLootProfile profile, string newName)
+        {
+            if (profile == null || string.IsNullOrWhiteSpace(newName))
+                return;
+
+            string uniqueName = GetUniqueName(newName, profile);
+            string newFileName = SanitizeFileName(uniqueName, profile.FileName);
+
+            // Delete old files from disk
+            if (!string.IsNullOrWhiteSpace(profile.FileName))
+            {
+                string oldBasePath = Path.Combine(_profilesDir, profile.FileName);
+
+                try
+                {
+                    if (File.Exists(oldBasePath))
+                        File.Delete(oldBasePath);
+
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        string backupPath = oldBasePath + ".backup" + i;
+                        if (File.Exists(backupPath))
+                            File.Delete(backupPath);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error($"Error deleting old profile files during rename of '{profile.Name}': {e.Message}");
+                }
+            }
+
+            profile.Name = uniqueName;
+            profile.FileName = newFileName;
+            SaveProfile(profile);
+        }
+
+
+        public AutoLootProfile ImportFromOtherCharacter(string characterName, List<AutoLootConfigEntry> entries)
         {
             try
             {
-                if (entries != null && entries.Count > 0)
-                    ImportEntries(entries, $"character: {characterName}");
-                else
+                if (entries == null || entries.Count == 0)
+                {
                     GameActions.Print($"No autoloot entries found for character: {characterName}", Constants.HUE_ERROR);
+                    return null;
+                }
+
+                string name = GetUniqueName($"Import - {characterName}");
+                var profile = new AutoLootProfile
+                {
+                    Name = name,
+                    IsActive = false,
+                    Entries = entries,
+                    FileName = SanitizeFileName(name),
+                    DisplayOrder = GetNextDisplayOrder()
+                };
+
+                Profiles.Add(profile);
+                SaveProfile(profile);
+                RebuildMergedList();
+
+                GameActions.Print($"Imported {entries.Count} entries from {characterName} into new profile '{name}'.", 0x48);
+                return profile;
             }
             catch (Exception e)
             {
                 GameActions.Print($"Error importing from other character: {e.Message}", Constants.HUE_ERROR);
+                return null;
             }
         }
 
-        private void ImportEntries(List<AutoLootConfigEntry> entries, string source)
+        private void ImportEntries(List<AutoLootConfigEntry> entries, string source, AutoLootProfile targetProfile = null)
         {
+            targetProfile ??= EnsureSelectedProfile();
+            if (targetProfile == null)
+            {
+                GameActions.Print("No profile available to import into.", Constants.HUE_ERROR);
+                return;
+            }
+
             var newItems = new List<AutoLootConfigEntry>();
             int duplicateCount = 0;
 
             foreach (AutoLootConfigEntry importedItem in entries)
             {
                 bool isDuplicate = false;
-                foreach (AutoLootConfigEntry existingItem in _autoLootItems)
+                foreach (AutoLootConfigEntry existingItem in targetProfile.Entries)
                     if (existingItem.Equals(importedItem))
                     {
                         isDuplicate = true;
@@ -503,8 +1029,9 @@ namespace ClassicUO.Game.Managers
 
             if (newItems.Count > 0)
             {
-                _autoLootItems.AddRange(newItems);
-                Save();
+                targetProfile.Entries.AddRange(newItems);
+                RebuildMergedList();
+                SaveProfile(targetProfile);
             }
 
             string message = $"Imported {newItems.Count} new autoloot entries from {source}";
@@ -514,6 +1041,46 @@ namespace ClassicUO.Game.Managers
 
         public List<AutoLootConfigEntry> LoadOtherCharacterConfig(string characterPath)
         {
+            // Try profile directory first (new format)
+            string profilesDir = Path.Combine(characterPath, "AutoLootProfiles");
+            if (Directory.Exists(profilesDir))
+            {
+                var allEntries = new List<AutoLootConfigEntry>();
+                try
+                {
+                    string[] files = Directory.GetFiles(profilesDir, "*.json");
+                    foreach (string file in files)
+                    {
+                        try
+                        {
+                            string json = File.ReadAllText(file);
+                            AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+
+                            if (profile == null)
+                            {
+                                Log.Error($"Failed to deserialize auto loot profile: {file}");
+                                continue;
+                            }
+
+                            if (profile.Entries != null)
+                            {
+                                allEntries.AddRange(profile.Entries);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Log.Error($"Error loading auto loot profile '{file}' from other character: {e.Message}");
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    GameActions.Print($"Error scanning autoloot profiles from {profilesDir}: {e.Message}", Constants.HUE_ERROR);
+                }
+                return allEntries;
+            }
+
+            // Fall back to legacy AutoLoot.json
             try
             {
                 string configPath = Path.Combine(characterPath, "AutoLoot.json");
@@ -560,39 +1127,121 @@ namespace ClassicUO.Game.Managers
         }
 
         #nullable enable
-        public string? GetJsonExport()
+        public string? GetProfileJsonExport(AutoLootProfile profile)
         {
+            if (profile == null)
+                return null;
+
             try
             {
-                return JsonSerializer.Serialize(_autoLootItems, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                return JsonSerializer.Serialize(profile, AutoLootJsonContext.Default.AutoLootProfile);
             }
             catch (Exception e)
             {
-                Log.Error($"Error exporting autoloot to JSON: {e}");
+                Log.Error($"Error exporting autoloot profile to JSON: {e}");
             }
 
             return null;
         }
         #nullable disable
 
-        public bool ImportFromJson(string json)
+        public AutoLootProfile ImportProfileFromClipboard(string json)
         {
+            if (string.IsNullOrWhiteSpace(json) || !_loaded)
+                return null;
+
+            // Try new format: full AutoLootProfile
             try
             {
-                List<AutoLootConfigEntry> importedItems = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                AutoLootProfile profile = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.AutoLootProfile);
+                if (profile != null && profile.Entries != null)
+                    return FinalizeImportedProfile(profile);
+            }
+            catch (Exception e)
+            {
+                Log.Trace($"Clipboard is not an AutoLootProfile: {e.Message}");
+            }
 
-                if (importedItems != null)
+            // Try legacy format: List<AutoLootConfigEntry>
+            try
+            {
+                List<AutoLootConfigEntry> entries = JsonSerializer.Deserialize(json, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+                if (entries != null)
                 {
-                    ImportEntries(importedItems, "clipboard");
-                    return true;
+                    var profile = new AutoLootProfile
+                    {
+                        Name = "Imported",
+                        Entries = entries
+                    };
+                    return FinalizeImportedProfile(profile);
                 }
             }
             catch (Exception e)
             {
-                Log.Error($"Error importing autoloot from JSON: {e}");
+                Log.Trace($"Clipboard is not a List<AutoLootConfigEntry>: {e.Message}");
             }
 
-            return false;
+            return null;
+        }
+
+        private AutoLootProfile FinalizeImportedProfile(AutoLootProfile profile)
+        {
+            profile.Name = GetUniqueName(string.IsNullOrWhiteSpace(profile.Name) ? "Imported" : profile.Name);
+            profile.IsActive = false;
+            profile.FileName = SanitizeFileName(profile.Name);
+            profile.DisplayOrder = GetNextDisplayOrder();
+            Profiles.Add(profile);
+            RebuildMergedList();
+            SaveProfile(profile);
+            return profile;
+        }
+
+        private int GetNextDisplayOrder()
+        {
+            int max = -1;
+            foreach (AutoLootProfile p in Profiles)
+                if (p.DisplayOrder > max)
+                    max = p.DisplayOrder;
+            return max + 1;
+        }
+
+        public string GetUniqueName(string baseName, AutoLootProfile excludeProfile = null)
+        {
+            string name = baseName;
+            int i = 1;
+            while (Profiles.Any(p => p != excludeProfile && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+                name = $"{baseName} ({i++})";
+            return name;
+        }
+
+        public string SanitizeFileName(string name, string existingFileName = null)
+        {
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            string sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray());
+
+            if (string.IsNullOrWhiteSpace(sanitized))
+                sanitized = "profile";
+
+            string fileName = sanitized + ".json";
+
+            if (!Directory.Exists(_profilesDir))
+                return fileName;
+
+            int counter = 1;
+            while (counter < 10000)
+            {
+                string fullPath = Path.Combine(_profilesDir, fileName);
+                if (!File.Exists(fullPath))
+                    return fileName;
+
+                if (existingFileName != null && string.Equals(fileName, existingFileName, StringComparison.OrdinalIgnoreCase))
+                    return fileName;
+
+                fileName = $"{sanitized}_{counter}.json";
+                counter++;
+            }
+
+            return $"{sanitized}_{DateTime.Now.Ticks}.json";
         }
 
         public enum AutoLootPriority { Low = 0, Normal = 1, High = 2 }
@@ -637,13 +1286,24 @@ namespace ClassicUO.Game.Managers
                 string search = "";
                 if (world.OPL.TryGetNameAndData(compareTo, out string name, out string data))
                     search += name + data;
-                else
+                else if (!Client.UnitTestingActive)
                     search = StringHelper.GetPluralAdjustedString(compareTo.ItemData.Name);
 
                 return RegexHelper.GetRegex(RegexSearch, RegexOptions.Multiline).IsMatch(search);
             }
 
             public bool Equals(AutoLootConfigEntry other) => other.Graphic == Graphic && other.Hue == Hue && RegexSearch == other.RegexSearch;
+        }
+
+        public class AutoLootProfile
+        {
+            public string Name { get; set; } = "";
+            public bool IsActive { get; set; } = true;
+            public int DisplayOrder { get; set; } = 0;
+            public List<AutoLootConfigEntry> Entries { get; set; } = new();
+
+            [JsonIgnore]
+            public string FileName { get; set; } = "";
         }
     }
 }
