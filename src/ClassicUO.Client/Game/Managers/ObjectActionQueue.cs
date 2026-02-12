@@ -95,7 +95,6 @@ public enum ActionPriority
     Immediate,
     ManualUseItem, //Higher priority than regular useitem which may occur in scripts
     UseItem,
-    OpenCorpse,
     EquipItem,
     MoveItem,
     LootItemHigh,      //Auto-loot: High priority items

@@ -958,9 +958,10 @@ namespace ClassicUO.Game.Scenes
                     && _world.Player.IsHidden
             )
             {
-                ObjectActionQueue.Instance.ClearByPriority(ActionPriority.OpenCorpse);
+                CorpseOpenQueue.Clear();
             }
 
+            CorpseOpenQueue.Update();
             ObjectActionQueue.Instance.Update();
             AutoLootManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);
