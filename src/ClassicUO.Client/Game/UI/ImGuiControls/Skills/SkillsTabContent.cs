@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Numerics;
 using System.Text;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Network;
 using ImGuiNET;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -12,20 +15,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private int _sortColumnIndex = 1;
         private bool _sortAscending = true;
+        private PlayerMobile _player;
 
-        private uint playerSerial;
         private bool _showGroups;
 
         private int[] _sortedIndices;
 
         public SkillsTabContent()
         {
+            _player = World.Instance.Player;
             int count = Client.Game.UO.FileManager.Skills.SkillsCount;
             _sortedIndices = new int[count];
 
             for (int i = 0; i < count; i++) _sortedIndices[i] = i;
-
-            playerSerial = World.Instance.Player.Serial;
         }
 
         public override void DrawContent()
@@ -144,7 +146,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 Lock.Up => ImGuiTheme.Current.Success,
                 Lock.Down => ImGuiTheme.Current.Error,
-                _ => ImGuiTheme.Current.Info
+                _ => ImGuiTheme.Current.Warning
             };
 
             ImGui.PushStyleColor(ImGuiCol.Button, lockColor);
@@ -155,6 +157,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 byte nextLock = (byte)(((byte)skill.Lock + 1) % 3);
                 GameActions.ChangeSkillLockStatus((ushort)skill.Index, nextLock);
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
             }
 
             ImGui.PopStyleColor(3);
@@ -238,21 +241,27 @@ namespace ClassicUO.Game.UI.ImGuiControls
         {
             // Set All buttons
             if (ImGui.SmallButton("All Up"))
+            {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Up);
-
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
+            }
             ImGui.SameLine();
 
             if (ImGui.SmallButton("All Down"))
+            {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Down);
-
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
+            }
             ImGui.SameLine();
 
             if (ImGui.SmallButton("All Lock"))
+            {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Locked);
-
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
+            }
             ImGui.SameLine();
             ImGui.Text("|");
             ImGui.SameLine();
