@@ -111,7 +111,9 @@ jobs:
           # PkgInfo
           echo -n "APPL????" > "$CONTENTS/PkgInfo"
 
-          # Ad-hoc codesign
+          # Ad-hoc codesign: sign all code objects individually, then the bundle
+          find "$APP" -type f \( -name "*.dll" -o -name "*.dylib" \) -exec codesign --force --sign - {} \;
+          codesign --force --sign - "$APP/Contents/MacOS/TazUO"
           codesign --force --sign - "$APP"
 
           # Zip the .app bundle
