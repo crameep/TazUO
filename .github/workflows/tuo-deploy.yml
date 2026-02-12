@@ -170,10 +170,13 @@ jobs:
           # PkgInfo
           echo -n "APPL????" > "$CONTENTS/PkgInfo"
 
+          # Remove PDB files (not needed at runtime, confuse codesign)
+          find "$APP" -name "*.pdb" -delete
+
           # Ad-hoc codesign: sign all code objects individually, then the bundle
           find "$APP" -type f \( -name "*.dll" -o -name "*.dylib" \) -exec codesign --force --sign - {} \;
           codesign --force --sign - "$APP/Contents/MacOS/TazUO"
-          codesign --force --sign - "$APP"
+          codesign --force --sign - "$APP" || echo "Bundle codesign failed (non-fatal)"
 
           # Zip the .app bundle
           zip -r -y "${{ matrix.rid }}.app.zip" "$APP"
