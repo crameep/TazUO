@@ -112,6 +112,11 @@ namespace ClassicUO.Game.Managers
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
 
             int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
+            // Corpse items get a priority boost so they're dequeued before ground items
+            // of the same AutoLootPriority. This is handled here (not in the ObjectActionQueue)
+            // to avoid OAQ priority starvation where ground items would never be processed
+            // while corpse items keep flowing in.
+            if (!item.OnGround) pri -= 100;
             _lootItems.Enqueue((item.Serial, entry), pri);
             _currentLootTotalCount++;
             _nextClearRecents = Time.Ticks + 5000;
@@ -557,25 +562,12 @@ namespace ClassicUO.Game.Managers
 
             if (destinationSerial != 0)
             {
-                ActionPriority lootPriority;
-                if (moveItem.OnGround)
+                ActionPriority lootPriority = entry?.Priority switch
                 {
-                    lootPriority = entry?.Priority switch
-                    {
-                        AutoLootPriority.High => ActionPriority.ScavengeItemHigh,
-                        AutoLootPriority.Low => ActionPriority.ScavengeItem,
-                        _ => ActionPriority.ScavengeItemMedium,
-                    };
-                }
-                else
-                {
-                    lootPriority = entry?.Priority switch
-                    {
-                        AutoLootPriority.High => ActionPriority.LootItemHigh,
-                        AutoLootPriority.Low => ActionPriority.LootItem,
-                        _ => ActionPriority.LootItemMedium,
-                    };
-                }
+                    AutoLootPriority.High => ActionPriority.LootItemHigh,
+                    AutoLootPriority.Low => ActionPriority.LootItem,
+                    _ => ActionPriority.LootItemMedium,
+                };
                 ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), lootPriority);
             }
             else
