@@ -107,7 +107,7 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
             ImGui.Text(_previewTitle);
             ImGui.Separator();
 
-            Vector2 contentSize = new Vector2(-1, ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeightWithSpacing() - ImGui.GetStyle().ItemSpacing.Y);
+            var contentSize = new Vector2(-1, ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeightWithSpacing() - ImGui.GetStyle().ItemSpacing.Y);
 
             if (_previewLoading)
             {

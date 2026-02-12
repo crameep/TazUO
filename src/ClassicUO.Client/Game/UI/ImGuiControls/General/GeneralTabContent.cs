@@ -16,7 +16,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private readonly Profile _profile = ProfileManager.CurrentProfile;
         private int _objectMoveDelay;
-        private bool _highlightObjects, _petScaling, _disableWeather, _useLongDistancePathing, _showNames, _autoOpenOwnCorpse, _autoUnequipForActions;
+        private bool _highlightObjects, _petScaling, _disableWeather, _useLongDistancePathing, _showNames, _autoOpenOwnCorpse, _autoUnequipForActions, _outlineMobiles;
         private ushort _turnDelay;
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
@@ -54,6 +54,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _gameScale = (int)(100 * Client.Game.RenderScale);
             _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
             _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
+            _outlineMobiles = _profile.OutlineMobilesNotoriety;
 
             var heal = SpellDefinition.FullIndexGetSpell(_profile.QuickHealSpell);
             var cure = SpellDefinition.FullIndexGetSpell(_profile.QuickCureSpell);
@@ -204,6 +205,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         mob.Scale = _petScaling ? 0.6f : 1f;
                 }
             }
+
+            if (ImGui.Checkbox("Outline mobiles", ref _outlineMobiles)) _profile.OutlineMobilesNotoriety = _outlineMobiles;
+            ImGuiComponents.Tooltip("Outline mobiles based on their notoriety");
 
             ImGui.SetNextItemWidth(125);
             if (ImGui.SliderInt("Min Gump Drag Distance", ref _minGumpMoveDist, 0, 20))

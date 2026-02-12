@@ -794,6 +794,19 @@ namespace ClassicUO.Configuration
             }
         }
 
+        [JsonIgnore]
+        public bool OutlineMobilesNotoriety
+        {
+            get;
+            set
+            {
+                if (field != value)
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.OUTLINE_NOTORIETIES, value);
+
+                field = value;
+            }
+        }
+
         private long lastSave;
 
         internal void AfterLoad()
@@ -833,7 +846,8 @@ namespace ClassicUO.Configuration
             //These must be waited before continue for various purposes elsewhere
             Task[] mustWait = [
                 Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_AUTO_START, false, b => WebMapAutoStart = b),
-                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, p => WebMapServerPort = p)
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.WEB_MAP_PORT, 8088, p => WebMapServerPort = p),
+                Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.OUTLINE_NOTORIETIES, false, p => OutlineMobilesNotoriety = p)
             ];
 
             Task.WaitAll(mustWait, 5000);
