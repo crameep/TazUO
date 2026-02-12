@@ -76,6 +76,23 @@ jobs:
           mkdir -p build/dist/LegionScripts
           curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
             -o build/dist/LegionScripts/Script_Updater.py
+      - name: Generate macOS icon
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        run: |
+          sips -s format png src/ClassicUO.Client/cuoicon.ico --out icon_base.png
+          mkdir -p icon.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size icon_base.png --out icon.iconset/icon_${size}x${size}.png
+          done
+          for size in 16 32 128 256; do
+            double=$((size * 2))
+            cp icon.iconset/icon_${double}x${double}.png icon.iconset/icon_${size}x${size}@2x.png
+          done
+          sips -z 1024 1024 icon_base.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o icon.icns
+          cp icon.icns build/dist/icon.icns
+
       - name: Create macOS .app bundle
         if: startsWith(matrix.rid, 'osx-')
         shell: bash
@@ -91,19 +108,8 @@ jobs:
           # Copy all published files into MacOS/
           cp -a build/dist/. "$MACOS/"
 
-          # Generate icon
-          brew install imagemagick
-          magick src/ClassicUO.Client/cuoicon.ico -flatten largest.png
-          mkdir -p icon.iconset
-          for size in 16 32 64 128 256 512; do
-            sips -z $size $size largest.png --out icon.iconset/icon_${size}x${size}.png
-          done
-          for size in 16 32 128 256; do
-            double=$((size * 2))
-            cp icon.iconset/icon_${double}x${double}.png icon.iconset/icon_${size}x${size}@2x.png
-          done
-          sips -z 1024 1024 largest.png --out icon.iconset/icon_512x512@2x.png
-          iconutil -c icns icon.iconset -o "$RESOURCES/icon.icns"
+          # Use pre-generated icon
+          cp icon.icns "$RESOURCES/icon.icns"
 
           # Info.plist
           cat > "$CONTENTS/Info.plist" << 'PLIST'
