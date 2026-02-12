@@ -76,10 +76,82 @@ jobs:
           mkdir -p build/dist/LegionScripts
           curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
             -o build/dist/LegionScripts/Script_Updater.py
+      - name: Create macOS .app bundle
+        if: startsWith(matrix.rid, 'osx-')
+        shell: bash
+        run: |
+          VERSION=$(cat build/dist/v.txt)
+          APP="TazUO.app"
+          CONTENTS="$APP/Contents"
+          MACOS="$CONTENTS/MacOS"
+          RESOURCES="$CONTENTS/Resources"
+
+          mkdir -p "$MACOS" "$RESOURCES"
+
+          # Copy all published files into MacOS/
+          cp -a build/dist/. "$MACOS/"
+
+          # Generate icon
+          brew install imagemagick
+          magick src/ClassicUO.Client/cuoicon.ico -flatten largest.png
+          mkdir -p icon.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size largest.png --out icon.iconset/icon_${size}x${size}.png
+          done
+          for size in 16 32 128 256; do
+            double=$((size * 2))
+            cp icon.iconset/icon_${double}x${double}.png icon.iconset/icon_${size}x${size}@2x.png
+          done
+          sips -z 1024 1024 largest.png --out icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o "$RESOURCES/icon.icns"
+
+          # Info.plist
+          cat > "$CONTENTS/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>TazUO</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.crameep.tazuo</string>
+            <key>CFBundleName</key>
+            <string>TazUO</string>
+            <key>CFBundleIconFile</key>
+            <string>icon</string>
+            <key>CFBundleShortVersionString</key>
+            <string>VERSION_PLACEHOLDER</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>11.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/" "$CONTENTS/Info.plist"
+
+          # PkgInfo
+          echo -n "APPL????" > "$CONTENTS/PkgInfo"
+
+          # Ad-hoc codesign
+          codesign --force --deep --sign - "$APP"
+
+          # Zip the .app bundle
+          zip -r -y "TazUO-${{ matrix.rid }}.app.zip" "$APP"
+
       - uses: actions/upload-artifact@v4
         with:
           name: TazUO-${{ matrix.rid }}
           path: build/dist/
+
+      - name: Upload macOS .app artifact
+        if: startsWith(matrix.rid, 'osx-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: TazUO-${{ matrix.rid }}-app
+          path: TazUO-${{ matrix.rid }}.app.zip
 
   release:
     needs: build
@@ -93,7 +165,14 @@ jobs:
         run: |
           for dir in TazUO-*/; do
             name="${dir%/}"
+            # Skip -app directories (already zipped)
+            [[ "$name" == *-app ]] && continue
             (cd "$dir" && zip -r "../${name}.zip" .)
+          done
+          # Copy .app.zip files from app artifact dirs
+          for dir in TazUO-*-app/; do
+            [ -d "$dir" ] || continue
+            cp "$dir"/*.app.zip . 2>/dev/null || true
           done
       - name: Sanitize branch name
         id: sanitize
