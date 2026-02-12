@@ -142,7 +142,7 @@ jobs:
           echo -n "APPL????" > "$CONTENTS/PkgInfo"
 
           # Ad-hoc codesign
-          codesign --force --deep --sign - "$APP"
+          codesign --force --sign - "$APP"
 
           # Zip the .app bundle
           zip -r -y "TazUO-${{ matrix.rid }}.app.zip" "$APP"
