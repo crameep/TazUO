@@ -177,6 +177,7 @@ namespace ClassicUO
 #if false
             SetScene(new MainScene(this));
 #else
+            PNGLoader.Instance.BasePath = CUOEnviroment.ExecutablePath;
             UO.Load(this);
 
             PNGLoader.Instance.GraphicsDevice = GraphicsDevice;

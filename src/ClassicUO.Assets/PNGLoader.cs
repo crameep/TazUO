@@ -14,6 +14,13 @@ namespace ClassicUO.Assets
 
         private string exePath;
 
+        /// <summary>
+        /// Override for the base path used to find ExternalImages/.
+        /// Set this before calling Load() when AppContext.BaseDirectory
+        /// differs from the actual data root (e.g. macOS .app bundles).
+        /// </summary>
+        public string? BasePath { get; set; }
+
         private Dictionary<string, Texture2D> EmbeddedArt = new Dictionary<string, Texture2D>();
         private Texture2D _emptyTexture;
 
@@ -196,7 +203,7 @@ namespace ClassicUO.Assets
 
         public void Load()
         {
-            exePath = AppContext.BaseDirectory;
+            exePath = BasePath ?? AppContext.BaseDirectory;
 
             string gumpPath = Path.Combine(exePath, IMAGES_FOLDER, GUMP_EXTERNAL_FOLDER);
 
