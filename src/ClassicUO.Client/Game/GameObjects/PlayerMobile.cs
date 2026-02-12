@@ -421,14 +421,24 @@ namespace ClassicUO.Game.GameObjects
 
         private void TryOpenDoors()
         {
-            if (!World.Player.IsDead && ProfileManager.CurrentProfile.AutoOpenDoors)
-            {
-                int x = X, y = Y, z = Z;
-                Pathfinder.GetNewXY((byte)Direction, ref x, ref y);
+            if (World.Player.IsDead || !ProfileManager.CurrentProfile.AutoOpenDoors)
+                return;
 
-                if (World.Items.Values.Any(s => s.ItemData.IsDoor && s.X == x && s.Y == y && s.Z - 15 <= z && s.Z + 15 >= z))
+            int x = X, y = Y, z = Z;
+            Pathfinder.GetNewXY((byte)Direction, ref x, ref y);
+
+            GameObject tile = World.Map?.GetTile(x, y, false);
+            if (tile == null) return;
+
+            while (tile.TPrevious != null)
+                tile = tile.TPrevious;
+
+            for (GameObject obj = tile; obj != null; obj = obj.TNext)
+            {
+                if (obj is Item item && item.ItemData.IsDoor && item.Z - 15 <= z && item.Z + 15 >= z)
                 {
                     GameActions.OpenDoor();
+                    return;
                 }
             }
         }
