@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -15,8 +15,14 @@ using System.Threading;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
 using System.Text.Json.Serialization;
+using ClassicUO.Utility.Platforms;
 
 namespace ClassicUO.LegionScripting;
+
+[JsonSerializable(typeof(ScriptBrowser.GhFileObject))]
+[JsonSerializable(typeof(List<ScriptBrowser.GhFileObject>))]
+[JsonSerializable(typeof(ScriptBrowser.Links))]
+internal partial class ScriptBrowserJsonContext : JsonSerializerContext { }
 
 public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
 {
@@ -27,6 +33,11 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
     private readonly Dictionary<string, DirectoryNode> _directoryCache = new();
     private bool _isInitialLoading = false;
     private string _errorMessage = "";
+
+    private string _previewTitle = "";
+    private string _previewContent = "";
+    private bool _previewLoading = false;
+    private bool _openPreviewPopup = false;
 
     private ScriptBrowser() : base("Public Script Browser")
     {
@@ -64,9 +75,54 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         // Draw the tree view
         if (ImGui.BeginChild("ScriptTreeView", new Vector2(0, 0), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar))
         {
-            DrawDirectoryTree("", 0);
+            if (ImGui.BeginTable("ScriptTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollX))
+            {
+                ImGui.TableSetupColumn("Script", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn("View", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Download", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableSetupColumn("Link", ImGuiTableColumnFlags.WidthFixed);
+                ImGui.TableHeadersRow();
+
+                DrawDirectoryTree("", 0);
+
+                ImGui.EndTable();
+            }
         }
         ImGui.EndChild();
+
+        DrawPreviewPopup();
+    }
+
+    private void DrawPreviewPopup()
+    {
+        if (_openPreviewPopup)
+        {
+            ImGui.OpenPopup("ScriptPreview");
+            _openPreviewPopup = false;
+        }
+
+        ImGui.SetNextWindowSize(new Vector2(700, 500), ImGuiCond.Appearing);
+        if (ImGui.BeginPopupModal("ScriptPreview", ImGuiWindowFlags.None))
+        {
+            ImGui.Text(_previewTitle);
+            ImGui.Separator();
+
+            Vector2 contentSize = new Vector2(-1, ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeightWithSpacing() - ImGui.GetStyle().ItemSpacing.Y);
+
+            if (_previewLoading)
+            {
+                ImGui.Text("Loading...");
+            }
+            else
+            {
+                ImGui.InputTextMultiline("##preview", ref _previewContent, (uint)_previewContent.Length + 1, contentSize, ImGuiInputTextFlags.ReadOnly);
+            }
+
+            if (ImGui.Button("Close"))
+                ImGui.CloseCurrentPopup();
+
+            ImGui.EndPopup();
+        }
     }
 
     public override void Update()
@@ -108,6 +164,8 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         // Show loading state
         if (node.IsLoading)
         {
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
             ImGui.Text("Loading...");
             return;
         }
@@ -117,6 +175,8 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         foreach (GhFileObject dir in directories)
         {
             ImGui.PushID(dir.Path);
+            ImGui.TableNextRow();
+            ImGui.TableSetColumnIndex(0);
 
             // Check if this directory is expanded
             bool isExpanded = _directoryCache.TryGetValue(dir.Path, out DirectoryNode childNode) && childNode.IsExpanded;
@@ -149,18 +209,22 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         foreach (GhFileObject file in scriptFiles)
         {
             ImGui.PushID(file.Path);
+            ImGui.TableNextRow();
 
-            // Draw file as selectable
-            if (ImGui.Selectable($"    {file.Name}"))
-            {
+            ImGui.TableSetColumnIndex(0);
+            ImGui.Text(file.Name);
+
+            ImGui.TableSetColumnIndex(1);
+            if (ImGui.SmallButton("View"))
+                ViewScript(file);
+
+            ImGui.TableSetColumnIndex(2);
+            if (ImGui.SmallButton("Download"))
                 DownloadAndOpenScript(file);
-            }
 
-            // Tooltip
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip($"Click to download and open\n{file.Path}");
-            }
+            ImGui.TableSetColumnIndex(3);
+            if (ImGui.SmallButton("Open Link"))
+                PlatformHelper.LaunchBrowser(file.HtmlUrl);
 
             ImGui.PopID();
         }
@@ -334,6 +398,36 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         }
     });
 
+    private void ViewScript(GhFileObject file) => Task.Run(async () =>
+    {
+        _mainThreadActions.Enqueue(() =>
+        {
+            _previewTitle = file.Name;
+            _previewContent = "";
+            _previewLoading = true;
+            _openPreviewPopup = true;
+        });
+
+        try
+        {
+            string content = await _cache.GetFileContentAsync(file.DownloadUrl);
+            _mainThreadActions.Enqueue(() =>
+            {
+                _previewContent = content;
+                _previewLoading = false;
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading file for preview: {ex.Message}");
+            _mainThreadActions.Enqueue(() =>
+            {
+                _previewContent = $"Error loading file: {ex.Message}";
+                _previewLoading = false;
+            });
+        }
+    });
+
     public override void Dispose()
     {
         _cache?.Dispose();
@@ -349,7 +443,7 @@ public class ScriptBrowser : SingletonImGuiWindow<ScriptBrowser>
         public bool IsExpanded { get; set; }
     }
 
-public class GhFileObject
+    public class GhFileObject
     {
         [JsonPropertyName("name")]
         public string Name { get; set; }
@@ -396,15 +490,21 @@ public class GhFileObject
 }
 
 /// <summary>
-/// Caches GitHub repository content using WebClient for Mono compatibility
+/// Caches GitHub repository content
 /// </summary>
 internal class GitHubContentCache : IDisposable
 {
+    private static readonly HttpClient _httpClient = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(30),
+        DefaultRequestHeaders = { { "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }
+    };
+
     private readonly string _repository;
     private readonly string _baseUrl;
-    private readonly Dictionary<string, List<ScriptBrowser.GhFileObject>> _directoryCache;
-    private readonly Dictionary<string, string> _fileContentCache;
-    private readonly Dictionary<string, DateTime> _cacheTimestamps;
+    private readonly ConcurrentDictionary<string, List<ScriptBrowser.GhFileObject>> _directoryCache = new();
+    private readonly ConcurrentDictionary<string, string> _fileContentCache = new();
+    private readonly ConcurrentDictionary<string, DateTime> _cacheTimestamps = new();
     private readonly TimeSpan _cacheExpiration = TimeSpan.FromMinutes(10);
     private DateTime _lastApiCallTime = DateTime.MinValue;
     private readonly Lock _rateLimitLock = new Lock();
@@ -414,9 +514,6 @@ internal class GitHubContentCache : IDisposable
     {
         _repository = repo;
         _baseUrl = $"https://api.github.com/repos/{_repository}/contents";
-        _directoryCache = new Dictionary<string, List<ScriptBrowser.GhFileObject>>();
-        _fileContentCache = new Dictionary<string, string>();
-        _cacheTimestamps = new Dictionary<string, DateTime>();
     }
 
     /// <summary>
@@ -427,11 +524,11 @@ internal class GitHubContentCache : IDisposable
         string cacheKey = string.IsNullOrEmpty(path) ? "ROOT" : path;
 
         // Check if we have cached data that's still valid
-        if (_directoryCache.ContainsKey(cacheKey) &&
-            _cacheTimestamps.ContainsKey(cacheKey) &&
-            DateTime.Now - _cacheTimestamps[cacheKey] < _cacheExpiration)
+        if (_directoryCache.TryGetValue(cacheKey, out List<ScriptBrowser.GhFileObject> cached) &&
+            _cacheTimestamps.TryGetValue(cacheKey, out DateTime timestamp) &&
+            DateTime.Now - timestamp < _cacheExpiration)
         {
-            return _directoryCache[cacheKey];
+            return cached;
         }
 
         // Fetch from API
@@ -470,9 +567,9 @@ internal class GitHubContentCache : IDisposable
     /// </summary>
     public async Task<string> GetFileContentAsync(string downloadUrl)
     {
-        if (_fileContentCache.ContainsKey(downloadUrl))
+        if (_fileContentCache.TryGetValue(downloadUrl, out string cachedContent))
         {
-            return _fileContentCache[downloadUrl];
+            return cachedContent;
         }
 
         string content = await DownloadStringAsync(downloadUrl);
@@ -482,7 +579,7 @@ internal class GitHubContentCache : IDisposable
     }
 
     /// <summary>
-    /// Fetch directory contents from GitHub API using WebClient
+    /// Fetch directory contents from GitHub API
     /// </summary>
     private async Task<List<ScriptBrowser.GhFileObject>> FetchDirectoryFromApi(string path)
     {
@@ -496,15 +593,15 @@ internal class GitHubContentCache : IDisposable
                 return new List<ScriptBrowser.GhFileObject>();
             }
 
-            List<ScriptBrowser.GhFileObject> files = JsonSerializer.Deserialize<List<ScriptBrowser.GhFileObject>>(response);
+            List<ScriptBrowser.GhFileObject> files = JsonSerializer.Deserialize(response, ScriptBrowserJsonContext.Default.ListGhFileObject);
             return files ?? new List<ScriptBrowser.GhFileObject>();
         }
-        catch (WebException webEx)
+        catch (HttpRequestException httpEx)
         {
-            Console.WriteLine($"Web error fetching directory {path}: {webEx.Message}");
-            if (webEx.Response is HttpWebResponse httpResponse)
+            Console.WriteLine($"HTTP error fetching directory {path}: {httpEx.Message}");
+            if (httpEx.StatusCode.HasValue)
             {
-                Console.WriteLine($"HTTP Status: {httpResponse.StatusCode}");
+                Console.WriteLine($"HTTP Status: {httpEx.StatusCode}");
             }
             throw;
         }
@@ -544,65 +641,12 @@ internal class GitHubContentCache : IDisposable
     }
 
     /// <summary>
-    /// Download string content using WebClient with proper async handling and timeout
+    /// Download string content using HttpClient with rate limiting
     /// </summary>
     private async Task<string> DownloadStringAsync(string url)
     {
-        // Enforce rate limiting before making the request
         await EnforceRateLimitAsync();
-
-        var tcs = new TaskCompletionSource<string>();
-
-        var webClient = new WebClient();
-        webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        webClient.Encoding = Encoding.UTF8;
-
-        // Add timeout handling
-        var timer = new System.Threading.Timer((_) =>
-        {
-            if (!tcs.Task.IsCompleted)
-            {
-                webClient.CancelAsync();
-                tcs.TrySetException(new TimeoutException("Request timed out"));
-            }
-        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(-1));
-
-        webClient.DownloadStringCompleted += (sender, e) =>
-        {
-            timer.Dispose();
-            try
-            {
-                if (e.Error != null)
-                {
-                    tcs.TrySetException(e.Error);
-                }
-                else if (e.Cancelled)
-                {
-                    tcs.TrySetCanceled();
-                }
-                else
-                {
-                    tcs.TrySetResult(e.Result);
-                }
-            }
-            finally
-            {
-                webClient.Dispose();
-            }
-        };
-
-        try
-        {
-            webClient.DownloadStringAsync(new Uri(url));
-        }
-        catch (Exception ex)
-        {
-            timer.Dispose();
-            webClient.Dispose();
-            tcs.TrySetException(ex);
-        }
-
-        return tcs.Task.Result;
+        return await _httpClient.GetStringAsync(url);
     }
 
     /// <summary>
@@ -628,8 +672,8 @@ internal class GitHubContentCache : IDisposable
 
         foreach (string key in expiredKeys)
         {
-            _directoryCache.Remove(key);
-            _cacheTimestamps.Remove(key);
+            _directoryCache.TryRemove(key, out _);
+            _cacheTimestamps.TryRemove(key, out _);
         }
     }
 
