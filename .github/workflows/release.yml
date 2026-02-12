@@ -52,6 +52,14 @@ jobs:
           mkdir -p ${{ env.CUO_OUTPUT_PATH }}/LegionScripts
           curl -sSfL "https://raw.githubusercontent.com/crameep/LegionScripts/main/Script_Updater.py" \
             -o ${{ env.CUO_OUTPUT_PATH }}/LegionScripts/Script_Updater.py
+      - name: Bundle Fiddle-Me-This assets
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/PlayTazUO/Fiddle-Me-This.git /tmp/fmt
+          cp -r "/tmp/fmt/[Custom]/Data" ${{ env.CUO_OUTPUT_PATH }}/
+          cp -r "/tmp/fmt/[Custom]/ExternalImages" ${{ env.CUO_OUTPUT_PATH }}/
+          cp -rn "/tmp/fmt/[Original]/ExternalImages/." ${{ env.CUO_OUTPUT_PATH }}/ExternalImages/
+          rm -rf /tmp/fmt
 
       - name: Generate macOS icon
         if: startsWith(matrix.rid, 'osx-')
