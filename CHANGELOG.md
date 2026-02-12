@@ -5,6 +5,7 @@ All notable changes to TazUO will be recorded here.
 ### Misc
 - This changelog
 - Add auto-loot priority tiers (High/Normal/Low) - Coryigon
+- Removed integrated Discord features
 
 ### Legion
 - Add sound API endpoints to LegionScripts - fpw
