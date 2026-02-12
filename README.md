@@ -2,28 +2,74 @@
 
 ***
 
-
-| Channel | Status                                                                                                                                                                     |
-| --- |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Release | [![Release](https://github.com/PlayTazUO/TazUO/actions/workflows/build-test.yml/badge.svg?branch=main)](https://github.com/PlayTazUO/TazUO/actions/workflows/build-test.yml) |
-| Dev | [![Dev](https://github.com/PlayTazUO/TazUO/actions/workflows/build-test.yml/badge.svg?branch=dev)](https://github.com/PlayTazUO/TazUO/actions/workflows/build-test.yml)        |
-
+| Channel | Status |
+| --- | --- |
+| Stable | [![Stable](https://github.com/crameep/TazUO/actions/workflows/build-test.yml/badge.svg?branch=main)](https://github.com/crameep/TazUO/actions/workflows/build-test.yml) |
+| Bleeding Edge | [![Bleeding Edge](https://github.com/crameep/TazUO/actions/workflows/bleeding-edge.yml/badge.svg?branch=dev)](https://github.com/crameep/TazUO/actions/workflows/bleeding-edge.yml) |
 
 # What is TazUO?
 **TazUO** was originally a fork from ClassicUO with the mindset of adding features requested by users to improve QOL. **TazUO** has since moved away from ClassicUO, we will keep an eye on ClassicUO updates and incorporate changes or fixes as they have a wider user base that provides bug reports, but **TazUO** will no longer be merging all changes from ClassicUO.
 
 # Play now
-The easiest way to play with TazUO is via our [launcher](https://github.com/PlayTazUO/TUO-Launcher/releases/latest)!
+The easiest way to play is via the [launcher](https://github.com/crameep/TUO-Launcher/releases/latest).
+
+The launcher has three update channels:
+- **Stable** — Tagged releases that have been tested on the bleeding edge
+- **Bleeding Edge** — Latest features and fixes, auto-built from the `dev` branch
+- **Feature Branch** — Individual feature builds for testing specific changes
+
+# Branching strategy
+
+| Branch | Purpose |
+| --- | --- |
+| `main` | Stable releases only. Merges from `dev` when ready for release. |
+| `dev` | Bleeding edge. All features get merged here for testing before stable. |
+| Feature branches | Individual features/fixes. Merged into `dev` when ready. |
+
+# Recent changes
+
+## Auto-Loot Performance Optimizations
+Large loot lists (500+ entries) no longer cause stuttering. Three optimizations work together:
+- **Graphic Index** — Loot entries bucketed by graphic ID for O(1) lookup instead of linear scan
+- **Spatial Tracking** — Maintains a set of nearby ground items instead of scanning all world items
+- **Match Cache** — Caches per-serial match results with OPL-aware staleness detection (handles tooltips arriving after item creation)
+
+## Auto-Loot Profiles
+Loot configurations can now be organized into multiple profiles:
+- Create, rename, delete, and reorder profiles in a sidebar
+- Enable/disable individual profiles with checkboxes
+- Export/import profiles via clipboard
+- Import from other character configurations
+- Automatic migration from legacy single-list format
+
+## Scavenger Fix
+Fixed scavenger not picking up ground items. The previous priority system caused ground items to be perpetually starved behind corpse items in the action queue. Ground and corpse items now share the same priority tier with an internal bias toward corpse items.
+
+## Decoupled Corpse Opening
+Corpse double-click opens now run on a separate queue from item moves. Previously, opening corpses blocked all looting since they shared the same action queue with a single cooldown timer. Looting near multiple corpses is now significantly faster.
+
+## Movement Smoothness
+Several per-frame and per-step performance issues identified by comparing against upstream ClassicUO have been fixed:
+- **Removed debug render target** — An extra full-screen compositing pass was running every frame (debug flag left enabled)
+- **Spatial door lookup** — `TryOpenDoors()` was scanning all world items on every direction change. Now uses tile-based spatial lookup
+- **Cached corpse snapshots** — `GetCorpseSnapshot()` was allocating a new array every step. Now caches and only rebuilds when corpses change
+- **Gated pathfinding updates** — `WalkableManager` and `LongDistancePathfinder` no longer update every frame when long-distance pathfinding is disabled
+
+## Skills Management Window
+New ImGui-based skills management interface.
+
+## Auto-Loot Priority Tiers
+Loot entries can be assigned High, Normal, or Low priority. Higher priority items are looted first.
 
 # TazUO features
-Check out our [wiki](../../wiki) for details on all the changes TazUO has made for players!  
+Check out the [wiki](../../wiki) for details on all the changes TazUO has made for players!
 
-***Most*** features can be disabled if you don't want to use said feature.  
+***Most*** features can be disabled if you don't want to use said feature.
 
 - [Launcher](../../wiki/TazUO.Updater-Launcher) - Managing profiles for multiple accounts/servers
 - [Grid containers](../../wiki/TazUO.Grid-Containers) - Easily find and move items with our fully customizable grid containers
-- [Custom build-in scripting](../../wiki/TazUO.Legion-Scripting) - Build in powerful scripting languages. **Python** and Legion Script.
-- **Assistant features built-in** - Like Auto buy, sell, auto loot and more.
+- [Custom built-in scripting](../../wiki/TazUO.Legion-Scripting) - Built-in powerful scripting languages. **Python** and Legion Script.
+- **Assistant features built-in** - Auto buy, sell, auto loot and more
 - [Journal](../../wiki/TazUO.Journal) - Vastly improved journal for readability and organization
 - [Alternative paperdoll](../../wiki/TazUO.Alternate-Paperdoll) - A new flavor of your paperdoll
 - [Improved buff bar](../../wiki/TazUO.Buff-Bars)
@@ -32,9 +78,9 @@ Check out our [wiki](../../wiki) for details on all the changes TazUO has made f
 - [Cooldown bars](../../wiki/TazUO.Cooldown-bars) - Customizable cooldown bars
 - [Grid Highlighting](../../wiki/TazUO.Grid-highlighting-based-on-item-properties) - Grid highlighting of items that have specific properties, easier looting!
 - [Tooltip overrides](../../wiki/TazUO.Tooltip-Override) - Customize and override any text in tooltips!
-- [Custom fonts](../../wiki/TazUO.TTF-Fonts) - BYOF, Bring your own fonts for better readability.
+- [Custom fonts](../../wiki/TazUO.TTF-Fonts) - BYOF, Bring your own fonts for better readability
 
-There are ***many*** more features to check out in our [wiki](../../wiki) or in game, this list is just a sample!
+There are ***many*** more features to check out in the [wiki](../../wiki) or in game, this list is just a sample!
 
 
 # Screenshots
