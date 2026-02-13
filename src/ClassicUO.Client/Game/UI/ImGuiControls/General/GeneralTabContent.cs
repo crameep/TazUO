@@ -218,16 +218,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGuiComponents.Tooltip("How far you need to drag before a gump will move, this helps prevent accidentally dragging instead of clicking.");
 
             ImGui.SetNextItemWidth(125);
-            if (ImGui.SliderInt("Game Scale", ref _gameScale, _minScale, _maxScale))
+            if (ImGui.SliderInt("UI Scale", ref _gameScale, _minScale, _maxScale))
             {
                 _gameScale = Math.Clamp(_gameScale, _minScale, _maxScale);
             }
-            ImGuiComponents.Tooltip("Adjust the scale of the entire game.");
+            ImGuiComponents.Tooltip("Scales legacy UO interface elements. Does not affect the game world or modern UI windows.");
             if (ImGui.Button("Apply scale"))
             {
                 float scale = _gameScale / 100f;
                 Client.Game.SetScale(scale);
-                _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
+                _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, scale);
             }
 
             ImGui.EndGroup();

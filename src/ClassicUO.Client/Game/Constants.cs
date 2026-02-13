@@ -119,7 +119,7 @@ namespace ClassicUO.Game
             public const string WEB_MAP_PORT = "web_map_port";
             public const string WEB_MAP_AUTO_START = "web_map_auto_start";
             public const string MIN_GUMP_MOVE_DIST = "min_gump_move_dist";
-            public const string GAME_SCALE = "game_scale";
+            public const string UI_SCALE = "ui_scale";
             public const string AUTO_UNEQUIP_FOR_ACTIONS = "auto_unequip_for_actions";
             public const string SOUND_FILTER_IDS = "sound_filter_ids";
             public const string DISABLE_WEATHER = "disable_weather";

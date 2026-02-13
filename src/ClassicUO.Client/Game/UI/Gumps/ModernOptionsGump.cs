@@ -4054,7 +4054,7 @@ namespace ClassicUO.Game.UI.Gumps
                     float scale = ((float)s.GetValue() / (float)100);
 
                     Client.Game.SetScale(scale);
-                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, scale);
+                    _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, scale);
                 }
             };
 

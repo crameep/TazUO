@@ -13,6 +13,7 @@ using SDL3;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace ClassicUO
 {
@@ -218,7 +219,24 @@ namespace ClassicUO
                 // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
                 CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
 
-                _ = Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, 1f, f => Game.SetScale(f));
+                // Load UI scale with migration from old "game_scale" key
+                _ = Task.Run(async () =>
+                {
+                    float scale = await Settings.GetAsync<float>(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, 1f);
+
+                    // If we got the default, check for the legacy key
+                    if (scale == 1f)
+                    {
+                        float legacy = await Settings.GetAsync<float>(SettingsScope.Global, "game_scale", 1f);
+                        if (legacy != 1f)
+                        {
+                            scale = Math.Clamp(legacy, Constants.MIN_UI_SCALE, Constants.MAX_UI_SCALE);
+                            _ = Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, scale);
+                        }
+                    }
+
+                    MainThreadQueue.EnqueueAction(() => Game.SetScale(scale));
+                });
 
                 Game.Run();
             }
