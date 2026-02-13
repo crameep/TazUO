@@ -478,14 +478,25 @@ namespace ClassicUO.Game.Managers
         public static void Draw(UltimaBatcher2D batcher, Matrix uiTransform)
         {
             SortControlsByInfo();
-            batcher.Begin(null, uiTransform);
 
+            // Pass 1: Draw the game viewport unscaled so system chat stays on-screen
+            batcher.Begin(null, Matrix.Identity);
             for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
             {
                 Gump g = last.Value;
-                g.Draw(batcher, g.X, g.Y);
+                if (g is WorldViewportGump)
+                    g.Draw(batcher, g.X, g.Y);
             }
+            batcher.End();
 
+            // Pass 2: Draw all other gumps with UI scale
+            batcher.Begin(null, uiTransform);
+            for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
+            {
+                Gump g = last.Value;
+                if (g is not WorldViewportGump)
+                    g.Draw(batcher, g.X, g.Y);
+            }
             batcher.End();
         }
 
