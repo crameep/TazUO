@@ -2,6 +2,7 @@
 
 
 using ClassicUO.Configuration;
+using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
@@ -639,17 +640,18 @@ namespace ClassicUO.Game.Managers
 
         private static void HandleMouseInput()
         {
-            Control gump = GetMouseOverControl(Mouse.Position);
+            Point uiMouse = (Client.Game.Scene is LoginScene) ? Mouse.Position : ScreenToUI(Mouse.Position);
+            Control gump = GetMouseOverControl(uiMouse);
 
             if (MouseOverControl != null && gump != MouseOverControl)
             {
-                MouseOverControl.InvokeMouseExit(Mouse.Position);
+                MouseOverControl.InvokeMouseExit(uiMouse);
 
                 if (MouseOverControl.RootParent != null)
                 {
                     if (gump == null || gump.RootParent != MouseOverControl.RootParent)
                     {
-                        MouseOverControl.RootParent.InvokeMouseExit(Mouse.Position);
+                        MouseOverControl.RootParent.InvokeMouseExit(uiMouse);
                     }
                 }
             }
@@ -658,18 +660,18 @@ namespace ClassicUO.Game.Managers
             {
                 if (gump != MouseOverControl)
                 {
-                    gump.InvokeMouseEnter(Mouse.Position);
+                    gump.InvokeMouseEnter(uiMouse);
 
                     if (gump.RootParent != null)
                     {
                         if (MouseOverControl == null || gump.RootParent != MouseOverControl.RootParent)
                         {
-                            gump.RootParent.InvokeMouseEnter(Mouse.Position);
+                            gump.RootParent.InvokeMouseEnter(uiMouse);
                         }
                     }
                 }
 
-                gump.InvokeMouseOver(Mouse.Position);
+                gump.InvokeMouseOver(uiMouse);
             }
 
             MouseOverControl = gump;
@@ -906,6 +908,9 @@ namespace ClassicUO.Game.Managers
             }
 
             _wasCtrlHeldLastFrame = ctrlCurrentlyHeld;
+
+            if (Client.Game.Scene is not LoginScene)
+                delta = ScreenToUIDelta(delta);
 
             DraggingControl.X += delta.X;
             DraggingControl.Y += delta.Y;
