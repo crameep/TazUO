@@ -244,8 +244,9 @@ namespace ClassicUO.Game.UI.Controls
                 return true;
             }
 
-            split.X = Mouse.LClickPosition.X - 80;
-            split.Y = Mouse.LClickPosition.Y - 40;
+            Point uiClick = UIManager.ScreenToUI(Mouse.LClickPosition);
+            split.X = uiClick.X - 80;
+            split.Y = uiClick.Y - 40;
             UIManager.AttemptDragControl(split, true);
             split.BringOnTop();
 

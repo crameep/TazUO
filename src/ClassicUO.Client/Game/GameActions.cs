@@ -826,10 +826,11 @@ internal static class GameActions
                     return false;
                 }
 
+                var uiMouse = UIManager.ScreenToUI(Mouse.Position);
                 gump = new SplitMenuGump(world, item, new Point(x, y))
                 {
-                    X = Mouse.Position.X - 80,
-                    Y = Mouse.Position.Y - 40
+                    X = uiMouse.X - 80,
+                    Y = uiMouse.Y - 40
                 };
 
                 UIManager.Add(gump);
