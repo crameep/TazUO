@@ -3,6 +3,7 @@ using ImGuiNET;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using ClassicUO.Assets;
 using ClassicUO.Game.UI.ImGuiControls;
 
@@ -85,17 +86,20 @@ namespace ClassicUO.Game.UI
         private static void SetTazUOTheme(float scale = 1.0f)
         {
             ImGuiIOPtr io = ImGui.GetIO();
-            unsafe
-            {
-                fixed (byte* fontPtr = TrueTypeLoader.Instance.ImGuiFont)
-                {
-                    io.Fonts.AddFontFromMemoryTTF(
-                        (IntPtr)fontPtr,
-                        TrueTypeLoader.Instance.ImGuiFont.Length,
-                        16.0f * scale
-                    );
-                }
-            }
+
+            // Allocate font data in unmanaged memory so ImGui can safely free() it
+            // on Fonts.Clear(). Using fixed/managed memory causes heap corruption
+            // because ImGui takes ownership (FontDataOwnedByAtlas = true) and calls
+            // free() on a pointer that wasn't malloc'd.
+            byte[] fontData = TrueTypeLoader.Instance.ImGuiFont;
+            IntPtr unmanagedFont = Marshal.AllocHGlobal(fontData.Length);
+            Marshal.Copy(fontData, 0, unmanagedFont, fontData.Length);
+
+            io.Fonts.AddFontFromMemoryTTF(
+                unmanagedFont,
+                fontData.Length,
+                16.0f * scale
+            );
 
             ImGuiStylePtr style = ImGui.GetStyle();
 
