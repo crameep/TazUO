@@ -38,6 +38,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string _renameInput = "";
         private Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>> _otherCharConfigs;
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
+        private string _profileDestInput = "";
 
         public AutoLootTabContent()
         {
@@ -451,6 +452,52 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             ImGui.SeparatorText($"Editing: {_selectedProfile.Name}");
 
+            // Profile default destination bag
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Profile Bag:");
+            ImGui.SameLine();
+            ImGuiComponents.Tooltip("Default destination for all entries in this profile (overridden by per-entry destinations)");
+            _profileDestInput = _selectedProfile.DestinationContainer == 0 ? "" : $"0x{_selectedProfile.DestinationContainer:X}";
+            ImGui.SetNextItemWidth(90);
+            if (ImGui.InputText("##ProfileDest", ref _profileDestInput, 20))
+            {
+                if (string.IsNullOrWhiteSpace(_profileDestInput))
+                {
+                    _selectedProfile.DestinationContainer = 0;
+                    AutoLootManager.Instance.RebuildMergedList();
+                    AutoLootManager.Instance.SaveProfile(_selectedProfile);
+                }
+                else if (uint.TryParse(_profileDestInput.Replace("0x", "").Replace("0X", ""), System.Globalization.NumberStyles.HexNumber, null, out uint destSerial))
+                {
+                    _selectedProfile.DestinationContainer = destSerial;
+                    AutoLootManager.Instance.RebuildMergedList();
+                    AutoLootManager.Instance.SaveProfile(_selectedProfile);
+                }
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Target##ProfileDest"))
+            {
+                AutoLootManager.AutoLootProfile profile = _selectedProfile;
+                World.Instance.TargetManager.SetTargeting((targetedContainer) =>
+                {
+                    if (targetedContainer != null && targetedContainer is Entity targetedEntity && SerialHelper.IsItem(targetedEntity))
+                    {
+                        profile.DestinationContainer = targetedEntity.Serial;
+                        AutoLootManager.Instance.RebuildMergedList();
+                        AutoLootManager.Instance.SaveProfile(profile);
+                    }
+                });
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Clear##ProfileDest"))
+            {
+                _selectedProfile.DestinationContainer = 0;
+                AutoLootManager.Instance.RebuildMergedList();
+                AutoLootManager.Instance.SaveProfile(_selectedProfile);
+            }
+
+            ImGui.Spacing();
+
             if (ImGui.Button("Add Manual Entry"))
             {
                 showAddEntry = !showAddEntry;
@@ -502,6 +549,17 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 });
             }
             ImGuiComponents.Tooltip("Target a container to set as the destination for all entries in this profile");
+            ImGui.SameLine();
+            if (ImGui.Button("Clear All Destinations"))
+            {
+                foreach (var entry in _selectedProfile.Entries)
+                {
+                    entry.DestinationContainer = 0;
+                    entryDestinationInputs[entry.Uid] = "";
+                }
+                AutoLootManager.Instance.SaveProfile(_selectedProfile);
+            }
+            ImGuiComponents.Tooltip("Clear the destination container for all entries in this profile (items will go to grab bag or backpack)");
 
             if (showAddEntry)
             {

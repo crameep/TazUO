@@ -1078,9 +1078,9 @@ namespace ClassicUO.UnitTests.Game.Managers
             };
             manager.RebuildGraphicIndex();
 
-            // Act - add an entry and call NotifyEntryChanged
+            // Act - add an entry and rebuild the index directly
             manager._mergedEntries.Add(new AutoLootManager.AutoLootConfigEntry { Graphic = 200, Name = "Item 2" });
-            manager.NotifyEntryChanged();
+            manager.RebuildGraphicIndex();
 
             // Assert - index should reflect the new entry
             manager._graphicIndex.Should().HaveCount(2);

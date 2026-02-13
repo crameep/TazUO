@@ -51,7 +51,7 @@ namespace ClassicUO.Game.Managers
         internal List<AutoLootConfigEntry> _wildcardEntries = new();
         internal readonly Dictionary<uint, AutoLootConfigEntry> _matchCache = new();
         internal readonly HashSet<uint> _matchCacheHasOpl = new();
-        private volatile bool _loaded = false;
+        internal volatile bool _loaded = false;
         public bool Loaded => _loaded;
         private readonly string _savePath;
         private readonly string _profilesDir;
@@ -548,6 +548,13 @@ namespace ClassicUO.Game.Managers
                 if (itemDestContainer != null) destinationSerial = entry.DestinationContainer;
             }
 
+            //If the entry's profile has a default container, use it
+            if (destinationSerial == 0 && entry != null && entry.ProfileDestinationContainer != 0)
+            {
+                Item profileDestContainer = _world.Items.Get(entry.ProfileDestinationContainer);
+                if (profileDestContainer != null) destinationSerial = entry.ProfileDestinationContainer;
+            }
+
             if (destinationSerial == 0 && ProfileManager.CurrentProfile.GrabBagSerial != 0)
             {
                 Item grabBag = _world.Items.Get(ProfileManager.CurrentProfile.GrabBagSerial);
@@ -805,6 +812,8 @@ namespace ClassicUO.Game.Managers
             {
                 if (profile.IsActive)
                 {
+                    foreach (var entry in profile.Entries)
+                        entry.ProfileDestinationContainer = profile.DestinationContainer;
                     newList.AddRange(profile.Entries);
                     activeCount++;
                 }
@@ -1253,6 +1262,8 @@ namespace ClassicUO.Game.Managers
             public ushort Hue { get; set; } = ushort.MaxValue;
             public string RegexSearch { get; set; } = string.Empty;
             public uint DestinationContainer { get; set; } = 0;
+            [JsonIgnore]
+            public uint ProfileDestinationContainer { get; set; } = 0;
             public AutoLootPriority Priority { get; set; } = AutoLootPriority.Normal;
             private bool RegexMatch => !string.IsNullOrEmpty(RegexSearch);
             /// <summary>
@@ -1300,6 +1311,7 @@ namespace ClassicUO.Game.Managers
             public string Name { get; set; } = "";
             public bool IsActive { get; set; } = true;
             public int DisplayOrder { get; set; } = 0;
+            public uint DestinationContainer { get; set; } = 0;
             public List<AutoLootConfigEntry> Entries { get; set; } = new();
 
             [JsonIgnore]
