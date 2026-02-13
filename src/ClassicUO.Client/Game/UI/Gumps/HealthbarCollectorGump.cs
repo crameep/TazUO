@@ -663,7 +663,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (_mobile.IsDestroyed)
                 {
-                    Dispose();
+                    _parent.RemoveMobile(Serial);
                     return;
                 }
 

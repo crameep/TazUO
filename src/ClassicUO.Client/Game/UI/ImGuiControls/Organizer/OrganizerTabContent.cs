@@ -325,6 +325,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     ImGui.TableSetColumnIndex(0);
                     if (!DrawArt(itemConfig.Graphic, new Vector2(50, 50)))
                         ImGui.Text($"{itemConfig.Graphic:X4}");
+                    SetTooltip($"Graphic: {itemConfig.Graphic:X4}");
 
                     ImGui.TableSetColumnIndex(1);
                     string hueText = itemConfig.Hue == ushort.MaxValue ? "ANY" : itemConfig.Hue.ToString();

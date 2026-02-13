@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Numerics;
 using System.Text;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Network;
 using ImGuiNET;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -12,10 +15,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
     {
         private int _sortColumnIndex = 1;
         private bool _sortAscending = true;
-
-        private float[] _baselineBase;
-        private bool _baselineInitialized;
-        private uint _baselinePlayerSerial;
+        private PlayerMobile _player;
 
         private bool _showGroups;
 
@@ -23,16 +23,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         public SkillsTabContent()
         {
+            _player = World.Instance.Player;
             int count = Client.Game.UO.FileManager.Skills.SkillsCount;
-            _baselineBase = new float[count];
             _sortedIndices = new int[count];
 
-            for (int i = 0; i < count; i++)
-            {
-                _sortedIndices[i] = i;
-            }
-
-            _baselineInitialized = false;
+            for (int i = 0; i < count; i++) _sortedIndices[i] = i;
         }
 
         public override void DrawContent()
@@ -43,23 +38,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 ImGui.Text("Not connected");
                 return;
-            }
-
-            uint playerSerial = World.Instance.Player.Serial;
-
-            if (!_baselineInitialized || _baselinePlayerSerial != playerSerial)
-            {
-                // Don't initialize until the server has sent skill data
-                if (skills.Length == 0 || skills[0] == null || !skills[0].HasLoginBaseline)
-                    return;
-
-                for (int i = 0; i < skills.Length && i < _baselineBase.Length; i++)
-                {
-                    _baselineBase[i] = skills[i].BaseAtLogin;
-                }
-
-                _baselinePlayerSerial = playerSerial;
-                _baselineInitialized = true;
             }
 
             DrawToolbar(skills);
@@ -100,16 +78,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
 
                 if (_showGroups)
-                {
                     DrawGroupedRows(skills);
-                }
                 else
-                {
                     for (int row = 0; row < _sortedIndices.Length; row++)
-                    {
                         DrawSkillRow(skills, _sortedIndices[row]);
-                    }
-                }
 
                 ImGui.EndTable();
             }
@@ -130,12 +102,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // Use
             ImGui.TableNextColumn();
             if (skill.IsClickable)
-            {
                 if (ImGui.SmallButton("Use##" + idx))
-                {
                     GameActions.UseSkill(skill.Index);
-                }
-            }
 
             // Name
             ImGui.TableNextColumn();
@@ -155,20 +123,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             // +/-
             ImGui.TableNextColumn();
-            float delta = idx < _baselineBase.Length ? skill.Base - _baselineBase[idx] : 0f;
+            float delta = skill.Base - skill.BaseAtLogin;
 
             if (delta > 0f)
-            {
                 ImGui.TextColored(ImGuiTheme.Current.Success, $"+{delta:F1}");
-            }
             else if (delta < 0f)
-            {
                 ImGui.TextColored(ImGuiTheme.Current.Error, $"{delta:F1}");
-            }
             else
-            {
                 ImGui.Text("0.0");
-            }
 
             // Lock
             ImGui.TableNextColumn();
@@ -184,7 +146,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 Lock.Up => ImGuiTheme.Current.Success,
                 Lock.Down => ImGuiTheme.Current.Error,
-                _ => ImGuiTheme.Current.Info
+                _ => ImGuiTheme.Current.Warning
             };
 
             ImGui.PushStyleColor(ImGuiCol.Button, lockColor);
@@ -196,6 +158,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 byte nextLock = (byte)(((byte)skill.Lock + 1) % 3);
                 skill.Lock = (Lock)nextLock;
                 GameActions.ChangeSkillLockStatus((ushort)skill.Index, nextLock);
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
             }
 
             ImGui.PopStyleColor(3);
@@ -215,7 +178,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 SkillsGroup group = groups[g];
 
                 // Collect valid skill indices for this group
-                List<int> groupIndices = new List<int>(group.Count);
+                var groupIndices = new List<int>(group.Count);
                 float groupBaseTotal = 0f;
 
                 for (int i = 0; i < group.Count; i++)
@@ -246,18 +209,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if (open)
                 {
-                    for (int i = 0; i < groupIndices.Count; i++)
-                    {
-                        DrawSkillRow(skills, groupIndices[i]);
-                    }
+                    for (int i = 0; i < groupIndices.Count; i++) DrawSkillRow(skills, groupIndices[i]);
 
                     ImGui.TreePop();
                 }
             }
         }
 
-        private void SortGroupIndices(List<int> indices, Skill[] skills)
-        {
+        private void SortGroupIndices(List<int> indices, Skill[] skills) =>
             indices.Sort((a, b) =>
             {
                 Skill sa = skills[a];
@@ -270,15 +229,14 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     3 => sa.Base.CompareTo(sb.Base),
                     4 => sa.Cap.CompareTo(sb.Cap),
                     5 =>
-                        (a < _baselineBase.Length ? sa.Base - _baselineBase[a] : 0f)
-                        .CompareTo(b < _baselineBase.Length ? sb.Base - _baselineBase[b] : 0f),
+                        (sa.Base - sa.BaseAtLogin)
+                        .CompareTo(sb.Base - sb.BaseAtLogin),
                     6 => ((byte)sa.Lock).CompareTo((byte)sb.Lock),
                     _ => 0
                 };
 
                 return _sortAscending ? cmp : -cmp;
             });
-        }
 
         private void DrawToolbar(Skill[] skills)
         {
@@ -287,34 +245,32 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Up);
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
             }
-
             ImGui.SameLine();
 
             if (ImGui.SmallButton("All Down"))
             {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Down);
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
             }
-
             ImGui.SameLine();
 
             if (ImGui.SmallButton("All Lock"))
             {
                 for (int i = 0; i < skills.Length; i++)
                     GameActions.ChangeSkillLockStatus((ushort)i, (byte)Lock.Locked);
+                AsyncNetClient.Socket.Send_SkillsRequest(_player.Serial);
             }
-
             ImGui.SameLine();
             ImGui.Text("|");
             ImGui.SameLine();
 
             // Reset +/-
             if (ImGui.SmallButton("Reset +/-"))
-            {
-                for (int i = 0; i < skills.Length && i < _baselineBase.Length; i++)
-                    _baselineBase[i] = skills[i].Base;
-            }
+                for (int i = 0; i < skills.Length; i++)
+                    skills[i].BaseAtLogin = skills[i].Base;
 
             ImGui.SameLine();
 
@@ -336,7 +292,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     if (skill == null)
                         continue;
 
-                    float delta = idx < _baselineBase.Length ? skill.Base - _baselineBase[idx] : 0f;
+                    float delta = skill.Base - skill.BaseAtLogin;
                     string lockStr = skill.Lock switch
                     {
                         Lock.Up => "Up",
@@ -368,19 +324,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
             float capSum = 0f;
 
             for (int i = 0; i < skills.Length; i++)
-            {
                 if (skills[i] != null)
                 {
                     baseSum += skills[i].Base;
                     capSum += skills[i].Cap;
                 }
-            }
 
             ImGui.Text($"Total: {baseSum:F1} / {capSum:F1}");
         }
 
-        private void SortSkills(Skill[] skills)
-        {
+        private void SortSkills(Skill[] skills) =>
             Array.Sort(_sortedIndices, (a, b) =>
             {
                 if (a >= skills.Length || b >= skills.Length)
@@ -399,14 +352,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     3 => sa.Base.CompareTo(sb.Base),     // Base
                     4 => sa.Cap.CompareTo(sb.Cap),       // Cap
                     5 => // +/-
-                        (a < _baselineBase.Length ? sa.Base - _baselineBase[a] : 0f)
-                        .CompareTo(b < _baselineBase.Length ? sb.Base - _baselineBase[b] : 0f),
+                        (sa.Base - sa.BaseAtLogin)
+                        .CompareTo(sb.Base - sa.BaseAtLogin),
                     6 => ((byte)sa.Lock).CompareTo((byte)sb.Lock), // Lock
                     _ => 0
                 };
 
                 return _sortAscending ? cmp : -cmp;
             });
-        }
     }
 }

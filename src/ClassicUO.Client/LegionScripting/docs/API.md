@@ -21,12 +21,30 @@ You can now type `-updateapi` in game to download the latest API.py file.
 
 [Additional notes](../notes/)  
 
-*This was generated on `2/8/26`.*
+*This was generated on `2/12/26`.*
 
 ## Properties
 ### `JournalEntries`
 
 **Type:** `ConcurrentQueue<PyJournalEntry>`
+
+### `SoundEntries`
+
+**Type:** `ConcurrentQueue<PySoundEntry>`
+
+### `ScriptName`
+
+**Type:** `string`
+
+ Get this scripts full filename
+
+
+### `ScriptPath`
+
+**Type:** `string`
+
+ Get the full path to the file, no filename included. Use API.ScriptName to get the script.
+
 
 ### `Backpack`
 
@@ -861,7 +879,7 @@ You can now type `-updateapi` in game to download the latest API.py file.
  Say a message outloud.
  Example:
  ```py
- API.Say("Hello friend!")
+ API.Msg("Hello friend!")
  ```
 
 
@@ -2245,6 +2263,61 @@ You can now type `-updateapi` in game to download the latest API.py file.
 | `clearMatches` | `bool` | ✅ Yes |  |
 
 **Return Type:** `bool`
+
+---
+
+### ClearSoundLog
+
+ Clear your sound log (This is specific for each script).
+ Example:
+ ```py
+ API.ClearSoundLog()
+ ```
+
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### CheckSoundLog
+`(idx)`
+ Check if the sound log contains a given sound and retrieves it.
+ Example:
+ ```py
+ if API.CheckSoundLog(0x13E):
+   API.SysMsg("Chopped wood!")
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `idx` | `int` | ❌ No | The sound effect ID to check for. |
+
+**Return Type:** `PySoundEntry`
+
+---
+
+### GetSoundLog
+`(seconds)`
+ Get all the sound logs of the last X seconds.
+ Example:
+ ```py
+ list = API.GetSoundLog(30)
+ if list:
+   for entry in list:
+     entry.ID # Do something with this
+ ```
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `seconds` | `double` | ❌ No |  |
+
+**Return Type:** `PythonList`
 
 ---
 

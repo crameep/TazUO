@@ -1237,10 +1237,8 @@ namespace ClassicUO.Renderer
             float rotationCos,
             float depth,
             byte effects
-        )
-        {
+        ) =>
             AddSprite(texture, sourceX, sourceY, sourceW, sourceH, destinationX, destinationY, destinationW, destinationH, color, originX, originY, rotationSin, rotationCos, depth, effects, null);
-        }
 
         private void AddSprite
         (

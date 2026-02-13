@@ -193,8 +193,6 @@ namespace ClassicUO
 
             SetScene(new LoginScene(UO.World));
 #endif
-            new DiscordManager(UO.World); //Instance is set inside the constructor
-            DiscordManager.Instance.FromSavedToken();
         }
 
         private void LoadPlugins()
@@ -213,7 +211,6 @@ namespace ClassicUO
 
         protected override void UnloadContent()
         {
-            DiscordManager.Instance?.BeginDisconnect();
             ItemDatabaseManager.Instance.Dispose();
             SDL_GetWindowBordersSize(Window.Handle, out int top, out int left, out _, out _);
 
@@ -232,7 +229,6 @@ namespace ClassicUO
             _screenRenderTarget = null;
 
             UO.Unload();
-            DiscordManager.Instance?.FinalizeDisconnect();
             base.UnloadContent();
         }
 
@@ -484,8 +480,6 @@ namespace ClassicUO
 
             UO.GameCursor?.Update();
             Audio?.Update();
-
-            DiscordManager.Instance?.Update();
 
             base.Update(gameTime);
         }

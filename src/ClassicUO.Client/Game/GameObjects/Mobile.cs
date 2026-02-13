@@ -203,6 +203,8 @@ namespace ClassicUO.Game.GameObjects
             {
                 field = value;
                 EventSink.InvokeNotorietyChange(Serial, value);
+                if (ProfileManager.CurrentProfile?.OutlineMobilesNotoriety == true && OutlineColor == null)
+                    OutlineColor = Notoriety.GetColor(value);
             }
         }
 

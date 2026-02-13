@@ -282,62 +282,6 @@ namespace ClassicUO.Game.Managers
             Register("organize", (s) => OrganizerAgent.Instance?.OrganizerCommand(s));
             Register("organizer", (s) => OrganizerAgent.Instance?.OrganizerCommand(s));
             Register("organizerlist", (s) => OrganizerAgent.Instance?.ListOrganizers());
-            Register("reply", (s) =>
-            {
-                // Build the message text
-                string msg = "";
-                for (int i = 1; i < s.Length; i++)
-                    msg += s[i] + " ";
-
-                if (string.IsNullOrWhiteSpace(msg))
-                {
-                    GameActions.Print("No message text provided.", Constants.HUE_ERROR);
-                    return;
-                }
-
-                // First, try to use the active Discord channel if the gump is open
-                DiscordGump discordGump = UIManager.GetGump<DiscordGump>();
-                if (discordGump != null && discordGump.ActiveChannel != 0)
-                {
-                    ulong activeChannel = discordGump.ActiveChannel;
-
-                    // Determine if this is a DM or a lobby/channel
-                    // Try to get as user first (DM)
-                    Discord.Sdk.UserHandle user = DiscordManager.Instance.GetUser(activeChannel);
-                    if (user != null && user.Id() != 0)
-                    {
-                        // It's a DM
-                        DiscordManager.Instance.SendDm(activeChannel, msg);
-                        return;
-                    }
-
-                    // Try as lobby/channel
-                    Discord.Sdk.LobbyHandle lobby = DiscordManager.Instance.GetLobby(activeChannel);
-                    if (lobby != null && lobby.Id() != 0)
-                    {
-                        // It's a lobby
-                        DiscordManager.Instance.SendChannelMsg(activeChannel, msg);
-                        return;
-                    }
-
-                    Discord.Sdk.ChannelHandle channel = DiscordManager.Instance.GetChannel(activeChannel);
-                    if (channel != null && channel.Id() != 0)
-                    {
-                        // It's a channel
-                        DiscordManager.Instance.SendChannelMsg(activeChannel, msg);
-                        return;
-                    }
-                }
-
-                // Fallback: use the last incoming private message
-                if (DiscordManager.Instance.LastPrivateMessage != null)
-                {
-                    DiscordManager.Instance.SendDm(DiscordManager.Instance.LastPrivateMessage.AuthorId(), msg);
-                    return;
-                }
-
-                GameActions.Print("No active Discord conversation or message to reply to.", Constants.HUE_ERROR);
-            });
 
 #if DEBUG
 
