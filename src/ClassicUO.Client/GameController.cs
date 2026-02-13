@@ -77,11 +77,11 @@ namespace ClassicUO
             SDL.SDL_StartTextInput(Window.Handle);
         }
 
-        private float _renderScale = 1f;
-        public float RenderScale
+        private float _uiScale = 1f;
+        public float UIScale
         {
-            get => _renderScale;
-            set => _renderScale = Math.Max(value, 0.1f);
+            get => _uiScale;
+            set => _uiScale = Math.Clamp(value, 1.0f, 2.5f);
         }
         public Scene Scene { get; private set; }
         public AudioManager Audio { get; private set; }
@@ -303,8 +303,8 @@ namespace ClassicUO
 
         public void SetScale(float scale)
         {
-            RenderScale = Math.Max(scale, 0.1f);
-            ScaleChanged?.Invoke(this, RenderScale);
+            UIScale = scale;
+            ScaleChanged?.Invoke(this, UIScale);
         }
 
         public void SetWindowSize(int width, int height, bool bufferOnly = false)

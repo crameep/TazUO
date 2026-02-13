@@ -51,9 +51,9 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _pathfindingGenerationTimeMs = Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.LONG_DISTANCE_PATHING_SPEED, 2);
             _petScaling = _profile.EnablePetScaling;
             _minGumpMoveDist = _profile.MinGumpMoveDistance;
-            _gameScale = (int)(100 * Client.Game.RenderScale);
-            _minScale = Math.Abs((int)(100 * Constants.MIN_GAME_SCALE));
-            _maxScale = (int)(100 * Constants.MAX_GAME_SCALE);
+            _gameScale = (int)(100 * Client.Game.UIScale);
+            _minScale = (int)(100 * Constants.MIN_UI_SCALE);
+            _maxScale = (int)(100 * Constants.MAX_UI_SCALE);
             _outlineMobiles = _profile.OutlineMobilesNotoriety;
 
             var heal = SpellDefinition.FullIndexGetSpell(_profile.QuickHealSpell);

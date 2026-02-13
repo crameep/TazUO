@@ -147,9 +147,9 @@ namespace ClassicUO.Input
                 }
             }
 
-            Position.X = (int)(((double)Position.X * Client.Game.GraphicManager.PreferredBackBufferWidth / Client.Game.Window.ClientBounds.Width) / Client.Game.RenderScale);
+            Position.X = (int)(((double)Position.X * Client.Game.GraphicManager.PreferredBackBufferWidth / Client.Game.Window.ClientBounds.Width) / Client.Game.UIScale);
 
-            Position.Y = (int)(((double)Position.Y * Client.Game.GraphicManager.PreferredBackBufferHeight / Client.Game.Window.ClientBounds.Height) / Client.Game.RenderScale);
+            Position.Y = (int)(((double)Position.Y * Client.Game.GraphicManager.PreferredBackBufferHeight / Client.Game.Window.ClientBounds.Height) / Client.Game.UIScale);
 
             IsDragging = LButtonPressed || RButtonPressed || MButtonPressed;
         }

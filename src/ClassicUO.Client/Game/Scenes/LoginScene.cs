@@ -147,7 +147,7 @@ namespace ClassicUO.Game.Scenes
             UpdateWindowSize();
         }
 
-        private void UpdateWindowSize() => Client.Game.SetWindowSize((int)(640 * Client.Game.RenderScale), (int)(480 * Client.Game.RenderScale));
+        private void UpdateWindowSize() => Client.Game.SetWindowSize((int)(640 * Client.Game.UIScale), (int)(480 * Client.Game.UIScale));
 
         public override void Unload()
         {

@@ -384,7 +384,7 @@ namespace ClassicUO.Game
                             break;
                     }
 
-                    float scale = Client.Game.RenderScale;
+                    float scale = Client.Game.UIScale;
 
                     _aura.Draw(sb, (int)(Mouse.Position.X * scale), (int)(Mouse.Position.Y * scale), hue, 0f);
                 }
@@ -426,7 +426,7 @@ namespace ClassicUO.Game
 
             if (ItemHold.Enabled && !ItemHold.Dropped)
             {
-                float scale = Client.Game.RenderScale;
+                float scale = Client.Game.UIScale;
 
                 if (
                     ProfileManager.CurrentProfile != null

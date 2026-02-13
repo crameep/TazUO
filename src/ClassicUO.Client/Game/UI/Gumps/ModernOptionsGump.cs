@@ -4042,7 +4042,7 @@ namespace ClassicUO.Game.UI.Gumps
             );
 
             SliderWithLabel s;
-            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 50, 175, (int)(Client.Game.RenderScale * 100), null), true, page);
+            content.AddToRight(s = new SliderWithLabel(lang.GetTazUO.GlobalScale, 0, ThemeSettings.SLIDER_WIDTH, 100, 250, (int)(Client.Game.UIScale * 100), null), true, page);
 
             ModernButton b;
             content.AddToRight(b = new ModernButton(s.X + s.Width + 75, s.Y - 20, 75, 40, ButtonAction.Activate, "Apply", ThemeSettings.BUTTON_FONT_COLOR), false, page);
