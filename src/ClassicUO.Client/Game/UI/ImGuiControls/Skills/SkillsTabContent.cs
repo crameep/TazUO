@@ -194,6 +194,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.SmallButton(lockText + "##lock" + skill.Index))
             {
                 byte nextLock = (byte)(((byte)skill.Lock + 1) % 3);
+                skill.Lock = (Lock)nextLock;
                 GameActions.ChangeSkillLockStatus((ushort)skill.Index, nextLock);
             }
 
