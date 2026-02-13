@@ -98,12 +98,22 @@ public class ScriptFile
 
         string dir = System.IO.Path.GetDirectoryName(FullPath);
         ICollection<string> paths = PythonEngine.GetSearchPaths();
-        paths.Add(System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "iplib"));
-        paths.Add(System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts"));
+        string iplibPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "iplib");
+        string legionPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts");
+        paths.Add(iplibPath);
+        paths.Add(legionPath);
 
         paths.Add(!string.IsNullOrWhiteSpace(dir) ? dir : Environment.CurrentDirectory);
 
         PythonEngine.SetSearchPaths(paths);
+
+        // Diagnostic logging for search path issues
+        Log.Info($"[ScriptEngine] ExecutablePath: {CUOEnviroment.ExecutablePath}");
+        Log.Info($"[ScriptEngine] iplib path: {iplibPath} (exists: {Directory.Exists(iplibPath)})");
+        Log.Info($"[ScriptEngine] LegionScripts path: {legionPath} (exists: {Directory.Exists(legionPath)})");
+        if (Directory.Exists(iplibPath))
+            Log.Info($"[ScriptEngine] iplib/os.py exists: {File.Exists(System.IO.Path.Combine(iplibPath, "os.py"))}");
+        Log.Info($"[ScriptEngine] All search paths: {string.Join("; ", paths)}");
     }
 
     public void SetupPythonScope()
