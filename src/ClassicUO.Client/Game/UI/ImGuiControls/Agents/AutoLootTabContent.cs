@@ -483,6 +483,25 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     }
                 });
             }
+            ImGui.SameLine();
+            if (ImGui.Button("Set All Destinations"))
+            {
+                AutoLootManager.AutoLootProfile destProfile = _selectedProfile;
+                GameActions.Print(Client.Game.UO.World, "Target container to set as destination for all entries");
+                World.Instance.TargetManager.SetTargeting((targetedContainer) =>
+                {
+                    if (targetedContainer != null && targetedContainer is Entity targetedEntity && SerialHelper.IsItem(targetedEntity))
+                    {
+                        foreach (var entry in destProfile.Entries)
+                        {
+                            entry.DestinationContainer = targetedEntity.Serial;
+                            entryDestinationInputs[entry.Uid] = $"0x{targetedEntity.Serial:X}";
+                        }
+                        AutoLootManager.Instance.SaveProfile(destProfile);
+                    }
+                });
+            }
+            ImGuiComponents.Tooltip("Target a container to set as the destination for all entries in this profile");
 
             if (showAddEntry)
             {
