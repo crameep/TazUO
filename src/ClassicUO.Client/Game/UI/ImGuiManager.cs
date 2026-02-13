@@ -22,6 +22,7 @@ namespace ClassicUO.Game.UI
         public static ImGuiRenderer Renderer => _imGuiRenderer;
         public static float Alpha = 1f;
         public static float ImGuiScale { get; private set; } = 1.0f;
+        private static float? _pendingScale;
         public static ImGuiWindow[] Windows
         {
             get
@@ -199,7 +200,15 @@ namespace ClassicUO.Game.UI
 
         public static void SetScale(float scale)
         {
-            scale = Math.Clamp(scale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+            _pendingScale = Math.Clamp(scale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+        }
+
+        private static void ApplyPendingScale()
+        {
+            if (_pendingScale is not { } scale)
+                return;
+
+            _pendingScale = null;
             ImGuiScale = scale;
             ImGui.GetIO().Fonts.Clear();
             SetTazUOTheme(scale);
@@ -230,7 +239,12 @@ namespace ClassicUO.Game.UI
 
         public static void Update(GameTime gameTime)
         {
-            if (!_isInitialized || !_hasWindows)
+            if (!_isInitialized)
+                return;
+
+            ApplyPendingScale();
+
+            if (!_hasWindows)
                 return;
 
             try
