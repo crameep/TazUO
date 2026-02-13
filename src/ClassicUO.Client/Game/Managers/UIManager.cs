@@ -53,6 +53,18 @@ namespace ClassicUO.Game.Managers
 
         public static float ContainerScale { get; set; } = 1f;
 
+        public static Point ScreenToUI(Point screenPos)
+        {
+            float inv = 1f / Client.Game.UIScale;
+            return new Point((int)(screenPos.X * inv), (int)(screenPos.Y * inv));
+        }
+
+        public static Point ScreenToUIDelta(Point delta)
+        {
+            float inv = 1f / Client.Game.UIScale;
+            return new Point((int)(delta.X * inv), (int)(delta.Y * inv));
+        }
+
         public static AnchorManager AnchorManager { get; } = new();
 
         public static LinkedList<Gump> Gumps { get; } = new();
