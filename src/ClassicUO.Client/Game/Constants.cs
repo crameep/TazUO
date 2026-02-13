@@ -90,6 +90,8 @@ namespace ClassicUO.Game
         public const int PREDICTABLE_CHUNKS = 300;
         public const float MAX_UI_SCALE = 2.5f;
         public const float MIN_UI_SCALE = 1.0f;
+        public const float MIN_IMGUI_SCALE = 0.75f;
+        public const float MAX_IMGUI_SCALE = 3.0f;
         public static Color SELECTED_COLOR = Color.DarkRed;
 
         public static readonly bool[] BAD_CONTAINER_LAYERS =
@@ -131,6 +133,7 @@ namespace ClassicUO.Game
             public const string QUEUE_MANUAL_ITEM_USES = "queue_manual_item_uses";
             public const string HUE_CORPSE_AFTER_AUTOLOOT = "hue_corpse_after_autoloot";
             public const string OUTLINE_NOTORIETIES = "outline_notorieties";
+            public const string IMGUI_SCALE = "imgui_scale";
         }
     }
 }
