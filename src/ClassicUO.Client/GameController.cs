@@ -48,9 +48,6 @@ namespace ClassicUO
         private Texture2D _background;
         private bool _pluginsInitialized;
         private Rectangle bufferRect = Rectangle.Empty;
-        private RenderTarget2D _screenRenderTarget;
-        private bool _useScreenRenderTarget = true;
-
         private static Vector3 bgHueShader = new(0, 0, 0.3f);
         private bool drawScene;
 
@@ -224,9 +221,6 @@ namespace ClassicUO
 
             if (_pluginsInitialized)
                 Plugin.OnClosing();
-
-            _screenRenderTarget?.Dispose();
-            _screenRenderTarget = null;
 
             UO.Unload();
             base.UnloadContent();
@@ -490,48 +484,6 @@ namespace ClassicUO
                 bgHueShader = ShaderHueTranslator.GetHueVector(ProfileManager.CurrentProfile.MainWindowBackgroundHue, false, bgHueShader.Z);
         }
 
-        private void EnsureScreenRenderTarget()
-        {
-            int width = GraphicManager.PreferredBackBufferWidth;
-            int height = GraphicManager.PreferredBackBufferHeight;
-
-            // Sanity check dimensions
-            if (width <= 0 || height <= 0)
-            {
-                Log.Warn($"Invalid render target dimensions: {width}x{height}");
-                return;
-            }
-
-            if (_screenRenderTarget == null ||
-                _screenRenderTarget.IsDisposed ||
-                _screenRenderTarget.Width != width ||
-                _screenRenderTarget.Height != height)
-            {
-                _screenRenderTarget?.Dispose();
-
-                try
-                {
-                    PresentationParameters pp = GraphicsDevice.PresentationParameters;
-                    _screenRenderTarget = new RenderTarget2D(
-                        GraphicsDevice,
-                        width,
-                        height,
-                        false,
-                        pp.BackBufferFormat,
-                        pp.DepthStencilFormat,
-                        pp.MultiSampleCount,
-                        RenderTargetUsage.DiscardContents
-                    );
-                    Log.Trace($"Created render target: {width}x{height}");
-                }
-                catch (Exception ex)
-                {
-                    Log.Error($"Failed to create render target ({width}x{height}): {ex.Message}");
-                    throw;
-                }
-            }
-        }
-
         protected override void Draw(GameTime gameTime)
         {
             Profiler.EndFrame();
@@ -542,33 +494,7 @@ namespace ClassicUO
 
             _totalFrames++;
 
-            bool useRenderTarget = false;
-
-            if (_useScreenRenderTarget)
-            {
-                // Ensure render target is created and properly sized
-                EnsureScreenRenderTarget();
-
-                // Check if we should use render target or render directly
-                useRenderTarget = _screenRenderTarget != null && !_screenRenderTarget.IsDisposed;
-
-                if (!useRenderTarget)
-                {
-                    Log.Warn($"Render target invalid: null={_screenRenderTarget == null}, disposed={_screenRenderTarget?.IsDisposed ?? false}, bufferSize={GraphicManager.PreferredBackBufferWidth}x{GraphicManager.PreferredBackBufferHeight}");
-                }
-            }
-
-            if (useRenderTarget)
-            {
-                // Render everything to the render target
-                GraphicsDevice.SetRenderTarget(_screenRenderTarget);
-                GraphicsDevice.Clear(Color.Black);
-            }
-            else
-            {
-                // Render directly to back buffer (original behavior)
-                GraphicsDevice.Clear(Color.Black);
-            }
+            GraphicsDevice.Clear(Color.Black);
 
             _uoSpriteBatch.Begin();
             _uoSpriteBatch.DrawTiled(_background, bufferRect, _background.Bounds, bgHueShader);
@@ -593,48 +519,12 @@ namespace ClassicUO
             _uoSpriteBatch.End();
             Profiler.ExitContext("Game Cursor");
 
-            // Render ImGui and plugins to the render target (for consistent scaling)
-            if (useRenderTarget)
-            {
-                Profiler.EnterContext("ImGui");
-                ImGuiManager.Update(gameTime);
-                Profiler.ExitContext("ImGui");
+            Profiler.EnterContext("ImGui");
+            ImGuiManager.Update(gameTime);
+            Profiler.ExitContext("ImGui");
 
-                if(_pluginsInitialized)
-                {
-                    Profiler.EnterContext("Plugins");
-                    Plugin.ProcessDrawCmdList(GraphicsDevice);
-                    Profiler.ExitContext("Plugins");
-                }
-
-                // Set back to back buffer and composite the render target
-                GraphicsDevice.SetRenderTarget(null);
-                GraphicsDevice.Clear(Color.Black);
-
-                // Source and destination rectangles (full render target to full back buffer)
-                var srcRect = new Rectangle(0, 0, _screenRenderTarget.Width, _screenRenderTarget.Height);
-                Rectangle destRect = srcRect;
-
-                _uoSpriteBatch.Begin();
-                // Match GameScene's composite pattern - use source rectangle overload
-                if(RenderScale != 1.0f)
-                {
-                    destRect = new Rectangle(0, 0, (int)(_screenRenderTarget.Width * RenderScale), (int)(_screenRenderTarget.Height * RenderScale));
-                    _uoSpriteBatch.SetSampler(SamplerState.AnisotropicClamp);
-                }
-                _uoSpriteBatch.Draw(_screenRenderTarget, destRect, srcRect, new Vector3(0, 0, 1f));
-                _uoSpriteBatch.End();
-            }
-            else
-            {
-                // Fallback: render ImGui and plugins directly if render target is not available
-                Profiler.EnterContext("ImGui");
-                ImGuiManager.Update(gameTime);
-                Profiler.ExitContext("ImGui");
-
-                if(_pluginsInitialized)
-                    Plugin.ProcessDrawCmdList(GraphicsDevice);
-            }
+            if(_pluginsInitialized)
+                Plugin.ProcessDrawCmdList(GraphicsDevice);
 
             Profiler.EnterContext("OutOfContext");
             base.Draw(gameTime);
@@ -1138,21 +1028,10 @@ namespace ClassicUO
             Color[] colors;
             int width, height;
 
-            // Use render target if available and in use, otherwise use back buffer
-            if (_useScreenRenderTarget && _screenRenderTarget != null && !_screenRenderTarget.IsDisposed)
-            {
-                width = _screenRenderTarget.Width;
-                height = _screenRenderTarget.Height;
-                colors = new Color[width * height];
-                _screenRenderTarget.GetData(colors);
-            }
-            else
-            {
-                width = GraphicManager.PreferredBackBufferWidth;
-                height = GraphicManager.PreferredBackBufferHeight;
-                colors = new Color[width * height];
-                GraphicsDevice.GetBackBufferData(colors);
-            }
+            width = GraphicManager.PreferredBackBufferWidth;
+            height = GraphicManager.PreferredBackBufferHeight;
+            colors = new Color[width * height];
+            GraphicsDevice.GetBackBufferData(colors);
 
             using (
                 var texture = new Texture2D(
@@ -1187,15 +1066,7 @@ namespace ClassicUO
         {
             var colors = new Color[position.Width * position.Height];
 
-            // Use render target if available and in use, otherwise use back buffer
-            if (_useScreenRenderTarget && _screenRenderTarget != null && !_screenRenderTarget.IsDisposed)
-            {
-                _screenRenderTarget.GetData(0, position, colors, 0, colors.Length);
-            }
-            else
-            {
-                graphicDevice.GetBackBufferData(position, colors, 0, colors.Length);
-            }
+            graphicDevice.GetBackBufferData(position, colors, 0, colors.Length);
 
             using (
                 var texture = new Texture2D(
