@@ -1207,10 +1207,11 @@ namespace ClassicUO.Game.UI.Gumps
 
                             UIManager.Gumps.OfType<MacroButtonGump>().FirstOrDefault(s => s.TheMacro == m)?.Dispose();
 
-                            var macroButtonGump = new MacroButtonGump(World, m, Mouse.Position.X, Mouse.Position.Y);
+                            var uiPos = UIManager.ScreenToUI(Mouse.Position);
+                            var macroButtonGump = new MacroButtonGump(World, m, uiPos.X, uiPos.Y);
 
-                            macroButtonGump.X = Mouse.Position.X - (macroButtonGump.Width >> 1);
-                            macroButtonGump.Y = Mouse.Position.Y - (macroButtonGump.Height >> 1);
+                            macroButtonGump.X = uiPos.X - (macroButtonGump.Width >> 1);
+                            macroButtonGump.Y = uiPos.Y - (macroButtonGump.Height >> 1);
 
                             UIManager.Add(macroButtonGump);
 
@@ -1419,9 +1420,10 @@ namespace ClassicUO.Game.UI.Gumps
                     }
 
                     UIManager.Gumps.OfType<MacroButtonGump>().FirstOrDefault(s => s.TheMacro == dragMacro)?.Dispose();
-                    var macroButtonGump = new MacroButtonGump(World, dragMacro, Mouse.Position.X, Mouse.Position.Y);
-                    macroButtonGump.X = Mouse.Position.X - (macroButtonGump.Width >> 1);
-                    macroButtonGump.Y = Mouse.Position.Y - (macroButtonGump.Height >> 1);
+                    var uiPos2 = UIManager.ScreenToUI(Mouse.Position);
+                    var macroButtonGump = new MacroButtonGump(World, dragMacro, uiPos2.X, uiPos2.Y);
+                    macroButtonGump.X = uiPos2.X - (macroButtonGump.Width >> 1);
+                    macroButtonGump.Y = uiPos2.Y - (macroButtonGump.Height >> 1);
                     UIManager.Add(macroButtonGump);
                     UIManager.AttemptDragControl(macroButtonGump, true);
                 };
