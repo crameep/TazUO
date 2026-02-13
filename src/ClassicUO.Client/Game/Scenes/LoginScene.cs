@@ -47,7 +47,6 @@ namespace ClassicUO.Game.Scenes
             LoginHandshake.Instance.LoginStepChanged += OnLoginStepChanged;
             LoginHandshake.Instance.ReceiveCharacterListNotifier += ReceiveCharacterList;
             LoginHandshake.Instance.UpdateCharacterListNotifier += UpdateCharacterList;
-            Client.Game.ScaleChanged += GameOnScaleChanged;
         }
 
         public bool Reconnect
@@ -75,8 +74,6 @@ namespace ClassicUO.Game.Scenes
         private string Password { get; set; }
         public bool CanAutologin => _autoLogin || Reconnect;
         public (int min, int max) LoginDelay => LoginHandshake.Instance.LoginDelay;
-
-        private void GameOnScaleChanged(object sender, float e) => UpdateWindowSize();
 
         public override void Load()
         {
@@ -147,7 +144,7 @@ namespace ClassicUO.Game.Scenes
             UpdateWindowSize();
         }
 
-        private void UpdateWindowSize() => Client.Game.SetWindowSize((int)(640 * Client.Game.UIScale), (int)(480 * Client.Game.UIScale));
+        private void UpdateWindowSize() => Client.Game.SetWindowSize(640, 480);
 
         public override void Unload()
         {
@@ -549,7 +546,6 @@ namespace ClassicUO.Game.Scenes
         public override void Dispose()
         {
             base.Dispose();
-            Client.Game.ScaleChanged -= GameOnScaleChanged;
             LoginHandshake.Instance.LoginStepChanged -= OnLoginStepChanged;
             LoginHandshake.Instance.ReceiveCharacterListNotifier -= ReceiveCharacterList;
             LoginHandshake.Instance.UpdateCharacterListNotifier -= UpdateCharacterList;

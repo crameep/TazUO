@@ -90,7 +90,6 @@ namespace ClassicUO
         public GraphicsDeviceManager GraphicManager { get; }
         public readonly uint[] FrameDelay = new uint[2];
         public static int SupportedRefreshRate = 0;
-        public event EventHandler<float> ScaleChanged;
 
         private readonly List<(uint, Action)> _queuedActions = new();
 
@@ -304,7 +303,6 @@ namespace ClassicUO
         public void SetScale(float scale)
         {
             UIScale = scale;
-            ScaleChanged?.Invoke(this, UIScale);
         }
 
         public void SetWindowSize(int width, int height, bool bufferOnly = false)

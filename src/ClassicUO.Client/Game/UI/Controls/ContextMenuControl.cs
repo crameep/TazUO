@@ -121,25 +121,30 @@ namespace ClassicUO.Game.UI.Controls
                 y += item.Height;
             }
 
-            if(y >= Client.Game.Window.ClientBounds.Height >> 1)
+            int maxScrollH = (int)(Client.Game.Window.ClientBounds.Height / Client.Game.UIScale) >> 1;
+            if(y >= maxScrollH)
             {
-                y = Client.Game.Window.ClientBounds.Height >> 1;
+                y = maxScrollH;
             }
 
             _scroll.Height = Height = _background.Height = y;
             _scroll.Width = _background.Width;
 
-            X = Mouse.Position.X + 5;
-            Y = Mouse.Position.Y - 20;
+            Point uiPos = UIManager.ScreenToUI(Mouse.Position);
+            X = uiPos.X + 5;
+            Y = uiPos.Y - 20;
 
-            if (X + _background.Width > Client.Game.Window.ClientBounds.Width)
+            int maxW = (int)(Client.Game.Window.ClientBounds.Width / Client.Game.UIScale);
+            int maxH = (int)(Client.Game.Window.ClientBounds.Height / Client.Game.UIScale);
+
+            if (X + _background.Width > maxW)
             {
-                X = Client.Game.Window.ClientBounds.Width - _background.Width;
+                X = maxW - _background.Width;
             }
 
-            if (Y + _background.Height > Client.Game.Window.ClientBounds.Height)
+            if (Y + _background.Height > maxH)
             {
-                Y = Client.Game.Window.ClientBounds.Height - _background.Height;
+                Y = maxH - _background.Height;
             }
 
             if (Y < 0)
