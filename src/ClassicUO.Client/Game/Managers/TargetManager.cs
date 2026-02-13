@@ -133,18 +133,27 @@ namespace ClassicUO.Game.Managers
     {
         public uint TargetSerial { get; set; }
         public TargetType ExpectedTargetType { get; set; }
+        public bool MatchAnyType { get; set; }
         public bool IsSet => TargetSerial != 0;
 
         public void Set(uint serial, TargetType targetType)
         {
             TargetSerial = serial;
             ExpectedTargetType = targetType;
+            MatchAnyType = false;
+        }
+
+        public void Set(uint serial)
+        {
+            TargetSerial = serial;
+            MatchAnyType = true;
         }
 
         public void Clear()
         {
             TargetSerial = 0;
             ExpectedTargetType = TargetType.Cancel;
+            MatchAnyType = false;
         }
     }
 
@@ -268,6 +277,7 @@ namespace ClassicUO.Game.Managers
         }
 
         public static void SetAutoTarget(uint serial, TargetType targetType) => NextAutoTarget.Set(serial, targetType);
+        public static void SetAutoTarget(uint serial) => NextAutoTarget.Set(serial);
 
         public void CancelTarget()
         {

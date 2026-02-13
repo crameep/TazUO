@@ -2142,9 +2142,15 @@ namespace ClassicUO.LegionScripting
         /// ```
         /// </summary>
         /// <param name="serial">Serial of the entity to pre-target</param>
-        /// <param name="targetType">Type of target: "neutral"/"neut"/"n", "harmful"/"harm"/"h", "beneficial"/"ben"/"heal"/"b" (default: "neutral")</param>
-        public void PreTarget(uint serial, string targetType = "neutral") => MainThreadQueue.InvokeOnMainThread(() =>
+        /// <param name="targetType">Type of target: "neutral"/"neut"/"n", "harmful"/"harm"/"h", "beneficial"/"ben"/"heal"/"b". When omitted, matches any target type from the server (recommended).</param>
+        public void PreTarget(uint serial, string targetType = null) => MainThreadQueue.InvokeOnMainThread(() =>
         {
+            if (targetType == null)
+            {
+                TargetManager.SetAutoTarget(serial);
+                return;
+            }
+
             TargetType type;
             switch (targetType.ToLower())
             {
