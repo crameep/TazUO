@@ -98,7 +98,9 @@ public class ScriptFile
 
         string dir = System.IO.Path.GetDirectoryName(FullPath);
         ICollection<string> paths = PythonEngine.GetSearchPaths();
-        string iplibPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "iplib");
+        // iplib is bundled next to the executable binary, so use BaseDirectory
+        // (not ExecutablePath, which resolves outside .app bundles on macOS)
+        string iplibPath = System.IO.Path.Combine(AppContext.BaseDirectory, "iplib");
         string legionPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts");
         paths.Add(iplibPath);
         paths.Add(legionPath);
@@ -106,21 +108,6 @@ public class ScriptFile
         paths.Add(!string.IsNullOrWhiteSpace(dir) ? dir : Environment.CurrentDirectory);
 
         PythonEngine.SetSearchPaths(paths);
-
-        // Diagnostic: write search path info to file next to executable
-        try
-        {
-            string diagPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "script_debug.txt");
-            string diag = $"[{DateTime.Now}] SetupPythonEngine\n"
-                + $"  ExecutablePath: {CUOEnviroment.ExecutablePath}\n"
-                + $"  iplib path: {iplibPath} (exists: {Directory.Exists(iplibPath)})\n"
-                + $"  LegionScripts path: {legionPath} (exists: {Directory.Exists(legionPath)})\n"
-                + $"  iplib/os.py exists: {File.Exists(System.IO.Path.Combine(iplibPath, "os.py"))}\n"
-                + $"  All search paths: {string.Join("; ", paths)}\n"
-                + $"  Script: {FullPath}\n";
-            File.AppendAllText(diagPath, diag);
-        }
-        catch { }
     }
 
     public void SetupPythonScope()
