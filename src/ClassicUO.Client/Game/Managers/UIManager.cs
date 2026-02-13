@@ -462,10 +462,10 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public static void Draw(UltimaBatcher2D batcher)
+        public static void Draw(UltimaBatcher2D batcher, Matrix uiTransform)
         {
             SortControlsByInfo();
-            batcher.Begin();
+            batcher.Begin(null, uiTransform);
 
             for (LinkedListNode<Gump> last = Gumps.Last; last != null; last = last.Previous)
             {

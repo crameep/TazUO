@@ -507,7 +507,10 @@ namespace ClassicUO
             Profiler.ExitContext("Draw-Scene");
 
             Profiler.EnterContext("Draw-UI");
-            UIManager.Draw(_uoSpriteBatch);
+            Matrix uiTransform = Matrix.Identity;
+            if (!(Scene is LoginScene) && UIScale != 1.0f)
+                uiTransform = Matrix.CreateScale(UIScale, UIScale, 1f);
+            UIManager.Draw(_uoSpriteBatch, uiTransform);
             Profiler.ExitContext("Draw-UI");
 
             Profiler.EnterContext("Game Cursor");
