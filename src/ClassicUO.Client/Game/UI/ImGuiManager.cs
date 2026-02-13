@@ -21,6 +21,7 @@ namespace ClassicUO.Game.UI
         public static bool IsInitialized => _isInitialized;
         public static ImGuiRenderer Renderer => _imGuiRenderer;
         public static float Alpha = 1f;
+        public static float ImGuiScale { get; private set; } = 1.0f;
         public static ImGuiWindow[] Windows
         {
             get
@@ -80,17 +81,17 @@ namespace ClassicUO.Game.UI
         public static void UpdateTheme(float alpha) => ApplyThemeColors(alpha);
         public static void UpdateTheme() => ApplyThemeColors(Alpha);
 
-        private static void SetTazUOTheme()
+        private static void SetTazUOTheme(float scale = 1.0f)
         {
             ImGuiIOPtr io = ImGui.GetIO();
             unsafe
             {
                 fixed (byte* fontPtr = TrueTypeLoader.Instance.ImGuiFont)
                 {
-                    ImGui.GetIO().Fonts.AddFontFromMemoryTTF(
+                    io.Fonts.AddFontFromMemoryTTF(
                         (IntPtr)fontPtr,
                         TrueTypeLoader.Instance.ImGuiFont.Length,
-                        16.0f // font size
+                        16.0f * scale
                     );
                 }
             }
@@ -196,13 +197,25 @@ namespace ClassicUO.Game.UI
             colors[(int)ImGuiCol.ScrollbarGrabActive] = ImGuiTheme.Current.ScrollbarGrabActive;
         }
 
+        public static void SetScale(float scale)
+        {
+            scale = Math.Clamp(scale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+            ImGuiScale = scale;
+            ImGui.GetIO().Fonts.Clear();
+            SetTazUOTheme(scale);
+            _imGuiRenderer.RebuildFontAtlas();
+            _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.IMGUI_SCALE, scale);
+        }
+
         public static void Initialize(Microsoft.Xna.Framework.Game game)
         {
             _game = game;
             try
             {
                 _imGuiRenderer = new ImGuiRenderer(game);
-                SetTazUOTheme();
+                float scale = Client.Settings?.Get(SettingsScope.Global, Constants.SqlSettings.IMGUI_SCALE, 1.0f) ?? 1.0f;
+                ImGuiScale = Math.Clamp(scale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+                SetTazUOTheme(ImGuiScale);
                 _imGuiRenderer.RebuildFontAtlas();
 
                 _isInitialized = true;

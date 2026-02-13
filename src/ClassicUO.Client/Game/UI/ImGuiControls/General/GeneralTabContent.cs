@@ -21,6 +21,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private float _imguiWindowAlpha, _lastImguiWindowAlpha;
         private float _cameraSmoothingFactor;
         private int _currentThemeIndex, _minGumpMoveDist, _gameScale, _minScale, _maxScale;
+        private float _imguiScale;
+        private string _imguiScaleInput;
         private string[] _themeNames;
         private int _pathfindingGenerationTimeMs;
         private string _quickHealSpell, _quickCureSpell;
@@ -55,6 +57,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _minScale = (int)(100 * Constants.MIN_UI_SCALE);
             _maxScale = (int)(100 * Constants.MAX_UI_SCALE);
             _outlineMobiles = _profile.OutlineMobilesNotoriety;
+            _imguiScale = ImGuiManager.ImGuiScale;
+            _imguiScaleInput = _imguiScale.ToString("F2");
 
             var heal = SpellDefinition.FullIndexGetSpell(_profile.QuickHealSpell);
             var cure = SpellDefinition.FullIndexGetSpell(_profile.QuickCureSpell);
@@ -228,6 +232,28 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 float scale = _gameScale / 100f;
                 Client.Game.SetScale(scale);
                 _ = Client.Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, scale);
+            }
+
+            ImGui.SetNextItemWidth(125);
+            if (ImGui.SliderFloat("ImGui Scale", ref _imguiScale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE, "%.2f"))
+            {
+                _imguiScale = Math.Clamp(_imguiScale, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+                _imguiScaleInput = _imguiScale.ToString("F2");
+            }
+            ImGuiComponents.Tooltip("Scales modern UI windows (Legion Assistant, etc.)");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(50);
+            if (ImGui.InputText("##imguiScaleInput", ref _imguiScaleInput, 8, ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                if (float.TryParse(_imguiScaleInput, out float parsed))
+                {
+                    _imguiScale = Math.Clamp(parsed, Constants.MIN_IMGUI_SCALE, Constants.MAX_IMGUI_SCALE);
+                    _imguiScaleInput = _imguiScale.ToString("F2");
+                }
+            }
+            if (ImGui.Button("Apply ImGui scale"))
+            {
+                ImGuiManager.SetScale(_imguiScale);
             }
 
             ImGui.EndGroup();
