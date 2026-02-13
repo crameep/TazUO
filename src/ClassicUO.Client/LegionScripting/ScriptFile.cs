@@ -107,13 +107,20 @@ public class ScriptFile
 
         PythonEngine.SetSearchPaths(paths);
 
-        // Diagnostic logging for search path issues
-        Log.Info($"[ScriptEngine] ExecutablePath: {CUOEnviroment.ExecutablePath}");
-        Log.Info($"[ScriptEngine] iplib path: {iplibPath} (exists: {Directory.Exists(iplibPath)})");
-        Log.Info($"[ScriptEngine] LegionScripts path: {legionPath} (exists: {Directory.Exists(legionPath)})");
-        if (Directory.Exists(iplibPath))
-            Log.Info($"[ScriptEngine] iplib/os.py exists: {File.Exists(System.IO.Path.Combine(iplibPath, "os.py"))}");
-        Log.Info($"[ScriptEngine] All search paths: {string.Join("; ", paths)}");
+        // Diagnostic: write search path info to file next to executable
+        try
+        {
+            string diagPath = System.IO.Path.Combine(CUOEnviroment.ExecutablePath, "script_debug.txt");
+            string diag = $"[{DateTime.Now}] SetupPythonEngine\n"
+                + $"  ExecutablePath: {CUOEnviroment.ExecutablePath}\n"
+                + $"  iplib path: {iplibPath} (exists: {Directory.Exists(iplibPath)})\n"
+                + $"  LegionScripts path: {legionPath} (exists: {Directory.Exists(legionPath)})\n"
+                + $"  iplib/os.py exists: {File.Exists(System.IO.Path.Combine(iplibPath, "os.py"))}\n"
+                + $"  All search paths: {string.Join("; ", paths)}\n"
+                + $"  Script: {FullPath}\n";
+            File.AppendAllText(diagPath, diag);
+        }
+        catch { }
     }
 
     public void SetupPythonScope()
