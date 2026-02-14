@@ -414,7 +414,7 @@ namespace ClassicUO.Game.Managers
                         continue;
                     }
 
-                    if (item.Distance < ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                    if (item.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
                         (toLoot ??= new List<Item>()).Add(item);
                 }
 
@@ -442,23 +442,26 @@ namespace ClassicUO.Game.Managers
 
         private void OnItemCreatedOrUpdated(object sender, EventArgs e)
         {
-            if (!_loaded || !IsEnabled) return;
+            if (!_loaded) return;
 
             if (sender is Item i)
             {
                 _matchCache.Remove(i.Serial);
                 _matchCacheHasOpl.Remove(i.Serial);
 
-                CheckCorpse(i);
+                if (IsEnabled)
+                    CheckCorpse(i);
 
-                // Maintain spatial tracking set for scavenger.
-                // Items within range are added to the set and will be checked for looting
-                // during OnPositionChanged, so no immediate CheckAndLoot is needed here.
+                // Maintain spatial tracking set for scavenger and attempt immediate pickup.
                 if (ProfileManager.CurrentProfile.EnableScavenger)
                 {
                     if (IsTrackableGroundItem(i) && i.Distance <= SCAVENGER_TRACKING_RADIUS)
                     {
                         _nearbyGroundItems.Add(i.Serial);
+
+                        // Attempt immediate scavenge for items within pickup range
+                        if (i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                            CheckAndLoot(i);
                     }
                     else
                     {
@@ -491,7 +494,7 @@ namespace ClassicUO.Game.Managers
 
         public void Update()
         {
-            if (!_loaded || !IsEnabled || !_world.InGame) return;
+            if (!_loaded || (!IsEnabled && !ProfileManager.CurrentProfile.EnableScavenger) || !_world.InGame) return;
 
             if (_nextLootTime > Time.Ticks) return;
 
