@@ -422,10 +422,16 @@ namespace ClassicUO.Game.Managers
                     foreach (uint serial in toRemove)
                         _nearbyGroundItems.Remove(serial);
 
-                // Loot after iteration is complete to avoid re-entrancy issues
+                // Loot after iteration is complete to avoid re-entrancy issues.
+                // Clear ground items from _recentlyLooted so they can be re-queued —
+                // unlike corpse items, ground items persist and should always be retriable
+                // when the player walks back within range.
                 if (toLoot != null)
                     foreach (Item item in toLoot)
+                    {
+                        _recentlyLooted.Remove(item.Serial);
                         CheckAndLoot(item);
+                    }
             }
 
             if (IsEnabled)
@@ -461,7 +467,10 @@ namespace ClassicUO.Game.Managers
 
                         // Attempt immediate scavenge for items within pickup range
                         if (i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+                        {
+                            _recentlyLooted.Remove(i.Serial);
                             CheckAndLoot(i);
+                        }
                     }
                     else
                     {
