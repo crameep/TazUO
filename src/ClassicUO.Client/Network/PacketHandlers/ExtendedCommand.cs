@@ -215,11 +215,14 @@ internal static class ExtendedCommand
             //===========================================================================================
             //===========================================================================================
             case 0x14: // display popup/context menu
+                var popupPos = UIManager.ScreenToUI(new Microsoft.Xna.Framework.Point(
+                    world.DelayedObjectClickManager.LastMouseX,
+                    world.DelayedObjectClickManager.LastMouseY));
                 UIManager.ShowGamePopup(
                     new PopupMenuGump(world, PopupMenuData.Parse(ref p))
                     {
-                        X = world.DelayedObjectClickManager.LastMouseX,
-                        Y = world.DelayedObjectClickManager.LastMouseY
+                        X = popupPos.X,
+                        Y = popupPos.Y
                     }
                 );
 
