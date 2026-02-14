@@ -226,9 +226,13 @@ namespace ClassicUO.Game.Managers
                 }
             }
 
-            if (PopupMenu != null && !PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y))
+            if (PopupMenu != null)
             {
-                ShowGamePopup(null);
+                Point uiMouse = (Client.Game.Scene is LoginScene) ? Mouse.Position : ScreenToUI(Mouse.Position);
+                if (!PopupMenu.Bounds.Contains(uiMouse.X, uiMouse.Y))
+                {
+                    ShowGamePopup(null);
+                }
             }
         }
 
