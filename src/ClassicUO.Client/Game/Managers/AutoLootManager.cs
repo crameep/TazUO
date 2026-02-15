@@ -1014,6 +1014,39 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        public void MoveEntryToProfile(AutoLootConfigEntry entry, AutoLootProfile fromProfile, AutoLootProfile toProfile)
+        {
+            if (entry == null || fromProfile == null || toProfile == null || fromProfile == toProfile)
+                return;
+
+            fromProfile.Entries.Remove(entry);
+            toProfile.Entries.Add(entry);
+            RebuildMergedList();
+            SaveProfile(fromProfile);
+            SaveProfile(toProfile);
+        }
+
+        public void CopyEntryToProfile(AutoLootConfigEntry entry, AutoLootProfile toProfile)
+        {
+            if (entry == null || toProfile == null)
+                return;
+
+            var copy = new AutoLootConfigEntry
+            {
+                Graphic = entry.Graphic,
+                Hue = entry.Hue,
+                Name = entry.Name,
+                RegexSearch = entry.RegexSearch,
+                Priority = entry.Priority,
+                Scavenge = entry.Scavenge,
+                DestinationContainer = entry.DestinationContainer
+            };
+
+            toProfile.Entries.Add(copy);
+            RebuildMergedList();
+            SaveProfile(toProfile);
+        }
+
         public void ReorderProfile(int fromIndex, int toIndex)
         {
             if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0
