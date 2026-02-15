@@ -119,7 +119,6 @@ namespace ClassicUO.Game.Managers
             if (!item.OnGround) pri -= 100;
             _lootItems.Enqueue((item.Serial, entry), pri);
             _currentLootTotalCount++;
-            _nextClearRecents = Time.Ticks + 5000;
         }
 
         public void ForceLootContainer(uint serial)
@@ -422,16 +421,10 @@ namespace ClassicUO.Game.Managers
                     foreach (uint serial in toRemove)
                         _nearbyGroundItems.Remove(serial);
 
-                // Loot after iteration is complete to avoid re-entrancy issues.
-                // Clear ground items from _recentlyLooted so they can be re-queued —
-                // unlike corpse items, ground items persist and should always be retriable
-                // when the player walks back within range.
+                // Loot after iteration is complete to avoid re-entrancy issues
                 if (toLoot != null)
                     foreach (Item item in toLoot)
-                    {
-                        _recentlyLooted.Remove(item.Serial);
                         CheckAndLoot(item);
-                    }
             }
 
             if (IsEnabled)
@@ -467,10 +460,7 @@ namespace ClassicUO.Game.Managers
 
                         // Attempt immediate scavenge for items within pickup range
                         if (i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
-                        {
-                            _recentlyLooted.Remove(i.Serial);
                             CheckAndLoot(i);
-                        }
                     }
                     else
                     {
@@ -510,15 +500,18 @@ namespace ClassicUO.Game.Managers
             if (Client.Game.UO.GameCursor.ItemHold.Enabled)
                 return; //Prevent moving stuff while holding an item.
 
+            // Periodically clear _recentlyLooted so ground items can be retried
+            // even while the queue is active (e.g., corpse looting in progress).
+            if (Time.Ticks > _nextClearRecents)
+            {
+                _recentlyLooted.Clear();
+                ClearMatchCache();
+                _nextClearRecents = Time.Ticks + 5000;
+            }
+
             if (_lootItems.Count == 0)
             {
                 _progressBarGump?.Dispose();
-                if (Time.Ticks > _nextClearRecents)
-                {
-                    _recentlyLooted.Clear();
-                    ClearMatchCache();
-                    _nextClearRecents = Time.Ticks + 5000;
-                }
                 return;
             }
 
