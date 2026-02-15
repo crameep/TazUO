@@ -642,6 +642,44 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
+        private void DrawEntryContextMenu(AutoLootManager.AutoLootConfigEntry entry, int rowIndex)
+        {
+            if (ImGui.BeginPopupContextItem($"EntryContext##{rowIndex}"))
+            {
+                var profiles = AutoLootManager.Instance.Profiles;
+
+                if (ImGui.BeginMenu("Move to"))
+                {
+                    foreach (var p in profiles)
+                    {
+                        if (p == _selectedProfile) continue;
+                        if (ImGui.MenuItem(p.Name))
+                        {
+                            AutoLootManager.Instance.MoveEntryToProfile(entry, _selectedProfile, p);
+                            entryGraphicInputs.Remove(entry.Uid);
+                            entryHueInputs.Remove(entry.Uid);
+                            entryRegexInputs.Remove(entry.Uid);
+                            entryDestinationInputs.Remove(entry.Uid);
+                        }
+                    }
+                    ImGui.EndMenu();
+                }
+
+                if (ImGui.BeginMenu("Copy to"))
+                {
+                    foreach (var p in profiles)
+                    {
+                        if (p == _selectedProfile) continue;
+                        if (ImGui.MenuItem(p.Name))
+                            AutoLootManager.Instance.CopyEntryToProfile(entry, p);
+                    }
+                    ImGui.EndMenu();
+                }
+
+                ImGui.EndPopup();
+            }
+        }
+
         private void SelectProfile(AutoLootManager.AutoLootProfile profile, int index)
         {
             _exclusionSelected = false;
@@ -879,7 +917,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                     AutoLootManager.AutoLootConfigEntry entry = _selectedProfile.Entries[i];
                     ImGui.TableNextRow();
 
+                    // Invisible selectable for row-level right-click context menu
                     ImGui.TableNextColumn();
+                    ImGui.Selectable($"##RowCtx{i}", false, ImGuiSelectableFlags.SpanAllColumns | ImGuiSelectableFlags.AllowOverlap, new Vector2(0, 50));
+                    DrawEntryContextMenu(entry, i);
+                    ImGui.SameLine();
+
                     if (!DrawArt((ushort)entry.Graphic, new Vector2(50, 50)))
                         ImGui.Text($"{entry.Graphic:X4}");
                     SetTooltip(entry.Name);
@@ -1026,6 +1069,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         entryRegexInputs.Remove(entry.Uid);
                         entryDestinationInputs.Remove(entry.Uid);
                     }
+
                 }
 
                 ImGui.EndTable();
