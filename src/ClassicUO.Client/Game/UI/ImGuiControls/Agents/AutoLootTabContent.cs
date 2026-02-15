@@ -41,10 +41,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string _profileDestInput = "";
 
         // Exclusion list UI state
-        private bool _showAddExclusion = false;
-        private string _exclGraphicInput = "";
-        private string _exclHueInput = "";
-        private string _exclRegexInput = "";
+        private bool _exclusionSelected = false;
         private Dictionary<string, string> _exclEntryGraphicInputs = new();
         private Dictionary<string, string> _exclEntryHueInputs = new();
         private Dictionary<string, string> _exclEntryRegexInputs = new();
@@ -108,13 +105,6 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.Separator();
             ImGui.Spacing();
 
-            // Global Exclusion List
-            DrawExclusionSection();
-
-            ImGui.Spacing();
-            ImGui.Separator();
-            ImGui.Spacing();
-
             // Loading state check
             if (!AutoLootManager.Instance.Loaded && AutoLootManager.Instance.Profiles.Count == 0)
             {
@@ -145,7 +135,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 DrawProfileSidebar();
 
                 ImGui.TableSetColumnIndex(1);
-                DrawEntryTable();
+                if (_exclusionSelected)
+                    DrawExclusionEntryTable();
+                else
+                    DrawEntryTable();
 
                 ImGui.EndTable();
             }
@@ -293,17 +286,19 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
         }
 
-        private void DrawExclusionSection()
+        private void DrawExclusionEntryTable()
         {
-            if (!ImGui.CollapsingHeader("Global Exclusions"))
-                return;
+            ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.Current.Error);
+            ImGui.SeparatorText("Exclusions");
+            ImGui.PopStyleColor();
+            ImGui.TextWrapped("Items matching these entries will never be looted or scavenged.");
 
-            ImGuiComponents.Tooltip("Items matching these entries will never be looted or scavenged, regardless of profile settings.");
+            ImGui.Spacing();
 
             var exclusions = AutoLootManager.Instance.ExclusionList;
 
-            if (ImGui.Button("Add Manual##Excl"))
-                _showAddExclusion = !_showAddExclusion;
+            if (ImGui.Button("Add Manual Entry##Excl"))
+                showAddEntry = !showAddEntry;
 
             ImGui.SameLine();
             if (ImGui.Button("Add from Target##Excl"))
@@ -318,15 +313,18 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 });
             }
 
-            if (_showAddExclusion)
+            if (showAddEntry)
             {
+                ImGui.SeparatorText("Add New Exclusion:");
                 ImGui.Spacing();
+
                 ImGui.BeginGroup();
                 ImGui.AlignTextToFramePadding();
                 ImGui.Text("Graphic:");
                 ImGui.SameLine();
+                ImGuiComponents.Tooltip("Item Graphic");
                 ImGui.SetNextItemWidth(70);
-                ImGui.InputText("##ExclNewGraphic", ref _exclGraphicInput, 10);
+                ImGui.InputText("##ExclNewGraphic", ref newGraphicInput, 10);
                 ImGui.EndGroup();
 
                 ImGui.SameLine();
@@ -335,45 +333,47 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 ImGui.AlignTextToFramePadding();
                 ImGui.Text("Hue:");
                 ImGui.SameLine();
+                ImGuiComponents.Tooltip("Set -1 to match any Hue");
                 ImGui.SetNextItemWidth(70);
-                ImGui.InputText("##ExclNewHue", ref _exclHueInput, 10);
-                ImGuiComponents.Tooltip("Set -1 to match any hue");
+                ImGui.InputText("##ExclNewHue", ref newHueInput, 10);
                 ImGui.EndGroup();
 
                 ImGui.Text("Regex:");
-                ImGui.InputText("##ExclNewRegex", ref _exclRegexInput, 500);
+                ImGui.InputText("##ExclNewRegex", ref newRegexInput, 500);
 
                 ImGui.Spacing();
                 if (ImGui.Button("Add##ExclAdd"))
                 {
-                    if (StringHelper.TryParseInt(_exclGraphicInput, out int graphic))
+                    if (StringHelper.TryParseInt(newGraphicInput, out int graphic))
                     {
                         ushort hue = ushort.MaxValue;
-                        if (!string.IsNullOrEmpty(_exclHueInput) && _exclHueInput != "-1")
-                            ushort.TryParse(_exclHueInput, out hue);
+                        if (!string.IsNullOrEmpty(newHueInput) && newHueInput != "-1")
+                            ushort.TryParse(newHueInput, out hue);
 
                         var entry = AutoLootManager.Instance.AddExclusionEntry((ushort)graphic, hue);
-                        if (entry != null && !string.IsNullOrEmpty(_exclRegexInput))
+                        if (entry != null && !string.IsNullOrEmpty(newRegexInput))
                         {
-                            entry.RegexSearch = _exclRegexInput;
+                            entry.RegexSearch = newRegexInput;
                             AutoLootManager.Instance.ClearMatchCache();
                         }
 
-                        _exclGraphicInput = "";
-                        _exclHueInput = "";
-                        _exclRegexInput = "";
-                        _showAddExclusion = false;
+                        newGraphicInput = "";
+                        newHueInput = "";
+                        newRegexInput = "";
+                        showAddEntry = false;
                     }
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Cancel##ExclAdd"))
                 {
-                    _showAddExclusion = false;
-                    _exclGraphicInput = "";
-                    _exclHueInput = "";
-                    _exclRegexInput = "";
+                    showAddEntry = false;
+                    newGraphicInput = "";
+                    newHueInput = "";
+                    newRegexInput = "";
                 }
             }
+
+            ImGui.SeparatorText("Current Exclusion Entries:");
 
             if (exclusions.Count == 0)
             {
@@ -381,7 +381,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
-            if (ImGui.BeginTable("ExclusionTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, Math.Min(exclusions.Count * 60 + 30, 250))))
+            if (ImGui.BeginTable("ExclusionTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
             {
                 ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 52);
                 ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
@@ -476,6 +476,23 @@ namespace ClassicUO.Game.UI.ImGuiControls
         {
             var profiles = AutoLootManager.Instance.Profiles;
 
+            // Exclusion list — permanent entry, always at top
+            ImGui.PushStyleColor(ImGuiCol.Text, ImGuiTheme.Current.Error);
+            if (ImGui.Selectable("Exclusions", _exclusionSelected))
+            {
+                _exclusionSelected = true;
+                _selectedProfile = null;
+                _selectedProfileIndex = -1;
+                entryGraphicInputs.Clear();
+                entryHueInputs.Clear();
+                entryRegexInputs.Clear();
+                entryDestinationInputs.Clear();
+            }
+            ImGui.PopStyleColor();
+            ImGuiComponents.Tooltip("Items matching these entries will never be looted or scavenged. This list cannot be renamed or deleted.");
+
+            ImGui.Separator();
+
             // Profile list
             int dropTargetIndex = -1;
 
@@ -563,7 +580,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             ImGuiComponents.Tooltip("New Profile");
 
-            if (_selectedProfile != null)
+            if (_selectedProfile != null && !_exclusionSelected)
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Rename"))
@@ -591,7 +608,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _showImportCharPopup = true;
             }
 
-            if (_selectedProfile != null)
+            if (_selectedProfile != null && !_exclusionSelected)
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Export"))
@@ -627,6 +644,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         private void SelectProfile(AutoLootManager.AutoLootProfile profile, int index)
         {
+            _exclusionSelected = false;
             _selectedProfile = profile;
             _selectedProfileIndex = index;
             AutoLootManager.Instance.SelectedProfile = profile;
