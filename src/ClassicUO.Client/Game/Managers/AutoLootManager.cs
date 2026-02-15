@@ -205,8 +205,12 @@ namespace ClassicUO.Game.Managers
                 oplAvailable = _world.OPL.TryGetNameAndData(i.Serial, out _, out _);
             AutoLootConfigEntry result = null;
 
+            bool isGroundItem = i.OnGround;
+
             if (_graphicIndex.TryGetValue(i.Graphic, out List<AutoLootConfigEntry> entries))
                 foreach (AutoLootConfigEntry entry in entries)
+                {
+                    if (isGroundItem && !entry.Scavenge) continue;
                     if (entry.Match(i))
                     {
                         if (result == null || entry.Priority > result.Priority)
@@ -214,9 +218,12 @@ namespace ClassicUO.Game.Managers
                         if (result.Priority == AutoLootPriority.High)
                             break;
                     }
+                }
 
             if (result == null || result.Priority != AutoLootPriority.High)
                 foreach (AutoLootConfigEntry entry in _wildcardEntries)
+                {
+                    if (isGroundItem && !entry.Scavenge) continue;
                     if (entry.Match(i))
                     {
                         if (result == null || entry.Priority > result.Priority)
@@ -224,6 +231,7 @@ namespace ClassicUO.Game.Managers
                         if (result.Priority == AutoLootPriority.High)
                             break;
                     }
+                }
 
             // Store result in cache
             _matchCache[i.Serial] = result;
@@ -1389,6 +1397,7 @@ namespace ClassicUO.Game.Managers
             [JsonIgnore]
             public uint ProfileDestinationContainer { get; set; } = 0;
             public AutoLootPriority Priority { get; set; } = AutoLootPriority.Normal;
+            public bool Scavenge { get; set; } = true;
             private bool RegexMatch => !string.IsNullOrEmpty(RegexSearch);
             /// <summary>
             /// Do not set this manually.

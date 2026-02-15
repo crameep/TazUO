@@ -844,12 +844,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             }
             else
             // Table headers
-            if (ImGui.BeginTable("AutoLootTable", 7, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+            if (ImGui.BeginTable("AutoLootTable", 8, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
             {
                 ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 52);
                 ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
                 ImGui.TableSetupColumn("Priority", ImGuiTableColumnFlags.WidthFixed, 80);
+                ImGui.TableSetupColumn("Scav", ImGuiTableColumnFlags.WidthFixed, 35);
                 ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
                 ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 150);
                 ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
@@ -917,6 +918,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         entry.Priority = priorityValues[currentPriorityIndex];
                         AutoLootManager.Instance.NotifyMatchCriteriaChanged();
                     }
+
+                    ImGui.TableNextColumn();
+                    bool scavenge = entry.Scavenge;
+                    if (ImGui.Checkbox($"##Scav{i}", ref scavenge))
+                    {
+                        entry.Scavenge = scavenge;
+                        AutoLootManager.Instance.NotifyMatchCriteriaChanged();
+                        AutoLootManager.Instance.SaveProfile(_selectedProfile);
+                    }
+                    ImGuiComponents.Tooltip("When unchecked, this entry only applies to corpse looting and won't be used by the scavenger for ground items.");
 
                     ImGui.TableNextColumn();
                     // Initialize input string if not exists
