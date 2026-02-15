@@ -55,9 +55,15 @@ namespace ClassicUO.Game.Managers
         public bool Loaded => _loaded;
         private readonly string _savePath;
         private readonly string _profilesDir;
+        private readonly string _exclusionsPath;
         private string _migrationSourcePath;
         public bool NeedsMigration => _migrationSourcePath != null;
         public string MigrationSourcePath => _migrationSourcePath;
+
+        // Global exclusion list — items matching these entries are never looted/scavenged
+        public List<AutoLootConfigEntry> ExclusionList { get; private set; } = new();
+        internal Dictionary<int, List<AutoLootConfigEntry>> _exclusionGraphicIndex = new();
+        internal List<AutoLootConfigEntry> _exclusionWildcardEntries = new();
 
         public List<AutoLootProfile> Profiles { get; set; } = new();
         public AutoLootProfile SelectedProfile { get; set; }
@@ -74,6 +80,7 @@ namespace ClassicUO.Game.Managers
             _world = Client.Game.UO.World;
             _savePath = Path.Combine(ProfileManager.ProfilePath, "AutoLoot.json");
             _profilesDir = Path.Combine(ProfileManager.ProfilePath, "AutoLootProfiles");
+            _exclusionsPath = Path.Combine(ProfileManager.ProfilePath, "AutoLootExclusions.json");
         }
 
         /// <summary>
@@ -169,6 +176,9 @@ namespace ClassicUO.Game.Managers
         internal AutoLootConfigEntry IsOnLootList(Item i)
         {
             if (!_loaded) return null;
+
+            // Check global exclusion list before profile matching
+            if (IsExcluded(i)) return null;
 
             bool oplChecked = false;
             bool oplAvailable = false;
@@ -357,6 +367,7 @@ namespace ClassicUO.Game.Managers
         public void OnSceneLoad()
         {
             LoadProfiles();
+            LoadExclusions();
             EventSink.OPLOnReceive += OnOPLReceived;
             EventSink.OnItemCreated += OnItemCreatedOrUpdated;
             EventSink.OnItemUpdated += OnItemCreatedOrUpdated;
@@ -374,6 +385,7 @@ namespace ClassicUO.Game.Managers
             _nearbyGroundItems.Clear();
             ClearMatchCache();
             SaveAll();
+            SaveExclusions();
             Instance = null;
         }
 
@@ -856,6 +868,113 @@ namespace ClassicUO.Game.Managers
                     }
                     bucket.Add(entry);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Check if an item is on the global exclusion list.
+        /// Uses the exclusion graphic index for O(1) lookup.
+        /// </summary>
+        internal bool IsExcluded(Item i)
+        {
+            if (ExclusionList.Count == 0) return false;
+
+            if (_exclusionGraphicIndex.TryGetValue(i.Graphic, out List<AutoLootConfigEntry> entries))
+                foreach (AutoLootConfigEntry entry in entries)
+                    if (entry.Match(i))
+                        return true;
+
+            foreach (AutoLootConfigEntry entry in _exclusionWildcardEntries)
+                if (entry.Match(i))
+                    return true;
+
+            return false;
+        }
+
+        public AutoLootConfigEntry AddExclusionEntry(ushort graphic = 0, ushort hue = ushort.MaxValue, string name = "")
+        {
+            var entry = new AutoLootConfigEntry { Graphic = graphic, Hue = hue, Name = name };
+
+            foreach (AutoLootConfigEntry existing in ExclusionList)
+                if (existing.Equals(entry))
+                    return existing;
+
+            ExclusionList.Add(entry);
+            RebuildExclusionIndex();
+            ClearMatchCache();
+            SaveExclusions();
+            return entry;
+        }
+
+        public void RemoveExclusionEntry(string uid)
+        {
+            for (int i = 0; i < ExclusionList.Count; i++)
+            {
+                if (ExclusionList[i].Uid == uid)
+                {
+                    ExclusionList.RemoveAt(i);
+                    RebuildExclusionIndex();
+                    ClearMatchCache();
+                    SaveExclusions();
+                    return;
+                }
+            }
+        }
+
+        internal void RebuildExclusionIndex()
+        {
+            _exclusionGraphicIndex.Clear();
+            _exclusionWildcardEntries.Clear();
+
+            foreach (AutoLootConfigEntry entry in ExclusionList)
+            {
+                if (entry.Graphic == -1)
+                {
+                    _exclusionWildcardEntries.Add(entry);
+                }
+                else
+                {
+                    if (!_exclusionGraphicIndex.TryGetValue(entry.Graphic, out List<AutoLootConfigEntry> bucket))
+                    {
+                        bucket = new List<AutoLootConfigEntry>();
+                        _exclusionGraphicIndex[entry.Graphic] = bucket;
+                    }
+                    bucket.Add(entry);
+                }
+            }
+        }
+
+        private void LoadExclusions()
+        {
+            try
+            {
+                if (JsonHelper.Load(_exclusionsPath, AutoLootJsonContext.Default.ListAutoLootConfigEntry, out List<AutoLootConfigEntry> entries))
+                {
+                    ExclusionList = entries ?? new List<AutoLootConfigEntry>();
+                }
+                else
+                {
+                    ExclusionList = new List<AutoLootConfigEntry>();
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error loading auto loot exclusions: {e.Message}");
+                ExclusionList = new List<AutoLootConfigEntry>();
+            }
+
+            RebuildExclusionIndex();
+        }
+
+        private void SaveExclusions()
+        {
+            try
+            {
+                JsonHelper.SaveAndBackup(ExclusionList, _exclusionsPath, AutoLootJsonContext.Default.ListAutoLootConfigEntry);
+            }
+            catch (Exception e)
+            {
+                Log.Error($"Error saving auto loot exclusions: {e.Message}");
             }
         }
 

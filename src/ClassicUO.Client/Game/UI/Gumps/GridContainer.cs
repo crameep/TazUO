@@ -367,6 +367,7 @@ namespace ClassicUO.Game.UI.Gumps
                 "Alt + Click to toggle selection for multi-move\n" +
                 "Alt + Double Click to select all similar items\n" +
                 "Shift + Click to add an item to your auto loot list\n" +
+                "Ctrl + Shift + Click to add an item to the exclusion list\n" +
                 "Sort and single click looting can be enabled with the icons on the right side");
             _quickDropBackpack = new ResizableStaticPic(World.Player.Backpack.DisplayedGraphic, 20, 20)
             {
@@ -1377,6 +1378,11 @@ namespace ClassicUO.Game.UI.Gumps
                             MultiItemMoveGump.ShowNextTo(_gridContainer);
 
                         Mouse.CancelDoubleClick = true;
+                    }
+                    else if (Keyboard.Ctrl && Keyboard.Shift && _item != null && !_profile.HoldShiftForContext && !_profile.HoldShiftToSplitStack)
+                    {
+                        AutoLootManager.Instance.AddExclusionEntry(_item.Graphic, _item.Hue, _item.Name);
+                        GameActions.Print(_world, $"Added this item to exclusion list.");
                     }
                     else if (Keyboard.Shift && _item != null && _profile.EnableAutoLoot && !_profile.HoldShiftForContext && !_profile.HoldShiftToSplitStack)
                     {

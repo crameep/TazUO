@@ -40,6 +40,15 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
         private string _profileDestInput = "";
 
+        // Exclusion list UI state
+        private bool _showAddExclusion = false;
+        private string _exclGraphicInput = "";
+        private string _exclHueInput = "";
+        private string _exclRegexInput = "";
+        private Dictionary<string, string> _exclEntryGraphicInputs = new();
+        private Dictionary<string, string> _exclEntryHueInputs = new();
+        private Dictionary<string, string> _exclEntryRegexInputs = new();
+
         public AutoLootTabContent()
         {
             profile = ProfileManager.CurrentProfile;
@@ -94,6 +103,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Checkbox("Hue corpse after processing", ref hueAfterProcess))
                 profile.HueCorpseAfterAutoloot = hueAfterProcess;
             ImGuiComponents.Tooltip("Hue corpses after processing to make it easier to see if autoloot has processed them.");
+
+            ImGui.Spacing();
+            ImGui.Separator();
+            ImGui.Spacing();
+
+            // Global Exclusion List
+            DrawExclusionSection();
 
             ImGui.Spacing();
             ImGui.Separator();
@@ -274,6 +290,185 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
 
                 ImGui.EndPopup();
+            }
+        }
+
+        private void DrawExclusionSection()
+        {
+            if (!ImGui.CollapsingHeader("Global Exclusions"))
+                return;
+
+            ImGuiComponents.Tooltip("Items matching these entries will never be looted or scavenged, regardless of profile settings.");
+
+            var exclusions = AutoLootManager.Instance.ExclusionList;
+
+            if (ImGui.Button("Add Manual##Excl"))
+                _showAddExclusion = !_showAddExclusion;
+
+            ImGui.SameLine();
+            if (ImGui.Button("Add from Target##Excl"))
+            {
+                World.Instance.TargetManager.SetTargeting((targeted) =>
+                {
+                    if (targeted is Entity entity && SerialHelper.IsItem(entity))
+                    {
+                        AutoLootManager.Instance.AddExclusionEntry(entity.Graphic, entity.Hue, entity.Name);
+                        GameActions.Print($"Added item to exclusion list.");
+                    }
+                });
+            }
+
+            if (_showAddExclusion)
+            {
+                ImGui.Spacing();
+                ImGui.BeginGroup();
+                ImGui.AlignTextToFramePadding();
+                ImGui.Text("Graphic:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(70);
+                ImGui.InputText("##ExclNewGraphic", ref _exclGraphicInput, 10);
+                ImGui.EndGroup();
+
+                ImGui.SameLine();
+
+                ImGui.BeginGroup();
+                ImGui.AlignTextToFramePadding();
+                ImGui.Text("Hue:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(70);
+                ImGui.InputText("##ExclNewHue", ref _exclHueInput, 10);
+                ImGuiComponents.Tooltip("Set -1 to match any hue");
+                ImGui.EndGroup();
+
+                ImGui.Text("Regex:");
+                ImGui.InputText("##ExclNewRegex", ref _exclRegexInput, 500);
+
+                ImGui.Spacing();
+                if (ImGui.Button("Add##ExclAdd"))
+                {
+                    if (StringHelper.TryParseInt(_exclGraphicInput, out int graphic))
+                    {
+                        ushort hue = ushort.MaxValue;
+                        if (!string.IsNullOrEmpty(_exclHueInput) && _exclHueInput != "-1")
+                            ushort.TryParse(_exclHueInput, out hue);
+
+                        var entry = AutoLootManager.Instance.AddExclusionEntry((ushort)graphic, hue);
+                        if (entry != null && !string.IsNullOrEmpty(_exclRegexInput))
+                        {
+                            entry.RegexSearch = _exclRegexInput;
+                            AutoLootManager.Instance.ClearMatchCache();
+                        }
+
+                        _exclGraphicInput = "";
+                        _exclHueInput = "";
+                        _exclRegexInput = "";
+                        _showAddExclusion = false;
+                    }
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Cancel##ExclAdd"))
+                {
+                    _showAddExclusion = false;
+                    _exclGraphicInput = "";
+                    _exclHueInput = "";
+                    _exclRegexInput = "";
+                }
+            }
+
+            if (exclusions.Count == 0)
+            {
+                ImGui.Text("No exclusions configured.");
+                return;
+            }
+
+            if (ImGui.BeginTable("ExclusionTable", 5, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, Math.Min(exclusions.Count * 60 + 30, 250))))
+            {
+                ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 52);
+                ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Regex", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableHeadersRow();
+
+                for (int i = exclusions.Count - 1; i >= 0; i--)
+                {
+                    AutoLootManager.AutoLootConfigEntry entry = exclusions[i];
+                    ImGui.TableNextRow();
+
+                    ImGui.TableNextColumn();
+                    if (!DrawArt((ushort)entry.Graphic, new Vector2(50, 50)))
+                        ImGui.Text($"{entry.Graphic:X4}");
+                    SetTooltip(entry.Name);
+
+                    ImGui.TableNextColumn();
+                    if (!_exclEntryGraphicInputs.ContainsKey(entry.Uid))
+                        _exclEntryGraphicInputs[entry.Uid] = entry.Graphic.ToString();
+                    string graphicStr = _exclEntryGraphicInputs[entry.Uid];
+                    if (ImGui.InputText($"##ExclGraphic{i}", ref graphicStr, 10))
+                    {
+                        _exclEntryGraphicInputs[entry.Uid] = graphicStr;
+                        if (StringHelper.TryParseInt(graphicStr, out int newGraphic))
+                        {
+                            entry.Graphic = newGraphic;
+                            AutoLootManager.Instance.RebuildExclusionIndex();
+                            AutoLootManager.Instance.ClearMatchCache();
+                        }
+                    }
+                    SetTooltip("Set to -1 to match any graphic.");
+
+                    ImGui.TableNextColumn();
+                    if (!_exclEntryHueInputs.ContainsKey(entry.Uid))
+                        _exclEntryHueInputs[entry.Uid] = entry.Hue == ushort.MaxValue ? "-1" : entry.Hue.ToString();
+                    string hueStr = _exclEntryHueInputs[entry.Uid];
+                    if (ImGui.InputText($"##ExclHue{i}", ref hueStr, 10))
+                    {
+                        _exclEntryHueInputs[entry.Uid] = hueStr;
+                        if (hueStr == "-1")
+                        {
+                            entry.Hue = ushort.MaxValue;
+                            AutoLootManager.Instance.ClearMatchCache();
+                        }
+                        else if (ushort.TryParse(hueStr, out ushort newHue))
+                        {
+                            entry.Hue = newHue;
+                            AutoLootManager.Instance.ClearMatchCache();
+                        }
+                    }
+                    SetTooltip("Set to -1 to match any hue.");
+
+                    ImGui.TableNextColumn();
+                    if (!_exclEntryRegexInputs.ContainsKey(entry.Uid))
+                        _exclEntryRegexInputs[entry.Uid] = entry.RegexSearch ?? "";
+                    string regexStr = _exclEntryRegexInputs[entry.Uid];
+
+                    if (ImGui.Button($"Edit##Excl{i}"))
+                        ImGui.OpenPopup($"ExclRegexEditor##{i}");
+
+                    if (ImGui.BeginPopup($"ExclRegexEditor##{i}"))
+                    {
+                        ImGui.TextColored(ImGuiTheme.Current.Primary, "Regex Editor:");
+                        if (ImGui.InputTextMultiline($"##ExclRegex{i}", ref regexStr, 500, new Vector2(300, 100)))
+                        {
+                            _exclEntryRegexInputs[entry.Uid] = regexStr;
+                            entry.RegexSearch = regexStr;
+                            AutoLootManager.Instance.ClearMatchCache();
+                        }
+                        if (ImGui.Button("Close"))
+                            ImGui.CloseCurrentPopup();
+                        ImGui.EndPopup();
+                    }
+
+                    ImGui.TableNextColumn();
+                    if (ImGui.Button($"Delete##ExclDel{i}"))
+                    {
+                        AutoLootManager.Instance.RemoveExclusionEntry(entry.Uid);
+                        _exclEntryGraphicInputs.Remove(entry.Uid);
+                        _exclEntryHueInputs.Remove(entry.Uid);
+                        _exclEntryRegexInputs.Remove(entry.Uid);
+                    }
+                }
+
+                ImGui.EndTable();
             }
         }
 
