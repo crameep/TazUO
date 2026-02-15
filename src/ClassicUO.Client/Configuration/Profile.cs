@@ -259,6 +259,9 @@ namespace ClassicUO.Configuration
         public bool ShowSkillsChangedMessage { get; set; } = true;
         public int ShowSkillsChangedDeltaValue { get; set; } = 1;
         public bool ShowStatsChangedMessage { get; set; } = true;
+        public int SkillsSortColumn { get; set; } = 1;
+        public bool SkillsSortAscending { get; set; } = true;
+        public bool SkillsShowGroups { get; set; } = false;
 
 
         public bool ShadowsEnabled { get; set; } = true;

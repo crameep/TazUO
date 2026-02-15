@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ImGuiNET;
@@ -10,8 +11,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
 {
     public class SkillsTabContent : TabContent
     {
-        private int _sortColumnIndex = 1;
-        private bool _sortAscending = true;
+        private int _sortColumnIndex;
+        private bool _sortAscending;
 
         private float[] _baselineBase;
         private bool _baselineInitialized;
@@ -23,6 +24,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         public SkillsTabContent()
         {
+            Profile profile = ProfileManager.CurrentProfile;
+            _sortColumnIndex = profile.SkillsSortColumn;
+            _sortAscending = profile.SkillsSortAscending;
+            _showGroups = profile.SkillsShowGroups;
+
             int count = Client.Game.UO.FileManager.Skills.SkillsCount;
             _baselineBase = new float[count];
             _sortedIndices = new int[count];
@@ -75,13 +81,18 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.BeginTable("SkillsTable", 7, flags, new Vector2(0, scrollHeight)))
             {
                 ImGui.TableSetupScrollFreeze(0, 1);
+
+                ImGuiTableColumnFlags sortDirFlag = _sortAscending
+                    ? ImGuiTableColumnFlags.PreferSortAscending
+                    : ImGuiTableColumnFlags.PreferSortDescending;
+
                 ImGui.TableSetupColumn("Use", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 30);
-                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch | ImGuiTableColumnFlags.DefaultSort);
-                ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("Base", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("Cap", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("+/-", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 50);
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch | (_sortColumnIndex == 1 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None));
+                ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthFixed | (_sortColumnIndex == 2 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None), 60);
+                ImGui.TableSetupColumn("Base", ImGuiTableColumnFlags.WidthFixed | (_sortColumnIndex == 3 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None), 60);
+                ImGui.TableSetupColumn("Cap", ImGuiTableColumnFlags.WidthFixed | (_sortColumnIndex == 4 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None), 60);
+                ImGui.TableSetupColumn("+/-", ImGuiTableColumnFlags.WidthFixed | (_sortColumnIndex == 5 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None), 60);
+                ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed | (_sortColumnIndex == 6 ? ImGuiTableColumnFlags.DefaultSort | sortDirFlag : ImGuiTableColumnFlags.None), 50);
                 ImGui.TableHeadersRow();
 
                 ImGuiTableSortSpecsPtr sortSpecs = ImGui.TableGetSortSpecs();
@@ -93,6 +104,10 @@ namespace ClassicUO.Game.UI.ImGuiControls
                         ImGuiTableColumnSortSpecsPtr spec = sortSpecs.Specs;
                         _sortColumnIndex = spec.ColumnIndex;
                         _sortAscending = spec.SortDirection == ImGuiSortDirection.Ascending;
+
+                        Profile profile = ProfileManager.CurrentProfile;
+                        profile.SkillsSortColumn = _sortColumnIndex;
+                        profile.SkillsSortAscending = _sortAscending;
                     }
 
                     SortSkills(skills);
@@ -356,7 +371,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
             ImGui.SameLine();
 
             // Show Groups checkbox
-            ImGui.Checkbox("Show Groups", ref _showGroups);
+            if (ImGui.Checkbox("Show Groups", ref _showGroups))
+                ProfileManager.CurrentProfile.SkillsShowGroups = _showGroups;
 
             ImGui.SameLine();
             ImGui.Text("|");
