@@ -44,6 +44,7 @@ namespace ClassicUO.Game.Managers
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
         internal readonly HashSet<uint> _nearbyGroundItems = new();
+        private readonly Dictionary<uint, long> _lootCooldowns = new();
         private static readonly PriorityQueue<(uint item, AutoLootConfigEntry entry), int> _lootItems = new ();
         internal volatile List<AutoLootConfigEntry> _mergedEntries = new ();
         private volatile int _activeProfileCount = 0;
@@ -117,6 +118,15 @@ namespace ClassicUO.Game.Managers
         public void LootItem(Item item, AutoLootConfigEntry entry = null)
         {
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
+
+            // Skip corpse/container items that are on cooldown from a previous loot attempt.
+            // Ground items are excluded — their retry cadence is already gated by position changes.
+            if (!item.OnGround && _lootCooldowns.TryGetValue(item.Serial, out long cooldownUntil) && Time.Ticks < cooldownUntil)
+            {
+                _recentlyLooted.Remove(item.Serial);
+                _quickContainsLookup.Remove(item.Serial);
+                return;
+            }
 
             int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
             // Corpse items get a priority boost so they're dequeued before ground items
@@ -391,6 +401,7 @@ namespace ClassicUO.Game.Managers
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
             _nearbyGroundItems.Clear();
+            _lootCooldowns.Clear();
             ClearMatchCache();
             SaveAll();
             SaveExclusions();
@@ -527,6 +538,18 @@ namespace ClassicUO.Game.Managers
                 _recentlyLooted.Clear();
                 ClearMatchCache();
                 _nextClearRecents = Time.Ticks + 5000;
+
+                // Clean up expired cooldowns and cooldowns for items that no longer exist
+                List<uint> expiredCooldowns = null;
+                foreach (var kvp in _lootCooldowns)
+                {
+                    if (Time.Ticks >= kvp.Value || _world.Items.Get(kvp.Key) == null)
+                        (expiredCooldowns ??= new List<uint>()).Add(kvp.Key);
+                }
+
+                if (expiredCooldowns != null)
+                    foreach (uint serial in expiredCooldowns)
+                        _lootCooldowns.Remove(serial);
             }
 
             if (_lootItems.Count == 0)
@@ -601,6 +624,11 @@ namespace ClassicUO.Game.Managers
                     _ => ActionPriority.LootItemMedium,
                 };
                 ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), lootPriority);
+
+                // Set a 30-second cooldown for corpse/container items so if the move fails, we don't spam retry.
+                // Ground items don't need this — their retry is already gated by position changes.
+                if (!moveItem.OnGround)
+                    _lootCooldowns[moveItem.Serial] = Time.Ticks + 30000;
             }
             else
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
