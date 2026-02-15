@@ -397,7 +397,10 @@ namespace ClassicUO.LegionScripting
             if (script.PythonThread == null || !script.PythonThread.IsAlive)
             {
                 script.ReadFromFile();
-                script.PythonThread = new Thread(() => ExecutePythonScript(script));
+                script.PythonThread = new Thread(() => ExecutePythonScript(script))
+                {
+                    IsBackground = true
+                };
 
                 if(!PyThreads.TryAdd(script.PythonThread.ManagedThreadId, script))
                     PyThreads[script.PythonThread.ManagedThreadId] = script;
@@ -534,6 +537,7 @@ namespace ClassicUO.LegionScripting
                     script.PythonEngine.Runtime.Shutdown();
 
                 script.PythonThread.Interrupt();
+                script.PythonThread.Join(3000);
             }
             else
             {
