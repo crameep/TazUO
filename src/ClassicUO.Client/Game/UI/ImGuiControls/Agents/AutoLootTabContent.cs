@@ -493,7 +493,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
             ImGui.Separator();
 
-            // Profile list
+            // Profile list in scrollable region
+            float availableHeight = ImGui.GetContentRegionAvail().Y - 60; // Reserve space for buttons below
+            if (availableHeight < 50) availableHeight = 50;
+            ImGui.BeginChild("ProfileList", new Vector2(0, availableHeight), ImGuiChildFlags.None);
+
             int dropTargetIndex = -1;
 
             for (int i = 0; i < profiles.Count; i++)
@@ -570,7 +574,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 }
             }
 
-            ImGui.Separator();
+            ImGui.EndChild();
 
             // Action buttons
             if (ImGui.Button("+"))
@@ -919,7 +923,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                     // Invisible selectable for row-level right-click context menu
                     ImGui.TableNextColumn();
-                    ImGui.Selectable($"##RowCtx{i}", false, ImGuiSelectableFlags.SpanAllColumns | ImGuiSelectableFlags.AllowOverlap, new Vector2(0, 50));
+                    ImGui.Selectable($"##RowCtx{i}", false, ImGuiSelectableFlags.SpanAllColumns | ImGuiSelectableFlags.AllowOverlap);
                     DrawEntryContextMenu(entry, i);
                     ImGui.SameLine();
 
