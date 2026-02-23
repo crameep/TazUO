@@ -25,6 +25,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const string DEBUG_STRING_6 = "\n- CamOff: {0:0.0},{1:0.0}  Δ {2:0.0}";
         private const string DEBUG_STRING_7 = "\n- Frame: last {0}ms max {1}ms  Update {2}ms  Draw {3}ms";
         private const string DEBUG_STRING_8 = "\n- GC: gen0 {0} gen1 {1} gen2 {2}  mem {3:0.0}MB";
+        private const string DEBUG_STRING_9 = "\n- WalkNet: deny {0} ({1}ms, seq {2}) confirm {3} ({4}ms) resync {5}";
 
         private const string DEBUG_STRING_SMALL = "FPS: {0}\nZoom: {1:0.00}";
         private const string DEBUG_STRING_SMALL_NO_ZOOM = "FPS: {0}";
@@ -167,6 +168,18 @@ namespace ClassicUO.Game.UI.Gumps
                         GC.CollectionCount(2),
                         GC.GetTotalMemory(false) / 1024f / 1024f
                     ));
+                    if (World.InGame)
+                    {
+                        sb.Append(string.Format(
+                            DEBUG_STRING_9,
+                            World.Player.Walker.DenyCount,
+                            World.Player.Walker.LastDenyTick > 0 ? (Time.Ticks - World.Player.Walker.LastDenyTick) : 0,
+                            World.Player.Walker.LastDenySequence,
+                            World.Player.Walker.ConfirmCount,
+                            World.Player.Walker.LastConfirmTick > 0 ? (Time.Ticks - World.Player.Walker.LastConfirmTick) : 0,
+                            World.Player.Walker.ResyncCount
+                        ));
+                    }
 
                     sb.Append(string.Format(DEBUG_STRING_3, ReadObject(SelectedObject.Object)));
 
@@ -212,6 +225,15 @@ namespace ClassicUO.Game.UI.Gumps
                             GC.CollectionCount(1),
                             GC.CollectionCount(2),
                             GC.GetTotalMemory(false) / 1024f / 1024f
+                        ));
+                        sb.Append(string.Format(
+                            DEBUG_STRING_9,
+                            World.Player.Walker.DenyCount,
+                            World.Player.Walker.LastDenyTick > 0 ? (Time.Ticks - World.Player.Walker.LastDenyTick) : 0,
+                            World.Player.Walker.LastDenySequence,
+                            World.Player.Walker.ConfirmCount,
+                            World.Player.Walker.LastConfirmTick > 0 ? (Time.Ticks - World.Player.Walker.LastConfirmTick) : 0,
+                            World.Player.Walker.ResyncCount
                         ));
                     }
                 }

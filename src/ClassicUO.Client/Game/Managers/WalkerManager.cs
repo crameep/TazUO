@@ -84,9 +84,18 @@ namespace ClassicUO.Game.Managers
         public bool WalkingFailed;
         public byte WalkSequence;
         public bool WantChangeCoordinates;
+        public int DenyCount;
+        public int ConfirmCount;
+        public int ResyncCount;
+        public long LastDenyTick;
+        public long LastConfirmTick;
+        public byte LastDenySequence;
 
         public void DenyWalk(byte sequence, int x, int y, sbyte z)
         {
+            DenyCount++;
+            LastDenyTick = Time.Ticks;
+            LastDenySequence = sequence;
             _player.ClearSteps();
 
             Reset();
@@ -102,6 +111,8 @@ namespace ClassicUO.Game.Managers
 
         public void ConfirmWalk(byte sequence)
         {
+            ConfirmCount++;
+            LastConfirmTick = Time.Ticks;
             if (UnacceptedPacketsCount != 0)
             {
                 UnacceptedPacketsCount--;
@@ -157,6 +168,7 @@ namespace ClassicUO.Game.Managers
                 {
                     AsyncNetClient.Socket.Send_Resync();
                     ResendPacketResync = true;
+                    ResyncCount++;
                 }
 
                 WalkingFailed = true;
