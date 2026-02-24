@@ -988,6 +988,23 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
+        private static int CountItemsRecursive(Item container)
+        {
+            int count = 0;
+
+            for (LinkedObject i = container.Items; i != null; i = i.Next)
+            {
+                count++;
+
+                if (i is Item child && !child.IsEmpty)
+                {
+                    count += CountItemsRecursive(child);
+                }
+            }
+
+            return count;
+        }
+
         private string GetContainerName(bool skipCount = false, bool truncate = true)
         {
             string containerName =
@@ -997,9 +1014,9 @@ namespace ClassicUO.Game.UI.Gumps
             if (truncate)
                 containerName = containerName.Truncate(21);
 
-            if (!skipCount && SlotManager != null)
+            if (!skipCount && Container != null)
             {
-                int count = SlotManager.ContainerContents.Count;
+                int count = CountItemsRecursive(Container);
                 int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
                 containerName += $" ({count}/{max})";
             }
@@ -1112,9 +1129,9 @@ namespace ClassicUO.Game.UI.Gumps
 
             bool result = base.Draw(batcher, x, y);
 
-            if (!_isMinimized && ProfileManager.CurrentProfile.Grid_ShowCapacityBar && SlotManager != null)
+            if (!_isMinimized && ProfileManager.CurrentProfile.Grid_ShowCapacityBar && Container != null)
             {
-                int count = SlotManager.ContainerContents.Count;
+                int count = CountItemsRecursive(Container);
                 int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
                 float ratio = max > 0 ? Math.Min((float)count / max, 1.0f) : 0f;
 
