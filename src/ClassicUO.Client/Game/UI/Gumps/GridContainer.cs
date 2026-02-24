@@ -56,6 +56,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int X_SPACING = 1, Y_SPACING = 1;
         private const int TOP_BAR_HEIGHT = 20;
         private const int LABEL_HEIGHT = 20;
+        private const int CAPACITY_BAR_HEIGHT = 3;
+        private const int CAPACITY_BAR_OVERLAP = 3;
         #endregion
 
         #region private static vars
@@ -997,7 +999,9 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (!skipCount && SlotManager != null)
             {
-                containerName += $" ({SlotManager.ContainerContents.Count})";
+                int count = SlotManager.ContainerContents.Count;
+                int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
+                containerName += $" ({count}/{max})";
             }
 
             return containerName;
@@ -1105,7 +1109,43 @@ namespace ClassicUO.Game.UI.Gumps
         {
             if (CUOEnviroment.Debug)
                 batcher.DrawString(Renderer.Fonts.Bold, LocalSerial.ToString(), x, y - 40, ShaderHueTranslator.GetHueVector(32));
-            return base.Draw(batcher, x, y);
+
+            bool result = base.Draw(batcher, x, y);
+
+            if (!_isMinimized && ProfileManager.CurrentProfile.Grid_ShowCapacityBar && SlotManager != null)
+            {
+                int count = SlotManager.ContainerContents.Count;
+                int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
+                float ratio = max > 0 ? Math.Min((float)count / max, 1.0f) : 0f;
+
+                int barX = x + _borderWidth;
+                int barY = y + _borderWidth + LABEL_HEIGHT - CAPACITY_BAR_OVERLAP;
+                int barWidth = Width - (_borderWidth * 2);
+
+                // Background
+                Vector3 bgHue = ShaderHueTranslator.GetHueVector(0, false, 0.6f);
+                batcher.Draw(SolidColorTextureCache.GetTexture(Color.Black), new Rectangle(barX, barY, barWidth, CAPACITY_BAR_HEIGHT), bgHue);
+
+                // Fill color based on fullness
+                Color fillColor;
+                if (ratio < 0.5f)
+                    fillColor = Color.Green;
+                else if (ratio < 0.8f)
+                    fillColor = Color.Yellow;
+                else if (ratio < 0.95f)
+                    fillColor = Color.Orange;
+                else
+                    fillColor = Color.Red;
+
+                int fillWidth = (int)(barWidth * ratio);
+                if (fillWidth > 0)
+                {
+                    Vector3 fillHue = ShaderHueTranslator.GetHueVector(0, false, 0.8f);
+                    batcher.Draw(SolidColorTextureCache.GetTexture(fillColor), new Rectangle(barX, barY, fillWidth, CAPACITY_BAR_HEIGHT), fillHue);
+                }
+            }
+
+            return result;
         }
 
         public enum GridSortMode
