@@ -988,21 +988,24 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        private static int CountItemsRecursive(Item container)
+        private int GetOplItemCount()
         {
-            int count = 0;
+            if (Container == null || !World.OPL.TryGetNameAndData(Container.Serial, out _, out string data))
+                return -1;
 
-            for (LinkedObject i = container.Items; i != null; i = i.Next)
+            if (string.IsNullOrEmpty(data))
+                return -1;
+
+            // Look for a line like "9 items, 13 stones" or "9 Items, 13 Stones"
+            foreach (string line in data.Split('\n'))
             {
-                count++;
-
-                if (i is Item child && !child.IsEmpty)
-                {
-                    count += CountItemsRecursive(child);
-                }
+                string trimmed = line.Trim();
+                int idx = trimmed.IndexOf(" item", StringComparison.OrdinalIgnoreCase);
+                if (idx > 0 && int.TryParse(trimmed.AsSpan(0, idx), out int count))
+                    return count;
             }
 
-            return count;
+            return -1;
         }
 
         private string GetContainerName(bool skipCount = false, bool truncate = true)
@@ -1011,14 +1014,32 @@ namespace ClassicUO.Game.UI.Gumps
                 GridContainerEntry?.CustomName.NotNullNotEmpty() == true ? GridContainerEntry.CustomName :
                 !string.IsNullOrEmpty(Container.Name) ? Container.Name : "a container";
 
-            if (truncate)
-                containerName = containerName.Truncate(21);
-
-            if (!skipCount && Container != null)
+            if (!skipCount)
             {
-                int count = CountItemsRecursive(Container);
-                int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
-                containerName += $" ({count}/{max})";
+                int oplCount = GetOplItemCount();
+                if (oplCount >= 0)
+                {
+                    int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
+                    string suffix = $" ({oplCount}/{max})";
+                    if (truncate)
+                        containerName = containerName.Truncate(21 - suffix.Length);
+                    containerName += suffix;
+                }
+                else if (SlotManager != null)
+                {
+                    string suffix = $" ({SlotManager.ContainerContents.Count})";
+                    if (truncate)
+                        containerName = containerName.Truncate(21 - suffix.Length);
+                    containerName += suffix;
+                }
+                else if (truncate)
+                {
+                    containerName = containerName.Truncate(21);
+                }
+            }
+            else if (truncate)
+            {
+                containerName = containerName.Truncate(21);
             }
 
             return containerName;
@@ -1129,36 +1150,37 @@ namespace ClassicUO.Game.UI.Gumps
 
             bool result = base.Draw(batcher, x, y);
 
-            if (!_isMinimized && ProfileManager.CurrentProfile.Grid_ShowCapacityBar && Container != null)
+            if (!_isMinimized && ProfileManager.CurrentProfile.Grid_ShowCapacityBar)
             {
-                int count = CountItemsRecursive(Container);
-                int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
-                float ratio = max > 0 ? Math.Min((float)count / max, 1.0f) : 0f;
-
-                int barX = x + _borderWidth;
-                int barY = y + _borderWidth + LABEL_HEIGHT - CAPACITY_BAR_OVERLAP;
-                int barWidth = Width - (_borderWidth * 2);
-
-                // Background
-                Vector3 bgHue = ShaderHueTranslator.GetHueVector(0, false, 0.6f);
-                batcher.Draw(SolidColorTextureCache.GetTexture(Color.Black), new Rectangle(barX, barY, barWidth, CAPACITY_BAR_HEIGHT), bgHue);
-
-                // Fill color based on fullness
-                Color fillColor;
-                if (ratio < 0.5f)
-                    fillColor = Color.Green;
-                else if (ratio < 0.8f)
-                    fillColor = Color.Yellow;
-                else if (ratio < 0.95f)
-                    fillColor = Color.Orange;
-                else
-                    fillColor = Color.Red;
-
-                int fillWidth = (int)(barWidth * ratio);
-                if (fillWidth > 0)
+                int oplCount = GetOplItemCount();
+                if (oplCount >= 0)
                 {
-                    Vector3 fillHue = ShaderHueTranslator.GetHueVector(0, false, 0.8f);
-                    batcher.Draw(SolidColorTextureCache.GetTexture(fillColor), new Rectangle(barX, barY, fillWidth, CAPACITY_BAR_HEIGHT), fillHue);
+                    int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
+                    float ratio = max > 0 ? Math.Min((float)oplCount / max, 1.0f) : 0f;
+
+                    int barX = x + _borderWidth;
+                    int barY = y + _borderWidth + LABEL_HEIGHT - CAPACITY_BAR_OVERLAP;
+                    int barWidth = Width - (_borderWidth * 2);
+
+                    Vector3 bgHue = ShaderHueTranslator.GetHueVector(0, false, 0.6f);
+                    batcher.Draw(SolidColorTextureCache.GetTexture(Color.Black), new Rectangle(barX, barY, barWidth, CAPACITY_BAR_HEIGHT), bgHue);
+
+                    Color fillColor;
+                    if (ratio < 0.5f)
+                        fillColor = Color.Green;
+                    else if (ratio < 0.8f)
+                        fillColor = Color.Yellow;
+                    else if (ratio < 0.95f)
+                        fillColor = Color.Orange;
+                    else
+                        fillColor = Color.Red;
+
+                    int fillWidth = (int)(barWidth * ratio);
+                    if (fillWidth > 0)
+                    {
+                        Vector3 fillHue = ShaderHueTranslator.GetHueVector(0, false, 0.8f);
+                        batcher.Draw(SolidColorTextureCache.GetTexture(fillColor), new Rectangle(barX, barY, fillWidth, CAPACITY_BAR_HEIGHT), fillHue);
+                    }
                 }
             }
 
