@@ -56,6 +56,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int X_SPACING = 1, Y_SPACING = 1;
         private const int TOP_BAR_HEIGHT = 20;
         private const int LABEL_HEIGHT = 20;
+        private const int CAPACITY_BAR_HEIGHT = 3;
+        private const int CAPACITY_BAR_OVERLAP = 3;
         #endregion
 
         #region private static vars
@@ -998,15 +1000,8 @@ namespace ClassicUO.Game.UI.Gumps
             if (!skipCount && SlotManager != null)
             {
                 int count = SlotManager.ContainerContents.Count;
-                if (ProfileManager.CurrentProfile.Grid_ShowCapacityBar)
-                {
-                    int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
-                    containerName += $" ({count}/{max})";
-                }
-                else
-                {
-                    containerName += $" ({count})";
-                }
+                int max = ProfileManager.CurrentProfile.Grid_MaxContainerItems;
+                containerName += $" ({count}/{max})";
             }
 
             return containerName;
@@ -1124,13 +1119,12 @@ namespace ClassicUO.Game.UI.Gumps
                 float ratio = max > 0 ? Math.Min((float)count / max, 1.0f) : 0f;
 
                 int barX = x + _borderWidth;
-                int barY = y + _borderWidth + LABEL_HEIGHT - 3;
+                int barY = y + _borderWidth + LABEL_HEIGHT - CAPACITY_BAR_OVERLAP;
                 int barWidth = Width - (_borderWidth * 2);
-                const int barHeight = 3;
 
                 // Background
                 Vector3 bgHue = ShaderHueTranslator.GetHueVector(0, false, 0.6f);
-                batcher.Draw(SolidColorTextureCache.GetTexture(Color.Black), new Rectangle(barX, barY, barWidth, barHeight), bgHue);
+                batcher.Draw(SolidColorTextureCache.GetTexture(Color.Black), new Rectangle(barX, barY, barWidth, CAPACITY_BAR_HEIGHT), bgHue);
 
                 // Fill color based on fullness
                 Color fillColor;
@@ -1147,7 +1141,7 @@ namespace ClassicUO.Game.UI.Gumps
                 if (fillWidth > 0)
                 {
                     Vector3 fillHue = ShaderHueTranslator.GetHueVector(0, false, 0.8f);
-                    batcher.Draw(SolidColorTextureCache.GetTexture(fillColor), new Rectangle(barX, barY, fillWidth, barHeight), fillHue);
+                    batcher.Draw(SolidColorTextureCache.GetTexture(fillColor), new Rectangle(barX, barY, fillWidth, CAPACITY_BAR_HEIGHT), fillHue);
                 }
             }
 
