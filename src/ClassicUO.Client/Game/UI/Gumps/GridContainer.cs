@@ -44,6 +44,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Xml;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
 using ClassicUO.Utility;
@@ -1490,6 +1491,42 @@ namespace ClassicUO.Game.UI.Gumps
                         }
                     }
                 }
+                else if (e == MouseButtonType.Right && _item != null)
+                {
+                    if (TryParseCoordinatesFromOPL(_item.Serial, out int mapX, out int mapY))
+                    {
+                        var menu = new ContextMenuControl(_gridContainer);
+                        menu.Add("Go To on World Map", () =>
+                        {
+                            WorldMapGump map = UIManager.GetGump<WorldMapGump>();
+                            if (map != null)
+                            {
+                                map.GoToMarker(mapX, mapY, true);
+                            }
+                        });
+                        menu.Show();
+                    }
+                }
+            }
+
+            private bool TryParseCoordinatesFromOPL(uint serial, out int x, out int y)
+            {
+                x = 0;
+                y = 0;
+
+                if (!_world.OPL.TryGetNameAndData(serial, out _, out string data))
+                    return false;
+
+                if (string.IsNullOrEmpty(data))
+                    return false;
+
+                Match match = Regex.Match(data, @"\((\d+)\s*,\s*(\d+)\)");
+                if (!match.Success)
+                    return false;
+
+                x = int.Parse(match.Groups[1].Value);
+                y = int.Parse(match.Groups[2].Value);
+                return true;
             }
 
             private (int X, int Y) GetBoxPosition(int boxIndex, uint itemGraphic, int width, int height)
