@@ -511,6 +511,13 @@ namespace ClassicUO.Game.UI.Gumps
             BuildBorder();
             ResizeWindow(savedSize);
 
+            // Auto-open sub-container tabs based on profile setting
+            AutoOpenTabs();
+
+            // Restore last active tab from save data
+            if (_gridContainerEntry.CurrentTabIndex > 0 && _gridContainerEntry.CurrentTabIndex < _tabs.Count)
+                SwitchToTab(_gridContainerEntry.CurrentTabIndex);
+
             // Apply minimized state after all controls are created
             if (loadMinimized)
             {
@@ -1386,6 +1393,44 @@ namespace ClassicUO.Game.UI.Gumps
                         }
                     }
                     return;
+                }
+            }
+        }
+
+        private void AutoOpenTabs()
+        {
+            int autoOpen = ProfileManager.CurrentProfile.GridContainerTabAutoOpen;
+            if (autoOpen == 0 || !ProfileManager.CurrentProfile.GridContainerTabsEnabled)
+                return;
+
+            Item root = Container;
+            if (root == null)
+                return;
+
+            if (autoOpen == 1) // Direct children only
+            {
+                for (LinkedObject i = root.Items; i != null; i = i.Next)
+                {
+                    var child = (Item)i;
+                    if (child.ItemData.IsContainer && !child.IsDestroyed)
+                        AddTab(child.Serial);
+                }
+            }
+            else if (autoOpen == 2) // All nested
+            {
+                AutoOpenRecursive(root);
+            }
+        }
+
+        private void AutoOpenRecursive(Item container)
+        {
+            for (LinkedObject i = container.Items; i != null; i = i.Next)
+            {
+                var child = (Item)i;
+                if (child.ItemData.IsContainer && !child.IsDestroyed)
+                {
+                    AddTab(child.Serial);
+                    AutoOpenRecursive(child);
                 }
             }
         }
