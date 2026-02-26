@@ -1035,7 +1035,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         private int GetOplItemCount()
         {
-            if (Container == null || !World.OPL.TryGetNameAndData(Container.Serial, out _, out string data))
+            Item activeContainer = ActiveTab != null ? World.Items.Get(ActiveTab.ContainerSerial) : Container;
+            if (activeContainer == null)
+                activeContainer = Container;
+
+            if (activeContainer == null || !World.OPL.TryGetNameAndData(activeContainer.Serial, out _, out string data))
                 return -1;
 
             if (string.IsNullOrEmpty(data))
@@ -1055,9 +1059,13 @@ namespace ClassicUO.Game.UI.Gumps
 
         private string GetContainerName(bool skipCount = false, bool truncate = true)
         {
+            Item activeContainer = ActiveTab != null ? World.Items.Get(ActiveTab.ContainerSerial) : Container;
+            if (activeContainer == null)
+                activeContainer = Container;
+
             string containerName =
                 GridContainerEntry?.CustomName.NotNullNotEmpty() == true ? GridContainerEntry.CustomName :
-                !string.IsNullOrEmpty(Container.Name) ? Container.Name : "a container";
+                !string.IsNullOrEmpty(activeContainer.Name) ? activeContainer.Name : "a container";
 
             if (!skipCount)
             {
@@ -1414,16 +1422,19 @@ namespace ClassicUO.Game.UI.Gumps
             // Save tab slot data before closing
             SaveTabData(tab);
 
-            // If closing the active tab, switch away first
-            if (_activeTabIndex == tabIndex)
-            {
-                SwitchToTab(tabIndex - 1);
-            }
+            bool wasActive = (_activeTabIndex == tabIndex);
 
-            // Detach and dispose grid items for the closed tab
+            // If closing the active tab, switch away first
+            // (SwitchToTab detaches the current tab's items from scroll area)
+            if (wasActive)
+                SwitchToTab(tabIndex - 1);
+
+            // Dispose grid items — only remove from scroll area if they weren't
+            // already detached by SwitchToTab above
             foreach (GridItem gi in tab.SlotManager.GridSlots.Values)
             {
-                _scrollArea.Remove(gi);
+                if (!wasActive)
+                    _scrollArea.Remove(gi);
                 gi.Dispose();
             }
 
