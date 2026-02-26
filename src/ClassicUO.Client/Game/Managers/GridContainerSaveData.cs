@@ -324,6 +324,10 @@ public class GridContainerEntry
 
     [JsonPropertyName("ls")] public Dictionary<uint, GridContainerSlotEntry> Slots { get; set; } = new();
 
+    [JsonPropertyName("tb")] public List<GridContainerTabEntry> Tabs { get; set; } = new();
+
+    [JsonPropertyName("tbi")] public int CurrentTabIndex { get; set; }
+
     public GridContainerSlotEntry GetSlot(uint serial)
     {
         if (Slots.TryGetValue(serial, out GridContainerSlotEntry entry))
@@ -421,10 +425,28 @@ public class GridContainerSlotEntry
     [JsonPropertyName("sl")] public int Slot { get; set; }
 }
 
+public class GridContainerTabEntry
+{
+    [JsonPropertyName("s")]
+    public uint ContainerSerial { get; set; }
+
+    [JsonPropertyName("cn")]
+    public string CustomName { get; set; }
+
+    [JsonPropertyName("ls")]
+    public Dictionary<uint, GridContainerSlotEntry> Slots { get; set; } = new();
+
+    [JsonPropertyName("sm")]
+    public int SortMode { get; set; } = -1; // -1 = inherit parent
+}
+
 [JsonSerializable(typeof(GridContainerEntry))]
 [JsonSerializable(typeof(GridContainerSlotEntry))]
 [JsonSerializable(typeof(GridContainerEntry[]))]
 [JsonSerializable(typeof(Dictionary<uint, GridContainerSlotEntry>))]
+[JsonSerializable(typeof(GridContainerTabEntry))]
+[JsonSerializable(typeof(GridContainerTabEntry[]))]
+[JsonSerializable(typeof(List<GridContainerTabEntry>))]
 [JsonSourceGenerationOptions(
     WriteIndented = false,
     PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified,

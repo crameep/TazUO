@@ -412,6 +412,8 @@ namespace ClassicUO.Configuration
         public bool Grid_HideBorder { get; set; } = false;
         public bool Grid_ShowCapacityBar { get; set; } = true;
         public int Grid_MaxContainerItems { get; set; } = 125;
+        public bool GridContainerTabsEnabled { get; set; } = true;
+        public int GridContainerTabAutoOpen { get; set; } = 0; // 0=Manual, 1=DirectChildren, 2=AllNested
         #endregion
 
         #region COOLDOWNS
