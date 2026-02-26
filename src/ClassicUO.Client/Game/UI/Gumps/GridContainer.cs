@@ -836,9 +836,13 @@ namespace ClassicUO.Game.UI.Gumps
             if (_autoSortContainer)
                 overrideSort = true;
 
+            Item activeContainer = ActiveTab != null ? World.Items.Get(ActiveTab.ContainerSerial) : Container;
+            if (activeContainer == null)
+                activeContainer = Container;
+
             List<Item> sortedContents = (ProfileManager.CurrentProfile is null || ProfileManager.CurrentProfile.GridContainerSearchMode == 0) && !string.IsNullOrEmpty(_searchBox.Text)
                 ? SlotManager.SearchResults(_searchBox.Text)
-                : GridSlotManager.GetItemsInContainer(World, Container, _sortMode, overrideSort);
+                : GridSlotManager.GetItemsInContainer(World, activeContainer, _sortMode, overrideSort);
 
             SlotManager.RebuildContainer(sortedContents, _searchBox.Text, overrideSort);
             InvalidateContents = false;
@@ -1262,9 +1266,41 @@ namespace ClassicUO.Game.UI.Gumps
         {
             if (tabIndex < 0 || tabIndex >= _tabs.Count || tabIndex == _activeTabIndex)
                 return;
+
+            // Save current tab state
+            ContainerTab currentTab = _tabs[_activeTabIndex];
+            currentTab.ScrollPosition = _scrollArea.ScrollValue;
+
+            // Detach current tab's grid items from scroll area
+            foreach (GridItem gi in currentTab.SlotManager.GridSlots.Values)
+                _scrollArea.Remove(gi);
+
+            // Switch
             _activeTabIndex = tabIndex;
+            ContainerTab newTab = _tabs[tabIndex];
+
+            // Update active SlotManager reference
+            SlotManager = newTab.SlotManager;
+
+            // Update sort mode
+            if (newTab.SortModeOverridden)
+                _sortMode = newTab.SortMode;
+            else
+                _sortMode = _tabs[0].SortMode;
+
+            // Attach new tab's grid items to scroll area
+            foreach (GridItem gi in newTab.SlotManager.GridSlots.Values)
+                _scrollArea.Add(gi);
+
+            // Restore scroll position
+            _scrollArea.ScrollValue = newTab.ScrollPosition;
+
+            // Update tab button selection
             for (int i = 0; i < _tabButtons.Count; i++)
                 _tabButtons[i].IsSelected = (i == _activeTabIndex);
+
+            // Trigger item rebuild for the new tab
+            InvalidateContents = true;
         }
 
         private void CloseTab(int tabIndex)
@@ -2437,7 +2473,11 @@ namespace ClassicUO.Game.UI.Gumps
 
             public int ScrollMaxHeight { get; set; } = -1;
             public ScrollbarBehaviour ScrollbarBehaviour { get; set; }
-            public int ScrollValue => _scrollBar.Value;
+            public int ScrollValue
+            {
+                get => _scrollBar.Value;
+                set => _scrollBar.Value = value;
+            }
             public int ScrollMinValue => _scrollBar.MinValue;
             public int ScrollMaxValue => _scrollBar.MaxValue;
 
