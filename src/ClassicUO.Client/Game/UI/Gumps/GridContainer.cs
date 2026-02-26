@@ -898,6 +898,13 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
+        public override void OnButtonClick(int buttonID)
+        {
+            // GridContainer is client-side only; prevent NiceButton clicks from
+            // reaching Gump.OnButtonClick which sends a server gump reply and
+            // disposes the gump.
+        }
+
         public override void Dispose()
         {
             if (_isCorpse)
