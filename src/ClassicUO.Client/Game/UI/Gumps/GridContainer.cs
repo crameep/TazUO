@@ -1222,6 +1222,9 @@ namespace ClassicUO.Game.UI.Gumps
             private static readonly HashSet<uint> _toggledThisAltDrag = new HashSet<uint>();
             private static bool _altDragActive;
             private bool _selectHighlight;
+            private bool _coordsParsed;
+            private bool _hasMapCoords;
+            private int _mapX, _mapY;
 
             public bool ItemGridLocked { get; set; }
             public bool Highlight { get; set; }
@@ -1308,11 +1311,14 @@ namespace ClassicUO.Game.UI.Gumps
                     ItemGridLocked = false;
                     CanMove = true;
                     _hasItem = false;
+                    _coordsParsed = false;
+                    _hasMapCoords = false;
                     _shouldDraw = !_gridContainer._isCorpse;
                     return;
                 }
 
                 _hasItem = true;
+                _coordsParsed = false;
                 CanMove = false;
                 _item = item;
                 ref readonly SpriteInfo text = ref Client.Game.UO.Arts.GetArt((uint)_item.DisplayedGraphic);
@@ -1531,6 +1537,19 @@ namespace ClassicUO.Game.UI.Gumps
                 x = int.Parse(match.Groups[1].Value);
                 y = int.Parse(match.Groups[2].Value);
                 return true;
+            }
+
+            private static Color GetDistanceColor(double distance)
+            {
+                if (distance < 200)
+                    return Color.Green;
+                if (distance < 500)
+                    return Color.YellowGreen;
+                if (distance < 1000)
+                    return Color.Gold;
+                if (distance < 2000)
+                    return Color.Orange;
+                return Color.Red;
             }
 
             private (int X, int Y) GetBoxPosition(int boxIndex, uint itemGraphic, int width, int height)
@@ -1761,6 +1780,27 @@ namespace ClassicUO.Game.UI.Gumps
                 );
 
                 if (!_hasItem) return true;
+
+                if (!_coordsParsed)
+                {
+                    _coordsParsed = true;
+                    _hasMapCoords = TryParseCoordinatesFromOPL(_item.Serial, out _mapX, out _mapY);
+                }
+
+                if (_hasMapCoords)
+                {
+                    double dx = _mapX - _world.Player.X;
+                    double dy = _mapY - _world.Player.Y;
+                    double distance = Math.Sqrt(dx * dx + dy * dy);
+                    Color tintColor = GetDistanceColor(distance);
+
+                    batcher.Draw
+                    (
+                        SolidColorTextureCache.GetTexture(tintColor),
+                        new Rectangle(x + 1, y, Width - 1, Height),
+                        new Vector3(1, 0, 0.3f)
+                    );
+                }
 
                 if (_item.MatchesHighlightData)
                 {
