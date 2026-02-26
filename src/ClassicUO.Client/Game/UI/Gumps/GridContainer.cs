@@ -839,6 +839,8 @@ namespace ClassicUO.Game.UI.Gumps
                 return;
             }
 
+            PruneInvalidTabs();
+
             _containerNameLabel.Text = GetContainerName();
             _containerNameLabel.SetTooltip(GetContainerName(true, false));
 
@@ -1489,6 +1491,37 @@ namespace ClassicUO.Game.UI.Gumps
             _tabs.Add(tab);
             BuildTabBar();
             SwitchToTab(_tabs.Count - 1);
+        }
+
+        private void PruneInvalidTabs()
+        {
+            for (int i = _tabs.Count - 1; i > 0; i--) // Skip main tab
+            {
+                Item tabContainer = World.Items.Get(_tabs[i].ContainerSerial);
+                if (tabContainer == null || tabContainer.IsDestroyed)
+                {
+                    CloseTab(i);
+                    continue;
+                }
+
+                // Verify still a descendant of root container
+                uint parentSerial = tabContainer.Container;
+                bool isDescendant = false;
+                while (parentSerial != 0 && parentSerial != 0xFFFFFFFF)
+                {
+                    if (parentSerial == LocalSerial)
+                    {
+                        isDescendant = true;
+                        break;
+                    }
+                    Item parent = World.Items.Get(parentSerial);
+                    if (parent == null) break;
+                    parentSerial = parent.Container;
+                }
+
+                if (!isDescendant)
+                    CloseTab(i);
+            }
         }
 
         private void CloseTab(int tabIndex)
