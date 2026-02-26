@@ -923,6 +923,25 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
+            // Save tab data
+            if (!_skipSave && !_isCorpse)
+            {
+                _gridContainerEntry.CurrentTabIndex = _activeTabIndex;
+                _gridContainerEntry.Tabs.Clear();
+                for (int i = 1; i < _tabs.Count; i++) // Skip main tab (index 0)
+                    SaveTabData(_tabs[i]);
+
+                // Dispose sub-tab SlotManagers and their GridItems
+                for (int i = 1; i < _tabs.Count; i++)
+                {
+                    foreach (GridItem gi in _tabs[i].SlotManager.GridSlots.Values)
+                    {
+                        _scrollArea.Remove(gi);
+                        gi.Dispose();
+                    }
+                }
+            }
+
             if (SlotManager != null && !_skipSave && SlotManager.ItemPositions.Count > 0 && !_isCorpse)
                 _gridContainerEntry.UpdateSaveDataEntry(this);
 
@@ -1303,14 +1322,147 @@ namespace ClassicUO.Game.UI.Gumps
             InvalidateContents = true;
         }
 
+        public void AddTab(uint containerSerial)
+        {
+            if (!ProfileManager.CurrentProfile.GridContainerTabsEnabled)
+                return;
+
+            // Check if tab already exists -- just switch to it
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                if (_tabs[i].ContainerSerial == containerSerial)
+                {
+                    SwitchToTab(i);
+                    return;
+                }
+            }
+
+            Item container = World.Items.Get(containerSerial);
+            if (container == null)
+                return;
+
+            // Close any existing standalone GridContainer for this sub-container
+            UIManager.GetGump<GridContainer>(containerSerial)?.Dispose();
+
+            // Look up saved tab data for restoring custom name and sort override
+            GridContainerTabEntry savedTab = _gridContainerEntry.Tabs.Find(t => t.ContainerSerial == containerSerial);
+
+            // Determine sort mode -- inherit parent unless overridden
+            GridSortMode sortMode = _sortMode;
+            bool sortOverridden = false;
+            if (savedTab != null && savedTab.SortMode >= 0)
+            {
+                sortMode = (GridSortMode)savedTab.SortMode;
+                sortOverridden = true;
+            }
+
+            // Create SlotManager for this sub-container
+            var slotManager = new GridSlotManager(World, containerSerial, this, _scrollArea);
+
+            // The SlotManager constructor auto-adds GridItems to _scrollArea via SetupGridItemControls.
+            // We need to detach them now -- they'll be re-attached when the tab is switched to.
+            foreach (GridItem gi in slotManager.GridSlots.Values)
+                _scrollArea.Remove(gi);
+
+            var tab = new ContainerTab
+            {
+                ContainerSerial = containerSerial,
+                CustomName = savedTab?.CustomName,
+                SlotManager = slotManager,
+                SortMode = sortMode,
+                SortModeOverridden = sortOverridden
+            };
+
+            _tabs.Add(tab);
+            BuildTabBar();
+            SwitchToTab(_tabs.Count - 1);
+        }
+
         private void CloseTab(int tabIndex)
         {
-            // Stub -- full implementation in Task 5
+            if (tabIndex <= 0 || tabIndex >= _tabs.Count)
+                return; // Can't close main tab
+
+            ContainerTab tab = _tabs[tabIndex];
+
+            // Save tab slot data before closing
+            SaveTabData(tab);
+
+            // If closing the active tab, switch away first
+            if (_activeTabIndex == tabIndex)
+            {
+                SwitchToTab(tabIndex - 1);
+            }
+
+            // Detach and dispose grid items for the closed tab
+            foreach (GridItem gi in tab.SlotManager.GridSlots.Values)
+            {
+                _scrollArea.Remove(gi);
+                gi.Dispose();
+            }
+
+            // Adjust active index if it was after the removed tab
+            if (_activeTabIndex > tabIndex)
+                _activeTabIndex--;
+
+            _tabs.RemoveAt(tabIndex);
+            BuildTabBar();
+        }
+
+        private void SaveTabData(ContainerTab tab)
+        {
+            if (tab.ContainerSerial == LocalSerial)
+                return; // Main tab uses the main entry
+
+            var tabEntry = _gridContainerEntry.Tabs.Find(t => t.ContainerSerial == tab.ContainerSerial);
+            if (tabEntry == null)
+            {
+                tabEntry = new GridContainerTabEntry { ContainerSerial = tab.ContainerSerial };
+                _gridContainerEntry.Tabs.Add(tabEntry);
+            }
+
+            tabEntry.CustomName = tab.CustomName;
+            tabEntry.SortMode = tab.SortModeOverridden ? (int)tab.SortMode : -1;
+            tabEntry.Slots = new Dictionary<uint, GridContainerSlotEntry>();
+
+            foreach (var kvp in tab.SlotManager.ItemPositions)
+            {
+                uint serial = kvp.Value;
+                tabEntry.Slots[serial] = new GridContainerSlotEntry
+                {
+                    Serial = serial,
+                    Slot = kvp.Key,
+                    Locked = tab.SlotManager.GridSlots.TryGetValue(kvp.Key, out GridItem gi) && gi.ItemGridLocked
+                };
+            }
         }
 
         private void ShowTabContextMenu(int tabIndex)
         {
-            // Stub -- full implementation in Task 5
+            ContainerTab tab = _tabs[tabIndex];
+            var menu = new ContextMenuControl(this);
+
+            menu.Add("Rename", () =>
+            {
+                var input = new InputRequest(World, "Enter tab name", "Save", "Cancel", (result, text) =>
+                {
+                    if (result == InputRequest.Result.BUTTON1 && !string.IsNullOrEmpty(text))
+                    {
+                        tab.CustomName = text;
+                        BuildTabBar();
+                    }
+                });
+                input.CenterXInViewPort();
+                input.CenterYInViewPort();
+                UIManager.Add(input);
+            });
+
+            if (tabIndex > 0)
+            {
+                menu.Add("Close Tab", () => CloseTab(tabIndex));
+            }
+
+            menu.Show();
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
