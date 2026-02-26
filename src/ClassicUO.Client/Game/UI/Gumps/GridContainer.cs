@@ -62,7 +62,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int TAB_BAR_HEIGHT = 25;
         #endregion
 
-        internal static bool ForceNewWindow;
+        internal static uint ForceNewWindowSerial;
 
         #region private static vars
         private static int _lastX = 100, _lastY = 100, _lastCorpseX = 100, _lastCorpseY = 100;
@@ -766,10 +766,11 @@ namespace ClassicUO.Game.UI.Gumps
         {
             if (e.Button == MouseButtonType.Left && _scrollArea.MouseIsOver)
             {
+                uint dropTarget = ActiveTab?.ContainerSerial ?? LocalSerial;
                 if (Client.Game.UO.GameCursor.ItemHold.Enabled)
-                    GameActions.DropItem(Client.Game.UO.GameCursor.ItemHold.Serial, 0xFFFF, 0xFFFF, 0, LocalSerial);
+                    GameActions.DropItem(Client.Game.UO.GameCursor.ItemHold.Serial, 0xFFFF, 0xFFFF, 0, dropTarget);
                 else if (World.TargetManager.IsTargeting && !ProfileManager.CurrentProfile.DisableTargetingGridContainers)
-                    World.TargetManager.Target(LocalSerial);
+                    World.TargetManager.Target(dropTarget);
             }
             else if (e.Button == MouseButtonType.Right)
             {
@@ -953,6 +954,10 @@ namespace ClassicUO.Game.UI.Gumps
                 }
             }
 
+            // Ensure we save the main tab's slot data, not a sub-tab's
+            if (_tabs.Count > 0)
+                SlotManager = _tabs[0].SlotManager;
+
             if (SlotManager != null && !_skipSave && SlotManager.ItemPositions.Count > 0 && !_isCorpse)
                 _gridContainerEntry.UpdateSaveDataEntry(this);
 
@@ -1010,7 +1015,8 @@ namespace ClassicUO.Game.UI.Gumps
                 int adjustedHeight = Height - (_borderWidth * 2);
                 UpdateBackgroundDimensions(adjustedWidth, adjustedHeight);
                 _scrollArea.Width = adjustedWidth;
-                _scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT;
+                _scrollArea.Y = LABEL_HEIGHT + TOP_BAR_HEIGHT + EffectiveTabBarHeight + _background.Y;
+                _scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT - EffectiveTabBarHeight;
                 _openRegularGump.X = Width - _openRegularGump.Width - _borderWidth;
                 _quickDropBackpack.X = _openRegularGump.X - _quickDropBackpack.Width;
                 _sortContents.X = _quickDropBackpack.X - _sortContents.Width;
@@ -1072,8 +1078,13 @@ namespace ClassicUO.Game.UI.Gumps
             if (activeContainer == null)
                 activeContainer = Container;
 
+            // Use tab custom name for sub-tabs, root custom name for main tab
+            string customName = (ActiveTab != null && ActiveTab.ContainerSerial != LocalSerial)
+                ? ActiveTab.CustomName
+                : GridContainerEntry?.CustomName;
+
             string containerName =
-                GridContainerEntry?.CustomName.NotNullNotEmpty() == true ? GridContainerEntry.CustomName :
+                !string.IsNullOrEmpty(customName) ? customName :
                 !string.IsNullOrEmpty(activeContainer.Name) ? activeContainer.Name : "a container";
 
             if (!skipCount)
@@ -1363,6 +1374,22 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Notify a container of an update, routing to tabs if the container is open as a tab.
+        /// Use this instead of UIManager.GetGump&lt;GridContainer&gt;(serial)?.RequestUpdateContents().
+        /// </summary>
+        internal static void NotifyContainerUpdate(World world, uint containerSerial)
+        {
+            GridContainer gc = UIManager.GetGump<GridContainer>(containerSerial);
+            if (gc != null)
+            {
+                gc.RequestUpdateContents();
+                return;
+            }
+            GridContainer parent = FindParentGridContainer(world, containerSerial);
+            parent?.RequestUpdateContentsForTab(containerSerial);
         }
 
         internal bool HasTab(uint containerSerial)
@@ -1875,7 +1902,7 @@ namespace ClassicUO.Game.UI.Gumps
                 else
                 {
                     if (Keyboard.Shift && _item != null && _item.ItemData.IsContainer)
-                        GridContainer.ForceNewWindow = true;
+                        GridContainer.ForceNewWindowSerial = _item.Serial;
 
                     GameActions.DoubleClick(_world, LocalSerial);
                 }

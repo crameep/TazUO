@@ -223,9 +223,9 @@ internal static class OpenContainer
                             {
                                 parentGC.RequestUpdateContentsForTab(serial);
                             }
-                            else if (GridContainer.ForceNewWindow)
+                            else if (GridContainer.ForceNewWindowSerial == serial)
                             {
-                                GridContainer.ForceNewWindow = false;
+                                GridContainer.ForceNewWindowSerial = 0;
                                 UIManager.Add(new GridContainer(world, serial, graphic));
                             }
                             else if (parentGC != null && ProfileManager.CurrentProfile.GridContainerTabsEnabled)

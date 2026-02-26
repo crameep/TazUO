@@ -65,7 +65,7 @@ internal static class DeleteObject
 
                 #region GridContainer
 
-                UIManager.GetGump<GridContainer>(cont)?.RequestUpdateContents();
+                GridContainer.NotifyContainerUpdate(world, cont);
 
                 #endregion
 
