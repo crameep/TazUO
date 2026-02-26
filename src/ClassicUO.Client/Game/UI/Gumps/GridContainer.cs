@@ -105,6 +105,9 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly GridScrollArea _scrollArea;
         private bool _isMinimized;
         private int _heightBeforeMinimize;
+
+        private readonly List<ContainerTab> _tabs = new();
+        private int _activeTabIndex;
         #endregion
 
         #region private tooltip vars
@@ -138,7 +141,9 @@ namespace ClassicUO.Game.UI.Gumps
         public bool StackNonStackableItems;
         public bool AutoSortContainer => _autoSortContainer;
         public GridSortMode SortMode => _sortMode;
-        public readonly GridSlotManager SlotManager;
+        public GridSlotManager SlotManager;
+
+        private ContainerTab ActiveTab => _tabs.Count > 0 ? _tabs[_activeTabIndex] : null;
 
         public bool IsMinimized
         {
@@ -479,6 +484,15 @@ namespace ClassicUO.Game.UI.Gumps
             #endregion
 
             SlotManager = new GridSlotManager(world, LocalSerial, this, _scrollArea); //Must come after scroll area
+
+            _tabs.Add(new ContainerTab
+            {
+                ContainerSerial = LocalSerial,
+                SlotManager = SlotManager,
+                SortMode = _sortMode,
+                SortModeOverridden = false
+            });
+            _activeTabIndex = 0;
 
             if (ShouldUseOldContainerStyle())
             {
@@ -1204,6 +1218,17 @@ namespace ClassicUO.Game.UI.Gumps
             Style5,
             Style6,
             Style7
+        }
+
+        private class ContainerTab
+        {
+            public uint ContainerSerial;
+            public string CustomName;
+            public GridSlotManager SlotManager;
+            public int ScrollPosition;
+            public GridSortMode SortMode;
+            public bool SortModeOverridden;
+            public NiceButton TabButton;
         }
 
         public class GridItem : Control
