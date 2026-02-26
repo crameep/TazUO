@@ -112,6 +112,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         private readonly List<ContainerTab> _tabs = new();
         private int _activeTabIndex;
+        private int _tabRowCount = 1;
         #endregion
 
         #region private tooltip vars
@@ -149,7 +150,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         private ContainerTab ActiveTab => _tabs.Count > 0 ? _tabs[_activeTabIndex] : null;
         private bool TabBarVisible => _tabs.Count > 1 && ProfileManager.CurrentProfile.GridContainerTabsEnabled;
-        private int EffectiveTabBarHeight => TabBarVisible ? TAB_BAR_HEIGHT : 0;
+        private int EffectiveTabBarHeight => TabBarVisible ? TAB_BAR_HEIGHT * _tabRowCount : 0;
 
         public bool IsMinimized
         {
@@ -1232,7 +1233,10 @@ namespace ClassicUO.Game.UI.Gumps
             _tabButtons.Clear();
 
             if (!TabBarVisible)
+            {
+                _tabRowCount = 1;
                 return;
+            }
 
             for (int i = 0; i < _tabs.Count; i++)
             {
@@ -1247,8 +1251,26 @@ namespace ClassicUO.Game.UI.Gumps
                     ButtonParameter = tabIndex,
                     IsSelectable = true,
                     IsSelected = (i == _activeTabIndex),
-                    CanCloseWithRightClick = false
+                    CanCloseWithRightClick = false,
+                    DisplayBorder = true
                 };
+
+                // Tint tab background with the container item's hue
+                ushort itemHue = 0;
+                Item tabItem = World.Items.Get(tab.ContainerSerial);
+                if (tabItem != null)
+                    itemHue = tabItem.Hue;
+
+                if (itemHue > 0)
+                {
+                    uint rgba = Client.Game.UO.FileManager.Hues.GetHueColorRgba8888(31, itemHue);
+                    btn.BackgroundColor = new Color() { PackedValue = rgba };
+                }
+                else
+                {
+                    btn.BackgroundColor = new Color(60, 60, 60);
+                }
+                btn.Alpha = 0.5f;
 
                 btn.MouseUp += (sender, e) =>
                 {
@@ -1285,13 +1307,31 @@ namespace ClassicUO.Game.UI.Gumps
         {
             int xOffset = _borderWidth;
             int tabY = _borderWidth + LABEL_HEIGHT + TOP_BAR_HEIGHT;
+            int maxX = Width - _borderWidth;
+            int rowCount = 1;
 
             for (int i = 0; i < _tabButtons.Count; i++)
             {
+                int btnWidth = _tabButtons[i].Width;
+
+                // Wrap to next row if this button would overflow
+                if (xOffset + btnWidth > maxX && i > 0)
+                {
+                    xOffset = _borderWidth;
+                    tabY += TAB_BAR_HEIGHT;
+                    rowCount++;
+                }
+
                 _tabButtons[i].X = xOffset;
                 _tabButtons[i].Y = tabY;
                 _tabButtons[i].IsVisible = TabBarVisible;
-                xOffset += _tabButtons[i].Width + 2;
+                xOffset += btnWidth + 4;
+            }
+
+            if (_tabRowCount != rowCount)
+            {
+                _tabRowCount = rowCount;
+                UpdateUiPositions();
             }
         }
 
