@@ -59,6 +59,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int LABEL_HEIGHT = 20;
         private const int CAPACITY_BAR_HEIGHT = 3;
         private const int CAPACITY_BAR_OVERLAP = 3;
+        private const int TAB_BAR_HEIGHT = 25;
         #endregion
 
         #region private static vars
@@ -87,6 +88,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly ResizableStaticPic _quickDropBackpack;
         private readonly GumpPicTiled _backgroundTexture;
         private readonly NiceButton _setLootBag, _searchClearButton;
+        private readonly List<NiceButton> _tabButtons = new();
         private readonly bool _isCorpse;
         #endregion
 
@@ -144,6 +146,8 @@ namespace ClassicUO.Game.UI.Gumps
         public GridSlotManager SlotManager;
 
         private ContainerTab ActiveTab => _tabs.Count > 0 ? _tabs[_activeTabIndex] : null;
+        private bool TabBarVisible => _tabs.Count > 1 && ProfileManager.CurrentProfile.GridContainerTabsEnabled;
+        private int EffectiveTabBarHeight => TabBarVisible ? TAB_BAR_HEIGHT : 0;
 
         public bool IsMinimized
         {
@@ -432,9 +436,9 @@ namespace ClassicUO.Game.UI.Gumps
             #region Scroll Area
             _scrollArea = new GridScrollArea(
                 _background.X,
-                LABEL_HEIGHT + TOP_BAR_HEIGHT + _background.Y,
+                LABEL_HEIGHT + TOP_BAR_HEIGHT + EffectiveTabBarHeight + _background.Y,
                 _background.Width,
-                _background.Height - LABEL_HEIGHT - TOP_BAR_HEIGHT
+                _background.Height - LABEL_HEIGHT - TOP_BAR_HEIGHT - EffectiveTabBarHeight
                 );
 
             _scrollArea.MouseUp += ScrollArea_MouseUp;
@@ -493,6 +497,7 @@ namespace ClassicUO.Game.UI.Gumps
                 SortModeOverridden = false
             });
             _activeTabIndex = 0;
+            BuildTabBar();
 
             if (ShouldUseOldContainerStyle())
             {
@@ -1137,7 +1142,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             _background.X = _background.Y = _borderWidth;
             _scrollArea.X = _background.X;
-            _scrollArea.Y = LABEL_HEIGHT + TOP_BAR_HEIGHT + _background.Y;
+            _scrollArea.Y = LABEL_HEIGHT + TOP_BAR_HEIGHT + EffectiveTabBarHeight + _background.Y;
             _searchBox.X = _borderWidth;
             _searchBox.Y = _borderWidth + LABEL_HEIGHT;
             _quickDropBackpack.Y = _sortContents.Y = _openRegularGump.Y = _borderWidth;
@@ -1155,7 +1160,121 @@ namespace ClassicUO.Game.UI.Gumps
             _searchClearButton.Y = _borderWidth + LABEL_HEIGHT;
 
             _scrollArea.Width = adjustedWidth;
-            _scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT;
+            _scrollArea.Height = adjustedHeight - LABEL_HEIGHT - TOP_BAR_HEIGHT - EffectiveTabBarHeight;
+
+            PositionTabButtons();
+        }
+
+        private void BuildTabBar()
+        {
+            foreach (NiceButton btn in _tabButtons)
+                btn.Dispose();
+            _tabButtons.Clear();
+
+            if (!TabBarVisible)
+                return;
+
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                ContainerTab tab = _tabs[i];
+                string label = GetTabLabel(tab);
+                if (i > 0)
+                    label += " \u00D7"; // multiply sign as close indicator
+
+                int tabIndex = i; // capture for closure
+                var btn = new NiceButton(0, 0, 80, TAB_BAR_HEIGHT, ButtonAction.Activate, label, 99)
+                {
+                    ButtonParameter = tabIndex,
+                    IsSelectable = true,
+                    IsSelected = (i == _activeTabIndex),
+                    CanCloseWithRightClick = false
+                };
+
+                btn.MouseUp += (sender, e) =>
+                {
+                    if (e.Button == MouseButtonType.Left)
+                    {
+                        // Check if click is on the close area (last ~16px) for non-main tabs
+                        if (tabIndex > 0)
+                        {
+                            int localX = Mouse.Position.X - btn.ScreenCoordinateX;
+                            if (localX >= btn.Width - 16)
+                            {
+                                CloseTab(tabIndex);
+                                return;
+                            }
+                        }
+                        SwitchToTab(tabIndex);
+                    }
+                    else if (e.Button == MouseButtonType.Right)
+                    {
+                        ShowTabContextMenu(tabIndex);
+                    }
+                };
+
+                tab.TabButton = btn;
+                _tabButtons.Add(btn);
+                Add(btn);
+            }
+
+            PositionTabButtons();
+            UpdateUiPositions();
+        }
+
+        private void PositionTabButtons()
+        {
+            int xOffset = _borderWidth;
+            int tabY = _borderWidth + LABEL_HEIGHT + TOP_BAR_HEIGHT;
+
+            for (int i = 0; i < _tabButtons.Count; i++)
+            {
+                _tabButtons[i].X = xOffset;
+                _tabButtons[i].Y = tabY;
+                _tabButtons[i].IsVisible = TabBarVisible;
+                xOffset += _tabButtons[i].Width + 2;
+            }
+        }
+
+        private string GetTabLabel(ContainerTab tab)
+        {
+            if (!string.IsNullOrEmpty(tab.CustomName))
+                return tab.CustomName;
+
+            if (tab.ContainerSerial == LocalSerial)
+                return "Main";
+
+            Item item = World.Items.Get(tab.ContainerSerial);
+            if (item != null && World.OPL.TryGetNameAndData(item.Serial, out string name, out _))
+                return TruncateLabel(name, 10);
+
+            return "Bag";
+        }
+
+        private static string TruncateLabel(string text, int maxLen)
+        {
+            if (string.IsNullOrEmpty(text)) return "Bag";
+            // Strip HTML tags that OPL names may contain
+            text = Regex.Replace(text, "<.*?>", "");
+            return text.Length <= maxLen ? text : text[..maxLen] + "..";
+        }
+
+        private void SwitchToTab(int tabIndex)
+        {
+            if (tabIndex < 0 || tabIndex >= _tabs.Count || tabIndex == _activeTabIndex)
+                return;
+            _activeTabIndex = tabIndex;
+            for (int i = 0; i < _tabButtons.Count; i++)
+                _tabButtons[i].IsSelected = (i == _activeTabIndex);
+        }
+
+        private void CloseTab(int tabIndex)
+        {
+            // Stub -- full implementation in Task 5
+        }
+
+        private void ShowTabContextMenu(int tabIndex)
+        {
+            // Stub -- full implementation in Task 5
         }
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
