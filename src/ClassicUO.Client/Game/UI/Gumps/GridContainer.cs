@@ -1504,6 +1504,10 @@ namespace ClassicUO.Game.UI.Gumps
                                 map.GoToMarker(mapX, mapY, true);
                             }
                         });
+                        menu.Add("Pathfind To Location", () =>
+                        {
+                            _world.Player.Pathfinder.WalkTo(mapX, mapY, 0, 1);
+                        });
                         menu.Show();
                     }
                 }
