@@ -212,9 +212,26 @@ internal static class OpenContainer
                     {
                         GridContainer gridContainer = UIManager.GetGump<GridContainer>(serial);
                         if (gridContainer != null)
+                        {
                             gridContainer.RequestUpdateContents();
-                        else
+                        }
+                        else if (GridContainer.ForceNewWindow)
+                        {
+                            GridContainer.ForceNewWindow = false;
                             UIManager.Add(new GridContainer(world, serial, graphic));
+                        }
+                        else
+                        {
+                            GridContainer parentGC = GridContainer.FindParentGridContainer(world, serial);
+                            if (parentGC != null && ProfileManager.CurrentProfile.GridContainerTabsEnabled)
+                            {
+                                parentGC.AddTab(serial);
+                            }
+                            else
+                            {
+                                UIManager.Add(new GridContainer(world, serial, graphic));
+                            }
+                        }
                     }
                     else
                     {

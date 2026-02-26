@@ -62,6 +62,8 @@ namespace ClassicUO.Game.UI.Gumps
         private const int TAB_BAR_HEIGHT = 25;
         #endregion
 
+        internal static bool ForceNewWindow;
+
         #region private static vars
         private static int _lastX = 100, _lastY = 100, _lastCorpseX = 100, _lastCorpseY = 100;
         private static int GridItemSize => (int)Math.Round(50 * (ProfileManager.CurrentProfile.GridContainersScale / 100f));
@@ -1322,6 +1324,30 @@ namespace ClassicUO.Game.UI.Gumps
             InvalidateContents = true;
         }
 
+        internal static GridContainer FindParentGridContainer(World world, uint containerSerial)
+        {
+            Item item = world.Items.Get(containerSerial);
+            if (item == null)
+                return null;
+
+            // Walk up the container chain to find nearest ancestor with an open GridContainer
+            uint parentSerial = item.Container;
+            while (parentSerial != 0 && parentSerial != 0xFFFFFFFF)
+            {
+                GridContainer gc = UIManager.GetGump<GridContainer>(parentSerial);
+                if (gc != null)
+                    return gc;
+
+                Item parent = world.Items.Get(parentSerial);
+                if (parent == null)
+                    break;
+
+                parentSerial = parent.Container;
+            }
+
+            return null;
+        }
+
         public void AddTab(uint containerSerial)
         {
             if (!ProfileManager.CurrentProfile.GridContainerTabsEnabled)
@@ -1725,6 +1751,9 @@ namespace ClassicUO.Game.UI.Gumps
                 }
                 else
                 {
+                    if (Keyboard.Shift && _item != null && _item.ItemData.IsContainer)
+                        GridContainer.ForceNewWindow = true;
+
                     GameActions.DoubleClick(_world, LocalSerial);
                 }
 
