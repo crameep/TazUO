@@ -1220,6 +1220,7 @@ namespace ClassicUO.Game.UI.Gumps
             private readonly List<SimpleTimedTextGump> _timedTexts = new();
             private readonly World _world;
             private static readonly HashSet<uint> _toggledThisAltDrag = new HashSet<uint>();
+            private static readonly Regex _mapCoordsRegex = new Regex(@"\((\d+)\s*,\s*(\d+)\)", RegexOptions.Compiled);
             private static bool _altDragActive;
             private bool _selectHighlight;
             private bool _coordsParsed;
@@ -1499,20 +1500,22 @@ namespace ClassicUO.Game.UI.Gumps
                 }
                 else if (e == MouseButtonType.Right && _item != null)
                 {
-                    if (TryParseCoordinatesFromOPL(_item.Serial, out int mapX, out int mapY))
+                    if (_hasMapCoords || TryParseCoordinatesFromOPL(_item.Serial, out _mapX, out _mapY))
                     {
+                        _hasMapCoords = true;
+                        _coordsParsed = true;
                         var menu = new ContextMenuControl(_gridContainer);
                         menu.Add("Go To on World Map", () =>
                         {
                             WorldMapGump map = UIManager.GetGump<WorldMapGump>();
                             if (map != null)
                             {
-                                map.GoToMarker(mapX, mapY, true);
+                                map.GoToMarker(_mapX, _mapY, true);
                             }
                         });
                         menu.Add("Pathfind To Location", () =>
                         {
-                            _world.Player.Pathfinder.WalkTo(mapX, mapY, 0, 1);
+                            _world.Player.Pathfinder.WalkTo(_mapX, _mapY, 0, 1);
                         });
                         menu.Show();
                     }
@@ -1530,7 +1533,7 @@ namespace ClassicUO.Game.UI.Gumps
                 if (string.IsNullOrEmpty(data))
                     return false;
 
-                Match match = Regex.Match(data, @"\((\d+)\s*,\s*(\d+)\)");
+                Match match = _mapCoordsRegex.Match(data);
                 if (!match.Success)
                     return false;
 
@@ -1539,15 +1542,15 @@ namespace ClassicUO.Game.UI.Gumps
                 return true;
             }
 
-            private static Color GetDistanceColor(double distance)
+            private static Color GetDistanceColor(double distanceSquared)
             {
-                if (distance < 200)
+                if (distanceSquared < 200 * 200)
                     return Color.Green;
-                if (distance < 500)
+                if (distanceSquared < 500 * 500)
                     return Color.YellowGreen;
-                if (distance < 1000)
+                if (distanceSquared < 1000 * 1000)
                     return Color.Gold;
-                if (distance < 2000)
+                if (distanceSquared < 2000 * 2000)
                     return Color.Orange;
                 return Color.Red;
             }
@@ -1783,22 +1786,24 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (!_coordsParsed)
                 {
-                    _coordsParsed = true;
                     _hasMapCoords = TryParseCoordinatesFromOPL(_item.Serial, out _mapX, out _mapY);
+                    // Only lock in the result once OPL data is available;
+                    // if OPL hasn't arrived yet, retry next frame.
+                    if (_hasMapCoords || _world.OPL.Contains(_item.Serial))
+                        _coordsParsed = true;
                 }
 
-                if (_hasMapCoords)
+                if (_hasMapCoords && _world.Player != null)
                 {
                     double dx = _mapX - _world.Player.X;
                     double dy = _mapY - _world.Player.Y;
-                    double distance = Math.Sqrt(dx * dx + dy * dy);
-                    Color tintColor = GetDistanceColor(distance);
+                    Color tintColor = GetDistanceColor(dx * dx + dy * dy);
 
                     batcher.Draw
                     (
                         SolidColorTextureCache.GetTexture(tintColor),
                         new Rectangle(x + 1, y, Width - 1, Height),
-                        new Vector3(1, 0, 0.3f)
+                        ShaderHueTranslator.GetHueVector(0, false, 0.3f)
                     );
                 }
 
