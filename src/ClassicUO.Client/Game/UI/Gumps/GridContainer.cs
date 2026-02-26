@@ -1356,6 +1356,40 @@ namespace ClassicUO.Game.UI.Gumps
             return null;
         }
 
+        internal bool HasTab(uint containerSerial)
+        {
+            for (int i = 0; i < _tabs.Count; i++)
+                if (_tabs[i].ContainerSerial == containerSerial)
+                    return true;
+            return false;
+        }
+
+        public void RequestUpdateContentsForTab(uint containerSerial)
+        {
+            for (int i = 0; i < _tabs.Count; i++)
+            {
+                if (_tabs[i].ContainerSerial == containerSerial)
+                {
+                    if (i == _activeTabIndex)
+                    {
+                        InvalidateContents = true;
+                    }
+                    else
+                    {
+                        // Rebuild inactive tab's contents
+                        Item container = World.Items.Get(containerSerial);
+                        if (container != null)
+                        {
+                            GridSortMode sort = _tabs[i].SortModeOverridden ? _tabs[i].SortMode : _tabs[0].SortMode;
+                            List<Item> items = GridSlotManager.GetItemsInContainer(World, container, sort, true);
+                            _tabs[i].SlotManager.RebuildContainer(items, "", true);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
         public void AddTab(uint containerSerial)
         {
             if (!ProfileManager.CurrentProfile.GridContainerTabsEnabled)

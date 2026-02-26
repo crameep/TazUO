@@ -215,15 +215,20 @@ internal static class OpenContainer
                         {
                             gridContainer.RequestUpdateContents();
                         }
-                        else if (GridContainer.ForceNewWindow)
-                        {
-                            GridContainer.ForceNewWindow = false;
-                            UIManager.Add(new GridContainer(world, serial, graphic));
-                        }
                         else
                         {
+                            // Check if this container is already open as a tab
                             GridContainer parentGC = GridContainer.FindParentGridContainer(world, serial);
-                            if (parentGC != null && ProfileManager.CurrentProfile.GridContainerTabsEnabled)
+                            if (parentGC != null && parentGC.HasTab(serial))
+                            {
+                                parentGC.RequestUpdateContentsForTab(serial);
+                            }
+                            else if (GridContainer.ForceNewWindow)
+                            {
+                                GridContainer.ForceNewWindow = false;
+                                UIManager.Add(new GridContainer(world, serial, graphic));
+                            }
+                            else if (parentGC != null && ProfileManager.CurrentProfile.GridContainerTabsEnabled)
                             {
                                 parentGC.AddTab(serial);
                             }
