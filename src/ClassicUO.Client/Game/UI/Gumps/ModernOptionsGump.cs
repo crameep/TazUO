@@ -2891,6 +2891,31 @@ namespace ClassicUO.Game.UI.Gumps
 
             content.AddToRight
             (
+                new CheckboxWithLabel("Enable Container Tabs", 0, profile.GridContainerTabsEnabled, (b) => { profile.GridContainerTabsEnabled = b; }),
+                true, page
+            );
+
+            content.Indent();
+
+            content.AddToRight
+            (
+                new ComboBoxWithLabel
+                (World,
+                    "Auto-Open Sub-Containers", 0, ThemeSettings.COMBO_BOX_WIDTH,
+                    new[] { "Manual", "Direct Children", "All Nested" },
+                    profile.GridContainerTabAutoOpen, (i, s) =>
+                    {
+                        profile.GridContainerTabAutoOpen = i;
+                    }
+                ), true, page
+            );
+
+            content.RemoveIndent();
+
+            content.BlankLine();
+
+            content.AddToRight
+            (
                 new ComboBoxWithLabel
                 (World,
                     lang.GetTazUO.ContainerStyle, 0, ThemeSettings.COMBO_BOX_WIDTH, Enum.GetNames(typeof(GridContainer.BorderStyle)), profile.Grid_BorderStyle, (i, s) =>
