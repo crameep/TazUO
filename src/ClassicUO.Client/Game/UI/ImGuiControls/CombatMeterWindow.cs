@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
 using ImGuiNET;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -21,8 +22,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
         // Time window fields (prepared for per-target tab)
         private int _selectedTimeWindow = 2;
 
-        private static readonly string[] TimeWindowLabels = { "10s", "30s", "1m", "5m", "All" };
-        private static readonly uint[] TimeWindowMs = { 10_000, 30_000, 60_000, 300_000, uint.MaxValue };
+        private static readonly string[] TimeWindowLabels = { "Current Fight", "30s", "1m", "5m", "Session" };
+        private static readonly uint[] TimeWindowMs = { 0, 30_000, 60_000, 300_000, uint.MaxValue };
 
         private CombatMeterWindow() : base("Combat Meter")
         {
@@ -51,13 +52,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 if (ImGui.BeginTabItem("Per-Target"))
                 {
-                    ImGui.Text("Coming soon...");
+                    DrawPerTargetTab();
                     ImGui.EndTabItem();
                 }
 
                 if (ImGui.BeginTabItem("Timeline"))
                 {
-                    ImGui.Text("Coming soon...");
+                    DrawTimelineTab();
                     ImGui.EndTabItem();
                 }
 
@@ -168,6 +169,171 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return $"{time} {e.TargetName} hits you for {e.Amount}";
 
             return $"{time} You hit {e.TargetName} for {e.Amount}";
+        }
+
+        private void DrawTimelineTab()
+        {
+            var tracker = CombatTracker.Instance;
+            uint sessionMs = (uint)(tracker.SessionDuration * 1000f);
+
+            if (sessionMs < 1000)
+            {
+                ImGui.Text("Waiting for data...");
+                return;
+            }
+
+            uint windowMs = Math.Min(sessionMs, 300_000);
+            var buckets = tracker.GetTimelineBuckets(windowMs);
+
+            if (buckets.Count == 0)
+            {
+                ImGui.Text("No combat data yet.");
+                return;
+            }
+
+            // Find max value for scaling
+            int maxVal = 1;
+            for (int i = 0; i < buckets.Count; i++)
+            {
+                if (buckets[i].Dealt > maxVal) maxVal = buckets[i].Dealt;
+                if (buckets[i].Taken > maxVal) maxVal = buckets[i].Taken;
+                if (buckets[i].Healed > maxVal) maxVal = buckets[i].Healed;
+            }
+
+            // Legend row
+            ImGui.TextColored(new Vector4(0.4f, 1.0f, 0.4f, 1.0f), "Dealt");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1.0f, 0.4f, 0.4f, 1.0f), "Taken");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.4f, 0.6f, 1.0f, 1.0f), "Healed");
+            ImGui.SameLine();
+            ImGui.Text($"  Peak: {maxVal}");
+
+            float chartHeight = 150f;
+            float barWidth = 8f;
+            float groupSpacing = 2f;
+            float groupWidth = barWidth * 3 + groupSpacing;
+            float totalWidth = buckets.Count * groupWidth + groupSpacing;
+
+            ImGui.BeginChild("TimelineScroll", new Vector2(-1, chartHeight + 20f), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
+
+            ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+            Vector2 cursorStart = ImGui.GetCursorScreenPos();
+            float baselineY = cursorStart.Y + chartHeight;
+
+            uint colorDealt = ImGui.GetColorU32(new Vector4(0.4f, 1.0f, 0.4f, 0.8f));
+            uint colorTaken = ImGui.GetColorU32(new Vector4(1.0f, 0.4f, 0.4f, 0.8f));
+            uint colorHealed = ImGui.GetColorU32(new Vector4(0.4f, 0.6f, 1.0f, 0.8f));
+            uint colorFightLine = ImGui.GetColorU32(new Vector4(1.0f, 1.0f, 0.0f, 0.6f));
+
+            uint cutoff = Time.Ticks > windowMs ? Time.Ticks - windowMs : 0;
+
+            for (int i = 0; i < buckets.Count; i++)
+            {
+                float x = cursorStart.X + i * groupWidth + groupSpacing;
+
+                // Dealt bar (green)
+                if (buckets[i].Dealt > 0)
+                {
+                    float h = (buckets[i].Dealt / (float)maxVal) * chartHeight;
+                    drawList.AddRectFilled(
+                        new Vector2(x, baselineY - h),
+                        new Vector2(x + barWidth, baselineY),
+                        colorDealt
+                    );
+                }
+
+                // Taken bar (red)
+                if (buckets[i].Taken > 0)
+                {
+                    float h = (buckets[i].Taken / (float)maxVal) * chartHeight;
+                    drawList.AddRectFilled(
+                        new Vector2(x + barWidth, baselineY - h),
+                        new Vector2(x + barWidth * 2, baselineY),
+                        colorTaken
+                    );
+                }
+
+                // Healed bar (blue)
+                if (buckets[i].Healed > 0)
+                {
+                    float h = (buckets[i].Healed / (float)maxVal) * chartHeight;
+                    drawList.AddRectFilled(
+                        new Vector2(x + barWidth * 2, baselineY - h),
+                        new Vector2(x + barWidth * 3, baselineY),
+                        colorHealed
+                    );
+                }
+            }
+
+            // Draw fight boundary lines
+            var fights = tracker.Fights;
+            for (int f = 0; f < fights.Count; f++)
+            {
+                uint fightStart = fights[f].StartTime;
+                if (fightStart < cutoff) continue;
+
+                float offsetMs = fightStart - cutoff;
+                float bucketIndex = offsetMs / 1000f;
+                float lineX = cursorStart.X + bucketIndex * groupWidth + groupSpacing;
+
+                drawList.AddLine(
+                    new Vector2(lineX, cursorStart.Y),
+                    new Vector2(lineX, baselineY),
+                    colorFightLine
+                );
+            }
+
+            // If currently in a fight, draw its start line too
+            var currentFight = tracker.GetCurrentFightSummary();
+            if (currentFight != null)
+            {
+                uint fightStart = currentFight.StartTime;
+                if (fightStart >= cutoff)
+                {
+                    float offsetMs = fightStart - cutoff;
+                    float bucketIndex = offsetMs / 1000f;
+                    float lineX = cursorStart.X + bucketIndex * groupWidth + groupSpacing;
+
+                    drawList.AddLine(
+                        new Vector2(lineX, cursorStart.Y),
+                        new Vector2(lineX, baselineY),
+                        colorFightLine
+                    );
+                }
+            }
+
+            // Invisible buttons for hover tooltips
+            for (int i = 0; i < buckets.Count; i++)
+            {
+                float x = cursorStart.X + i * groupWidth + groupSpacing;
+                ImGui.SetCursorScreenPos(new Vector2(x, cursorStart.Y));
+
+                ImGui.InvisibleButton($"tb_{i}", new Vector2(barWidth * 3, chartHeight));
+
+                if (ImGui.IsItemHovered())
+                {
+                    uint elapsed = buckets[i].Timestamp > tracker.SessionStart
+                        ? buckets[i].Timestamp - tracker.SessionStart
+                        : 0;
+                    int totalSec = (int)(elapsed / 1000);
+                    int min = totalSec / 60;
+                    int sec = totalSec % 60;
+
+                    ImGui.BeginTooltip();
+                    ImGui.Text($"[{min}:{sec:D2}]");
+                    ImGui.TextColored(new Vector4(0.4f, 1.0f, 0.4f, 1.0f), $"Dealt: {buckets[i].Dealt}");
+                    ImGui.TextColored(new Vector4(1.0f, 0.4f, 0.4f, 1.0f), $"Taken: {buckets[i].Taken}");
+                    ImGui.TextColored(new Vector4(0.4f, 0.6f, 1.0f, 1.0f), $"Healed: {buckets[i].Healed}");
+                    ImGui.EndTooltip();
+                }
+            }
+
+            // Set dummy to ensure scroll area covers all bars
+            ImGui.SetCursorScreenPos(new Vector2(cursorStart.X + totalWidth, baselineY));
+            ImGui.Dummy(new Vector2(0, 0));
+
+            ImGui.EndChild();
         }
 
         private void DrawFooter()
