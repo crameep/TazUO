@@ -105,6 +105,7 @@ namespace ClassicUO.Game.Managers
             _currentFightHealed = 0;
             _currentFightKills = 0;
 
+            EventSink.OnEntityDamage -= OnEntityDamage;
             EventSink.OnEntityDamage += OnEntityDamage;
         }
 
@@ -120,7 +121,8 @@ namespace ClassicUO.Game.Managers
 
         private void OnEntityDamage(object sender, int damage)
         {
-            if (sender is Mobile mobile && mobile.Hits <= 0 && mobile.Serial == World.Instance?.TargetManager?.LastAttack)
+            // Check if damage would bring the target to 0 HP (Hits hasn't been updated yet when this fires)
+            if (sender is Mobile mobile && (mobile.Hits - damage) <= 0 && mobile.Serial == World.Instance?.TargetManager?.LastAttack)
             {
                 RecordKill();
             }
@@ -318,6 +320,8 @@ namespace ClassicUO.Game.Managers
 
         public List<TimelineBucket> GetTimelineBuckets(uint windowMs, uint bucketSizeMs = 1000)
         {
+            if (bucketSizeMs == 0) bucketSizeMs = 1000;
+
             uint now = Time.Ticks;
             uint cutoff = now > windowMs ? now - windowMs : 0;
             var buckets = new Dictionary<uint, TimelineBucket>();
@@ -496,6 +500,8 @@ namespace ClassicUO.Game.Managers
 
     [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
     [System.Text.Json.Serialization.JsonSerializable(typeof(SessionExport))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(FightExport))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(EventExport))]
     internal partial class CombatExportContext : System.Text.Json.Serialization.JsonSerializerContext
     {
     }
