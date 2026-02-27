@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 
 namespace ClassicUO.Game.Managers
 {
@@ -381,5 +382,108 @@ namespace ClassicUO.Game.Managers
         }
 
         public float SessionDuration => (Time.Ticks - _sessionStart) / 1000f;
+
+        public string ExportSessionJson()
+        {
+            var fightExports = new List<FightExport>(_fights.Count);
+            for (int i = 0; i < _fights.Count; i++)
+            {
+                var f = _fights[i];
+                fightExports.Add(new FightExport
+                {
+                    DurationSec = f.DurationSeconds,
+                    Dealt = f.TotalDealt,
+                    Taken = f.TotalTaken,
+                    Healed = f.TotalHealed,
+                    Kills = f.Kills,
+                    DPS = f.DPS
+                });
+            }
+
+            // Include current fight if active
+            if (_inFight)
+            {
+                var current = GetCurrentFightSummary();
+                if (current != null)
+                {
+                    fightExports.Add(new FightExport
+                    {
+                        DurationSec = current.DurationSeconds,
+                        Dealt = current.TotalDealt,
+                        Taken = current.TotalTaken,
+                        Healed = current.TotalHealed,
+                        Kills = current.Kills,
+                        DPS = current.DPS
+                    });
+                }
+            }
+
+            var eventExports = new List<EventExport>(_events.Count);
+            for (int i = 0; i < _events.Count; i++)
+            {
+                var e = _events[i];
+                eventExports.Add(new EventExport
+                {
+                    TimestampMs = e.Timestamp > _sessionStart ? e.Timestamp - _sessionStart : 0,
+                    Target = e.TargetName,
+                    TargetSerial = e.TargetSerial,
+                    Amount = e.Amount,
+                    Category = e.Category.ToString(),
+                    IsHeal = e.IsHeal
+                });
+            }
+
+            var export = new SessionExport
+            {
+                ExportTime = DateTime.Now.ToString("o"),
+                SessionDurationSec = SessionDuration,
+                TotalDealt = TotalDealt,
+                TotalTaken = TotalTaken,
+                TotalHealed = TotalHealed,
+                TotalKills = TotalKills,
+                Fights = fightExports,
+                Events = eventExports
+            };
+
+            return JsonSerializer.Serialize(export, CombatExportContext.Default.SessionExport);
+        }
+    }
+
+    internal class SessionExport
+    {
+        public string ExportTime { get; set; }
+        public float SessionDurationSec { get; set; }
+        public int TotalDealt { get; set; }
+        public int TotalTaken { get; set; }
+        public int TotalHealed { get; set; }
+        public int TotalKills { get; set; }
+        public List<FightExport> Fights { get; set; }
+        public List<EventExport> Events { get; set; }
+    }
+
+    internal class FightExport
+    {
+        public float DurationSec { get; set; }
+        public int Dealt { get; set; }
+        public int Taken { get; set; }
+        public int Healed { get; set; }
+        public int Kills { get; set; }
+        public float DPS { get; set; }
+    }
+
+    internal class EventExport
+    {
+        public uint TimestampMs { get; set; }
+        public string Target { get; set; }
+        public uint TargetSerial { get; set; }
+        public ushort Amount { get; set; }
+        public string Category { get; set; }
+        public bool IsHeal { get; set; }
+    }
+
+    [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(SessionExport))]
+    internal partial class CombatExportContext : System.Text.Json.Serialization.JsonSerializerContext
+    {
     }
 }

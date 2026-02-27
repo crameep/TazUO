@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Numerics;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
@@ -468,7 +469,49 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
         private void DrawFooter()
         {
-            ImGui.Text("Session stats here");
+            var tracker = CombatTracker.Instance;
+            float duration = tracker.SessionDuration;
+            int totalSeconds = (int)duration;
+            int minutes = totalSeconds / 60;
+            int seconds = totalSeconds % 60;
+
+            ImGui.Text($"{minutes}:{seconds:D2}");
+            ImGui.SameLine();
+            ImGui.Text($"Dealt: {tracker.TotalDealt}");
+            ImGui.SameLine();
+            ImGui.Text($"Taken: {tracker.TotalTaken}");
+            ImGui.SameLine();
+            ImGui.Text($"Healed: {tracker.TotalHealed}");
+            ImGui.SameLine();
+            ImGui.Text($"Kills: {tracker.TotalKills}");
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Export"))
+            {
+                try
+                {
+                    var profile = ProfileManager.CurrentProfile;
+                    string dir = profile?.CombatExportPath ?? "CombatLogs";
+
+                    if (!Path.IsPathRooted(dir))
+                        dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, dir);
+
+                    Directory.CreateDirectory(dir);
+
+                    string fileName = $"combat_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.json";
+                    string path = Path.Combine(dir, fileName);
+
+                    string json = tracker.ExportSessionJson();
+                    File.WriteAllText(path, json);
+
+                    GameActions.Print($"Combat log exported to {path}", 0x0044);
+                }
+                catch (Exception ex)
+                {
+                    GameActions.Print($"Export failed: {ex.Message}", 0x0021);
+                }
+            }
         }
     }
 }
