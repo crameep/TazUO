@@ -34,5 +34,13 @@ internal static class UpdateHitpoints
             if (mobile != null)
                 BandageManager.Instance.OnMobileHpChanged(mobile, oldHits, entity.Hits);
         }
+
+        // Record heals to combat tracker
+        if (SerialHelper.IsMobile(entity.Serial) && entity.Hits > oldHits)
+        {
+            ushort healAmount = (ushort)(entity.Hits - oldHits);
+            string healName = (entity as Mobile)?.Name ?? string.Empty;
+            CombatTracker.Instance.RecordHeal(entity.Serial, healAmount, healName);
+        }
     }
 }

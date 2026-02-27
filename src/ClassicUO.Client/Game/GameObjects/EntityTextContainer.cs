@@ -96,6 +96,23 @@ namespace ClassicUO.Game.GameObjects
                 if (_parent.Serial == _world.TargetManager.LastAttack)
                     hue = ProfileManager.CurrentProfile == null ? (ushort)0x1F : ProfileManager.CurrentProfile.DamageHueLastAttck;
             }
+
+            // Record to combat tracker
+            var combatCategory = CombatCategory.Other;
+            if (ReferenceEquals(Parent, _world.Player))
+                combatCategory = CombatCategory.Self;
+            else if (Parent is Mobile cmob)
+            {
+                if (cmob.Serial == _world.TargetManager.LastAttack)
+                    combatCategory = CombatCategory.LastTarget;
+                else if (cmob.NotorietyFlag == NotorietyFlag.Ally)
+                    combatCategory = CombatCategory.Ally;
+                else if (cmob.IsRenamable && cmob.NotorietyFlag != NotorietyFlag.Invulnerable && cmob.NotorietyFlag != NotorietyFlag.Enemy)
+                    combatCategory = CombatCategory.Pet;
+            }
+            if (Parent is Entity combatEntity)
+                CombatTracker.Instance.RecordDamage(combatEntity.Serial, (ushort)damage, combatCategory, name);
+
             string dps = ProfileManager.CurrentProfile.ShowDPS ? $" (DPS: {Parent.GetCurrentDPS()})" : string.Empty;
 
 
