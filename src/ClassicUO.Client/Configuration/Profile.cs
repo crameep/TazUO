@@ -449,6 +449,15 @@ namespace ClassicUO.Configuration
         public ushort DamageHueOther { get; set; } = 0x0021;
 
         public bool ShowDPS { get; set; } = true;
+
+        // Combat Meter
+        public bool CombatMeterEnabled { get; set; } = true;
+        public bool CombatHudVisible { get; set; } = true;
+        public bool CombatHudAutoShow { get; set; } = true;
+        public int CombatHudAutoHideDelay { get; set; } = 5;
+        public int CombatFightIdleThreshold { get; set; } = 10;
+        public int CombatMaxEvents { get; set; } = 10000;
+        public string CombatExportPath { get; set; } = "CombatLogs";
         #endregion
 
         #region GridHighlightingProps
