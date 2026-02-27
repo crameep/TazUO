@@ -133,6 +133,12 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
 
     public void Refresh() => _pendingReload = true;
 
+    public new void Draw()
+    {
+        ImGui.SetNextWindowSize(new Vector2(400, 500), ImGuiCond.FirstUseEver);
+        base.Draw();
+    }
+
     public override void DrawContent()
     {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 0);
