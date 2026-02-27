@@ -197,6 +197,14 @@ namespace ClassicUO.Game.Scenes
             WalkableManager.Instance.Initialize();
             ItemDatabaseManager.Instance.Initialize();
 
+            CombatTracker.Instance.Initialize();
+            var combatProfile = ProfileManager.CurrentProfile;
+            if (combatProfile != null)
+            {
+                CombatTracker.Instance.SetMaxEvents(combatProfile.CombatMaxEvents);
+                CombatTracker.Instance.SetFightIdleThreshold(combatProfile.CombatFightIdleThreshold * 1000);
+            }
+
             var viewport = new WorldViewportGump(_world, this);
             UIManager.Add(viewport, false);
 
@@ -439,6 +447,7 @@ namespace ClassicUO.Game.Scenes
             SpellVisualRangeManager.Instance.Save();
             SpellVisualRangeManager.Instance.OnSceneUnload();
             AutoLootManager.Instance.OnSceneUnload();
+            CombatTracker.Reset();
             FriendsListManager.Instance.OnSceneUnload();
 
             NameOverHeadManager.Save();

@@ -488,6 +488,7 @@ namespace ClassicUO.Game
 
                 _effectManager.Update();
                 WorldTextManager.Update();
+                CombatTracker.Instance.Update();
                 WMapManager.RemoveUnupdatedWEntity();
             }
         }
