@@ -171,6 +171,136 @@ namespace ClassicUO.Game.UI.ImGuiControls
             return $"{time} You hit {e.TargetName} for {e.Amount}";
         }
 
+        private void DrawPerTargetTab()
+        {
+            var tracker = CombatTracker.Instance;
+
+            // Time window selector row
+            for (int i = 0; i < TimeWindowLabels.Length; i++)
+            {
+                if (i > 0)
+                    ImGui.SameLine();
+
+                bool isSelected = _selectedTimeWindow == i;
+
+                if (isSelected)
+                    ImGui.PushStyleColor(ImGuiCol.Button, ImGuiTheme.Current.Primary);
+
+                if (ImGui.Button(TimeWindowLabels[i]))
+                    _selectedTimeWindow = i;
+
+                if (isSelected)
+                    ImGui.PopStyleColor();
+            }
+
+            // Compute the time window in milliseconds
+            uint windowMs;
+
+            if (_selectedTimeWindow == 0)
+            {
+                // "Current Fight" — use elapsed time since fight start, or 0 if not in fight
+                if (tracker.InFight)
+                {
+                    var fight = tracker.GetCurrentFightSummary();
+                    windowMs = fight != null ? Time.Ticks - fight.StartTime : 0;
+                }
+                else
+                {
+                    windowMs = 0;
+                }
+            }
+            else if (_selectedTimeWindow == TimeWindowMs.Length - 1)
+            {
+                // "Session" — use uint.MaxValue, CombatTracker will clamp to session duration
+                windowMs = uint.MaxValue;
+            }
+            else
+            {
+                windowMs = TimeWindowMs[_selectedTimeWindow];
+            }
+
+            var breakdowns = tracker.GetPerTargetBreakdown(windowMs);
+
+            if (breakdowns.Count == 0)
+            {
+                ImGui.Text("No combat data for this time window.");
+                return;
+            }
+
+            // Per-target table
+            if (ImGui.BeginTable("PerTarget", 5,
+                ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY))
+            {
+                ImGui.TableSetupColumn("Target");
+                ImGui.TableSetupColumn("Dealt");
+                ImGui.TableSetupColumn("Taken");
+                ImGui.TableSetupColumn("Kills");
+                ImGui.TableSetupColumn("Avg Hit");
+                ImGui.TableHeadersRow();
+
+                int totalDealt = 0;
+                int totalTaken = 0;
+                int totalKills = 0;
+                int totalHitCount = 0;
+                int totalDealtForAvg = 0;
+
+                for (int i = 0; i < breakdowns.Count; i++)
+                {
+                    TargetBreakdown tb = breakdowns[i];
+
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+
+                    // Target name as Selectable — clicking filters the log tab
+                    if (ImGui.Selectable(tb.Name, _filterTargetSerial == tb.Serial,
+                        ImGuiSelectableFlags.SpanAllColumns))
+                    {
+                        _filterTargetSerial = _filterTargetSerial == tb.Serial ? null : tb.Serial;
+                    }
+
+                    ImGui.TableNextColumn();
+                    ImGui.Text(tb.Dealt.ToString());
+
+                    ImGui.TableNextColumn();
+                    ImGui.Text(tb.Taken.ToString());
+
+                    ImGui.TableNextColumn();
+                    ImGui.Text(tb.Kills.ToString());
+
+                    ImGui.TableNextColumn();
+                    ImGui.Text(tb.AvgHit.ToString("F1"));
+
+                    totalDealt += tb.Dealt;
+                    totalTaken += tb.Taken;
+                    totalKills += tb.Kills;
+                    totalHitCount += tb.HitCount;
+                    totalDealtForAvg += tb.Dealt;
+                }
+
+                // Totals row in yellow
+                Vector4 totalsColor = new Vector4(1f, 1f, 0.6f, 1f);
+                float totalAvg = totalHitCount > 0 ? (float)totalDealtForAvg / totalHitCount : 0f;
+
+                ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.TextColored(totalsColor, "Total");
+
+                ImGui.TableNextColumn();
+                ImGui.TextColored(totalsColor, totalDealt.ToString());
+
+                ImGui.TableNextColumn();
+                ImGui.TextColored(totalsColor, totalTaken.ToString());
+
+                ImGui.TableNextColumn();
+                ImGui.TextColored(totalsColor, totalKills.ToString());
+
+                ImGui.TableNextColumn();
+                ImGui.TextColored(totalsColor, totalAvg.ToString("F1"));
+
+                ImGui.EndTable();
+            }
+        }
+
         private void DrawTimelineTab()
         {
             var tracker = CombatTracker.Instance;
