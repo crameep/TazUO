@@ -92,8 +92,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             // Right-click to open the full combat meter window
             if (ImGui.IsWindowHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
             {
-                // TODO: CombatMeterWindow.Show() — uncomment when CombatMeterWindow is implemented
-                // CombatMeterWindow.Show();
+                CombatMeterWindow.Show();
             }
         }
     }

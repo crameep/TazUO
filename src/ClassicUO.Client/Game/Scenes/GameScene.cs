@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Net.Sockets;
 using ClassicUO.Game.Map;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
+using ClassicUO.Game.UI.ImGuiControls;
 using ClassicUO.LegionScripting;
 using ClassicUO.Network.PacketHandlers.Helpers;
 using ImGuiNET;
@@ -198,6 +199,7 @@ namespace ClassicUO.Game.Scenes
             ItemDatabaseManager.Instance.Initialize();
 
             CombatTracker.Instance.Initialize();
+            CombatHudOverlay.GetInstance();
             var combatProfile = ProfileManager.CurrentProfile;
             if (combatProfile != null)
             {

@@ -55,6 +55,8 @@ internal static class GameActions
 
     internal static void OpenLegionScriptingGump(World world) => ScriptManagerWindow.Show();
 
+    internal static void OpenCombatMeterWindow() => CombatMeterWindow.Show();
+
     /// <summary>
     ///
     /// </summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using ClassicUO.Game.GameObjects;
 
 namespace ClassicUO.Game.Managers
 {
@@ -103,6 +104,8 @@ namespace ClassicUO.Game.Managers
             _currentFightTaken = 0;
             _currentFightHealed = 0;
             _currentFightKills = 0;
+
+            EventSink.OnEntityDamage += OnEntityDamage;
         }
 
         public void SetMaxEvents(int max) => _maxEvents = max;
@@ -110,7 +113,17 @@ namespace ClassicUO.Game.Managers
 
         public static void Reset()
         {
+            if (_instance != null)
+                EventSink.OnEntityDamage -= _instance.OnEntityDamage;
             _instance = null;
+        }
+
+        private void OnEntityDamage(object sender, int damage)
+        {
+            if (sender is Mobile mobile && mobile.Hits <= 0 && mobile.Serial == World.Instance?.TargetManager?.LastAttack)
+            {
+                RecordKill();
+            }
         }
 
         public void RecordDamage(uint targetSerial, ushort amount, CombatCategory category, string targetName)
