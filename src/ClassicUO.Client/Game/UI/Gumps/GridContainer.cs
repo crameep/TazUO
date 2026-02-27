@@ -91,6 +91,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly GumpPicTiled _backgroundTexture;
         private readonly NiceButton _setLootBag, _searchClearButton;
         private readonly List<NiceButton> _tabButtons = new();
+        private readonly List<HitBox> _tabCloseButtons = new();
         private readonly bool _isCorpse;
         #endregion
 
@@ -1232,6 +1233,10 @@ namespace ClassicUO.Game.UI.Gumps
                 btn.Dispose();
             _tabButtons.Clear();
 
+            foreach (HitBox closeBtn in _tabCloseButtons)
+                closeBtn.Dispose();
+            _tabCloseButtons.Clear();
+
             if (!TabBarVisible)
             {
                 _tabRowCount = 1;
@@ -1276,16 +1281,6 @@ namespace ClassicUO.Game.UI.Gumps
                 {
                     if (e.Button == MouseButtonType.Left)
                     {
-                        // Check if click is on the close area (last ~16px) for non-main tabs
-                        if (tabIndex > 0)
-                        {
-                            int localX = Mouse.Position.X - btn.ScreenCoordinateX;
-                            if (localX >= btn.Width - 16)
-                            {
-                                CloseTab(tabIndex);
-                                return;
-                            }
-                        }
                         SwitchToTab(tabIndex);
                     }
                     else if (e.Button == MouseButtonType.Right)
@@ -1297,6 +1292,25 @@ namespace ClassicUO.Game.UI.Gumps
                 tab.TabButton = btn;
                 _tabButtons.Add(btn);
                 Add(btn);
+
+                // Add a separate close button HitBox for non-main tabs.
+                // This avoids coordinate-space issues with Mouse.Position
+                // that caused tabs to close instead of switch on Windows.
+                if (i > 0)
+                {
+                    var closeHitBox = new HitBox(0, 0, 16, TAB_BAR_HEIGHT)
+                    {
+                        CanCloseWithRightClick = false,
+                        Alpha = 0f
+                    };
+                    closeHitBox.MouseUp += (sender, e) =>
+                    {
+                        if (e.Button == MouseButtonType.Left)
+                            CloseTab(tabIndex);
+                    };
+                    _tabCloseButtons.Add(closeHitBox);
+                    Add(closeHitBox);
+                }
             }
 
             PositionTabButtons();
@@ -1309,6 +1323,7 @@ namespace ClassicUO.Game.UI.Gumps
             int tabY = _borderWidth + LABEL_HEIGHT + TOP_BAR_HEIGHT;
             int maxX = Width - _borderWidth;
             int rowCount = 1;
+            int closeIndex = 0;
 
             for (int i = 0; i < _tabButtons.Count; i++)
             {
@@ -1325,6 +1340,16 @@ namespace ClassicUO.Game.UI.Gumps
                 _tabButtons[i].X = xOffset;
                 _tabButtons[i].Y = tabY;
                 _tabButtons[i].IsVisible = TabBarVisible;
+
+                // Position close button over the right edge of non-main tabs
+                if (i > 0 && closeIndex < _tabCloseButtons.Count)
+                {
+                    _tabCloseButtons[closeIndex].X = xOffset + btnWidth - 16;
+                    _tabCloseButtons[closeIndex].Y = tabY;
+                    _tabCloseButtons[closeIndex].IsVisible = TabBarVisible;
+                    closeIndex++;
+                }
+
                 xOffset += btnWidth + 4;
             }
 
