@@ -931,6 +931,7 @@ internal static class GameActions
     internal static void ReplyGump(World world, uint local, uint server, int button, uint[] switches = null, Tuple<ushort, string>[] entries = null)
     {
         ScriptRecorder.Instance.RecordReplyGump(server, button, switches, entries);
+        GumpButtonCapture.Record(server, button);
         ScriptingInfoGump.AddOrUpdateInfo("Last Gump Button", button);
 
         if (switches != null)

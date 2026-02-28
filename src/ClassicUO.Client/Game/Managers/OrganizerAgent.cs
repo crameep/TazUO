@@ -102,6 +102,9 @@ namespace ClassicUO.Game.Managers
                 Name = GetUniqueName(config.Name + " Copy"),
                 SourceContSerial = config.SourceContSerial,
                 DestContSerial = config.DestContSerial,
+                TomeSerial = config.TomeSerial,
+                TomeGumpId = config.TomeGumpId,
+                TomeAddButtonId = config.TomeAddButtonId,
                 Enabled = false,
                 ItemConfigs = config.ItemConfigs.Select(c => new OrganizerItemConfig
                 {
@@ -474,6 +477,9 @@ namespace ClassicUO.Game.Managers
         public string Name { get; set; } = "Organizer";
         public uint SourceContSerial { get; set; }
         public uint DestContSerial { get; set; }
+        public uint TomeSerial { get; set; }
+        public uint TomeGumpId { get; set; }
+        public int TomeAddButtonId { get; set; }
         public bool Enabled { get; set; } = true;
         public List<OrganizerItemConfig> ItemConfigs { get; set; } = new List<OrganizerItemConfig>();
 

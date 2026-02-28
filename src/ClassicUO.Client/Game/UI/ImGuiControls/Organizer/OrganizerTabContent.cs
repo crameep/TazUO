@@ -15,6 +15,11 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private string _addItemGraphicInput = "";
         private string _addItemHueInput = "";
         private bool _showAddItemManual = false;
+        private bool _captureNextTomeButton = false;
+        private int _captureStartSequence = 0;
+        private OrganizerConfig _tomeInputBoundConfig = null;
+        private string _tomeGumpIdInput = "";
+        private string _tomeButtonIdInput = "";
 
         public OrganizerTabContent()
         {
@@ -99,6 +104,8 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 return;
             }
 
+            EnsureTomeInputsBound();
+            TryApplyCapturedTomeButton();
 
             bool enabled = _selectedConfig.Enabled;
             if (ImGui.Checkbox("Enabled", ref enabled))
@@ -168,13 +175,16 @@ namespace ClassicUO.Game.UI.ImGuiControls
             if (ImGui.Button("Delete"))
             {
                 OrganizerAgent.Instance?.DeleteConfig(_selectedConfig);
-                //_selectedConfig = null;
+                _selectedConfig = null;
+                _tomeInputBoundConfig = null;
+                _captureNextTomeButton = false;
                 _selectedConfigIndex = -1;
             }
             ImGui.PopStyleColor();
 
             // Container settings
             DrawContainerSettings();
+            DrawTomeSettings();
 
             ImGui.NewLine();
 
@@ -417,6 +427,111 @@ namespace ClassicUO.Game.UI.ImGuiControls
 
                 ImGui.EndTable();
             }
+        }
+
+        private void DrawTomeSettings()
+        {
+            ImGui.SeparatorText("Tome Settings (Capture):");
+
+            if (ImGui.Button("Set Tome"))
+            {
+                GameActions.Print("Select a [TOME] item", 82);
+                World.Instance.TargetManager.SetTargeting((target) =>
+                {
+                    if (target == null || target is not Entity entity || !SerialHelper.IsItem(entity))
+                    {
+                        GameActions.Print("Only tome items can be selected!");
+                        return;
+                    }
+
+                    _selectedConfig.TomeSerial = entity.Serial;
+                    GameActions.Print($"Tome set to 0x{entity.Serial:X4} ({entity.Name})", Constants.HUE_SUCCESS);
+                });
+            }
+
+            ImGui.SameLine();
+            if (!_captureNextTomeButton)
+            {
+                if (ImGui.Button("Capture Next Gump Button"))
+                {
+                    _captureNextTomeButton = true;
+                    _captureStartSequence = GumpButtonCapture.Sequence;
+                    GameActions.Print("Capture armed. Click the tome button you want to record.", 82);
+                }
+            }
+            else if (ImGui.Button("Cancel Capture"))
+            {
+                _captureNextTomeButton = false;
+                GameActions.Print("Tome gump button capture canceled.");
+            }
+
+            if (_selectedConfig.TomeSerial != 0)
+                ImGui.Text($"Tome: 0x{_selectedConfig.TomeSerial:X4}");
+            else
+                ImGui.Text("Tome: Not set");
+
+            ImGui.SetNextItemWidth(130);
+            if (ImGui.InputText("Tome Gump ID", ref _tomeGumpIdInput, 20))
+            {
+                if (TryParseUInt(_tomeGumpIdInput, out uint gumpId))
+                    _selectedConfig.TomeGumpId = gumpId;
+                else if (string.IsNullOrWhiteSpace(_tomeGumpIdInput))
+                    _selectedConfig.TomeGumpId = 0;
+            }
+            ImGuiComponents.Tooltip("Decimal or hex (for example 305419896 or 0x12345678).");
+
+            ImGui.SetNextItemWidth(130);
+            if (ImGui.InputText("Add Button ID", ref _tomeButtonIdInput, 12))
+            {
+                if (int.TryParse(_tomeButtonIdInput, out int buttonId))
+                    _selectedConfig.TomeAddButtonId = buttonId;
+                else if (string.IsNullOrWhiteSpace(_tomeButtonIdInput))
+                    _selectedConfig.TomeAddButtonId = 0;
+            }
+            ImGuiComponents.Tooltip("The gump button ID that will be replayed on the tome gump.");
+        }
+
+        private void EnsureTomeInputsBound()
+        {
+            if (_tomeInputBoundConfig == _selectedConfig)
+                return;
+
+            _tomeInputBoundConfig = _selectedConfig;
+            _tomeGumpIdInput = _selectedConfig.TomeGumpId == 0 ? string.Empty : $"0x{_selectedConfig.TomeGumpId:X8}";
+            _tomeButtonIdInput = _selectedConfig.TomeAddButtonId.ToString();
+        }
+
+        private void TryApplyCapturedTomeButton()
+        {
+            if (!_captureNextTomeButton || _selectedConfig == null)
+                return;
+
+            if (GumpButtonCapture.Sequence == _captureStartSequence)
+                return;
+
+            _selectedConfig.TomeGumpId = GumpButtonCapture.LastGumpId;
+            _selectedConfig.TomeAddButtonId = GumpButtonCapture.LastButtonId;
+            _tomeGumpIdInput = $"0x{_selectedConfig.TomeGumpId:X8}";
+            _tomeButtonIdInput = _selectedConfig.TomeAddButtonId.ToString();
+            _captureNextTomeButton = false;
+
+            GameActions.Print($"Captured tome mapping: gump 0x{_selectedConfig.TomeGumpId:X8}, button {_selectedConfig.TomeAddButtonId}.", Constants.HUE_SUCCESS);
+        }
+
+        private static bool TryParseUInt(string value, out uint result)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                result = 0;
+                return false;
+            }
+
+            string text = value.Trim();
+
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out result);
+
+            return uint.TryParse(text, out result);
         }
 
         private static string GetDestinationLabel(uint serial)
