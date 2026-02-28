@@ -1213,15 +1213,26 @@ namespace ClassicUO.UnitTests.Game.Managers
         [Fact]
         public void IsTrackableGroundItem_MovableItem_IsNotLocked()
         {
-            // IsLocked = (Flags & Flags.Movable) == 0 && ItemData.Weight > 90
-            // When Flags.Movable is set, IsLocked short-circuits to false regardless of weight.
-            // This verifies movable items pass the IsLocked check in IsTrackableGroundItem.
+            // Trackable scavenger items must be on ground and movable.
             Client.UnitTestingActive = true;
             var world = new World();
             var item = Item.Create(world, 1);
             item.Flags = Flags.Movable;
 
             AutoLootManager.IsTrackableGroundItem(item).Should().BeTrue();
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void IsTrackableGroundItem_GroundImmovableItem_ReturnsFalse()
+        {
+            Client.UnitTestingActive = true;
+            var world = new World();
+            var item = Item.Create(world, 1);
+            item.Flags = 0;
+
+            AutoLootManager.IsTrackableGroundItem(item).Should().BeFalse();
 
             CleanupTestWorld(world);
         }
@@ -1526,6 +1537,26 @@ namespace ClassicUO.UnitTests.Game.Managers
 
             // Item should be pruned: OnPositionChanged checks item.OnGround during iteration
             // Actually, it checks (item == null || !item.OnGround || item.IsLocked)
+            manager._nearbyGroundItems.Should().NotContain(1u);
+
+            CleanupTestWorld(world);
+        }
+
+        [Fact]
+        public void OnPositionChanged_PrunesItemsNoLongerMovable()
+        {
+            var world = CreateWorldWithPlayer(100, 100);
+            var manager = CreateTestManagerWithWorld(world);
+
+            var item = CreateGroundItem(world, 1, 105, 100);
+            manager._nearbyGroundItems.Add(1u);
+
+            item.Flags = 0;
+
+            SetProfileForScavenger();
+
+            manager.OnPositionChanged(null, new PositionChangedArgs(new Vector3(100, 100, 0)));
+
             manager._nearbyGroundItems.Should().NotContain(1u);
 
             CleanupTestWorld(world);

@@ -40,6 +40,8 @@ namespace ClassicUO.Game.Managers
         public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; }
 
         private const int SCAVENGER_TRACKING_RADIUS = 20;
+        private const int GROUND_LOOT_RETRY_COOLDOWN_MS = 10000;
+        private const int CONTAINER_LOOT_RETRY_COOLDOWN_MS = 30000;
 
         private readonly HashSet<uint> _quickContainsLookup = new ();
         private readonly HashSet<uint> _recentlyLooted = new();
@@ -120,9 +122,9 @@ namespace ClassicUO.Game.Managers
         {
             if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) return;
 
-            // Skip corpse/container items that are on cooldown from a previous loot attempt.
-            // Ground items are excluded — their retry cadence is already gated by position changes.
-            if (!item.OnGround && _lootCooldowns.TryGetValue(item.Serial, out long cooldownUntil) && Time.Ticks < cooldownUntil)
+            // Skip items currently on cooldown from a previous loot attempt.
+            // Ground items use a shorter cooldown to avoid retry spam on unlootable/locked-down house items.
+            if (_lootCooldowns.TryGetValue(item.Serial, out long cooldownUntil) && Time.Ticks < cooldownUntil)
             {
                 _recentlyLooted.Remove(item.Serial);
                 _quickContainsLookup.Remove(item.Serial);
@@ -151,7 +153,7 @@ namespace ClassicUO.Game.Managers
 
         internal static bool IsTrackableGroundItem(Item item)
         {
-            return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
+            return item != null && item.OnGround && !item.IsCorpse && item.IsMovable;
         }
 
         /// <summary>
@@ -441,7 +443,7 @@ namespace ClassicUO.Game.Managers
                     uint serial = _nearbyItemsSnapshot[idx];
                     Item item = _world.Items.Get(serial);
 
-                    if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+                    if (item == null || !item.OnGround || item.IsCorpse || !item.IsMovable)
                     {
                         (toRemove ??= new List<uint>()).Add(serial);
                         continue;
@@ -580,6 +582,14 @@ namespace ClassicUO.Game.Managers
             if (moveItem == null)
                 return;
 
+            if (moveItem.OnGround && !moveItem.IsMovable)
+            {
+                _nearbyGroundItems.Remove(moveItem.Serial);
+                _recentlyLooted.Remove(moveItem.Serial);
+                _lootCooldowns[moveItem.Serial] = Time.Ticks + GROUND_LOOT_RETRY_COOLDOWN_MS;
+                return;
+            }
+
             CreateProgressBar();
 
             if (_progressBarGump is { IsDisposed: false }) _progressBarGump.CurrentPercentage = 1 - ((double)_lootItems.Count / (double)_currentLootTotalCount);
@@ -634,10 +644,8 @@ namespace ClassicUO.Game.Managers
                 };
                 ObjectActionQueue.Instance.Enqueue(new MoveRequest(moveItem.Serial, destinationSerial, moveItem.Amount).ToObjectActionQueueItem(), lootPriority);
 
-                // Set a 30-second cooldown for corpse/container items so if the move fails, we don't spam retry.
-                // Ground items don't need this — their retry is already gated by position changes.
-                if (!moveItem.OnGround)
-                    _lootCooldowns[moveItem.Serial] = Time.Ticks + 30000;
+                int cooldownMs = moveItem.OnGround ? GROUND_LOOT_RETRY_COOLDOWN_MS : CONTAINER_LOOT_RETRY_COOLDOWN_MS;
+                _lootCooldowns[moveItem.Serial] = Time.Ticks + cooldownMs;
             }
             else
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
