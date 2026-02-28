@@ -34,6 +34,7 @@ namespace ClassicUO.Game.Managers
         private readonly TomeActionRunner _tomeActionRunner = new();
         private int _pendingRunActions;
         private bool _activeRunGuard;
+        private const int ExternalDestinationWalkTimeoutMs = 12000;
 
         private static string GetDataPath()
         {
@@ -292,6 +293,24 @@ namespace ClassicUO.Game.Managers
 
             return TryGetDestinationDistance(destinationContainer, destinationDropSerial, out int distance)
                    && distance <= maxRange;
+        }
+
+        internal static bool TryStartWalkToDestination(Item destinationContainer, uint destinationDropSerial)
+        {
+            World world = World.Instance;
+            if (world?.Player == null || destinationContainer == null)
+                return false;
+
+            if (SerialHelper.IsMobile(destinationDropSerial))
+            {
+                Mobile mobile = world.Mobiles.Get(destinationDropSerial);
+                if (mobile == null)
+                    return false;
+
+                return world.Player.Pathfinder.WalkTo(mobile.X, mobile.Y, mobile.Z, 1);
+            }
+
+            return world.Player.Pathfinder.WalkTo(destinationContainer.X, destinationContainer.Y, destinationContainer.Z, 1);
         }
 
         public void ListOrganizers()
@@ -588,30 +607,44 @@ namespace ClassicUO.Game.Managers
                     }
                 }
 
+                bool isExternalDestination = IsOutsideBackpackDestination(thisDestCont, thisDropSerial);
+
                 if (!IsDestinationWithinMoveRange(thisDestCont, thisDropSerial))
                 {
-                    int skippedForDestination = itemsForThisDest.Count;
-                    skippedItems += skippedForDestination;
-                    totalPlanned += skippedForDestination;
+                    if (!isExternalDestination)
+                    {
+                        int skippedForDestination = itemsForThisDest.Count;
+                        skippedItems += skippedForDestination;
+                        totalPlanned += skippedForDestination;
 
-                    if (TryGetDestinationDistance(thisDestCont, thisDropSerial, out int distance))
+                        if (TryGetDestinationDistance(thisDestCont, thisDropSerial, out int distance))
+                        {
+                            GameActions.Print(
+                                World.Instance,
+                                $"Destination 0x{destinationSerial:X} is out of range ({distance}). Move closer and retry organizer.",
+                                Constants.HUE_ERROR
+                            );
+                        }
+                        else
+                        {
+                            GameActions.Print(
+                                World.Instance,
+                                $"Destination 0x{destinationSerial:X} is not reachable right now.",
+                                Constants.HUE_ERROR
+                            );
+                        }
+
+                        continue;
+                    }
+
+                    if (TryStartWalkToDestination(thisDestCont, thisDropSerial))
                     {
                         GameActions.Print(
                             World.Instance,
-                            $"Destination 0x{destinationSerial:X} is out of range ({distance}). Move closer and retry organizer.",
-                            Constants.HUE_ERROR
+                            $"Walking to destination 0x{destinationSerial:X} for organizer '{config.Name}'.",
+                            Constants.HUE_SUCCESS
                         );
                     }
-                    else
-                    {
-                        GameActions.Print(
-                            World.Instance,
-                            $"Destination 0x{destinationSerial:X} is not reachable right now.",
-                            Constants.HUE_ERROR
-                        );
-                    }
-
-                    continue;
                 }
 
                 var destItems = (Item)thisDestCont.Items;
@@ -649,7 +682,7 @@ namespace ClassicUO.Game.Managers
                         if (itemConfig.Amount == 0)
                         {
                             // Move all items of this type
-                            EnqueueMoveRequest(new MoveRequest(item.Serial, thisDropSerial, ushort.MaxValue));
+                            EnqueueMoveRequest(new MoveRequest(item.Serial, thisDropSerial, ushort.MaxValue), thisDestCont, thisDropSerial, isExternalDestination);
                             totalItemsMoved++;
                             totalPlanned++;
                         }
@@ -661,7 +694,7 @@ namespace ClassicUO.Game.Managers
                             if (toMove > 0)
                             {
                                 ushort actualAmount = (ushort)Math.Min(toMove, item.Amount);
-                                EnqueueMoveRequest(new MoveRequest(item.Serial, thisDropSerial, actualAmount));
+                                EnqueueMoveRequest(new MoveRequest(item.Serial, thisDropSerial, actualAmount), thisDestCont, thisDropSerial, isExternalDestination);
                                 // Update the count to avoid over-moving if multiple stacks exist in source
                                 destItemCounts[(item.Graphic, item.Hue)] = existingCount + actualAmount;
                                 totalItemsMoved++;
@@ -843,19 +876,55 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        private void EnqueueMoveRequest(MoveRequest moveRequest)
+        private void EnqueueMoveRequest(MoveRequest moveRequest, Item destinationContainer = null, uint destinationDropSerial = 0, bool requireRange = false)
         {
             _pendingRunActions++;
-            ObjectActionQueue.Instance.Enqueue(
-                new ObjectActionQueueItem(
-                    moveRequest.Execute,
-                    _ =>
+
+            bool moveExecuted = false;
+            long giveUpAt = Time.Ticks + ExternalDestinationWalkTimeoutMs;
+
+            ObjectActionQueueItem queueItem = null;
+            queueItem = new ObjectActionQueueItem(
+                () =>
+                {
+                    if (requireRange)
                     {
-                        RunState.ItemsMoved++;
-                        _pendingRunActions = Math.Max(0, _pendingRunActions - 1);
-                        TryCompleteRunState();
+                        if (!IsDestinationWithinMoveRange(destinationContainer, destinationDropSerial))
+                        {
+                            if (Time.Ticks >= giveUpAt)
+                                return;
+
+                            TryStartWalkToDestination(destinationContainer, destinationDropSerial);
+                            ObjectActionQueue.Instance.Enqueue(queueItem, ActionPriority.MoveItem);
+                            return;
+                        }
                     }
-                ),
+
+                    moveRequest.Execute();
+                    moveExecuted = true;
+                },
+                _ =>
+                {
+                    if (!moveExecuted)
+                    {
+                        if (!requireRange || Time.Ticks < giveUpAt)
+                            return;
+
+                        RunState.ItemsSkipped++;
+                        _pendingRunActions = Math.Max(0, _pendingRunActions - 1);
+                        GameActions.Print(World.Instance, "Organizer skipped an item because destination remained out of range.", Constants.HUE_ERROR);
+                        TryCompleteRunState();
+                        return;
+                    }
+
+                    RunState.ItemsMoved++;
+                    _pendingRunActions = Math.Max(0, _pendingRunActions - 1);
+                    TryCompleteRunState();
+                }
+            );
+
+            ObjectActionQueue.Instance.Enqueue(
+                queueItem,
                 ActionPriority.MoveItem
             );
         }
