@@ -390,6 +390,7 @@ namespace ClassicUO.Game.Managers
             NextGumpConfig.Reset();
             NextGumpConfig.Enabled = true;
             NextGumpConfig.Serial = gumpId;
+            NextGumpConfig.AutoClose = true;
             NextGumpConfig.AutoRespondButton = buttonId;
             NextGumpConfig.AutoRespond = true;
         }
@@ -443,11 +444,24 @@ namespace ClassicUO.Game.Managers
 
         public void CloseTomeGump(uint gumpId)
         {
-            if (gumpId == 0)
+            World world = World.Instance;
+            if (world == null)
                 return;
 
-            UIManager.GetGumpServer(gumpId)?.Dispose();
-            UIManager.GetGump(gumpId)?.Dispose();
+            uint resolvedGumpId = gumpId != 0 ? gumpId : world.Player?.LastGumpID ?? 0;
+            if (resolvedGumpId == 0)
+                return;
+
+            var gump = UIManager.GetGumpServer(resolvedGumpId);
+            if (gump != null)
+            {
+                GameActions.ReplyGump(world, gump.LocalSerial, gump.ServerSerial, 0);
+                gump.Dispose();
+                return;
+            }
+
+            // Fallback for callers that accidentally persisted local serial as gump id.
+            UIManager.GetGump(resolvedGumpId)?.Dispose();
         }
     }
 }
