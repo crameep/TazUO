@@ -608,109 +608,114 @@ namespace ClassicUO.Game
                 return;
             }
 
-            if (IsHTML)
-            {
-                Client.Game.UO.FileManager.Fonts.SetUseHTML(true, HTMLColor, HasBackgroundColor);
-            }
+            var fonts = Client.Game.UO.FileManager.Fonts;
 
-            Client.Game.UO.FileManager.Fonts.RecalculateWidthByInfo = RecalculateWidthByInfo;
-
-            FontsLoader.FontInfo fi;
-            if (IsUnicode)
+            try
             {
-                fi = Client.Game.UO.FileManager.Fonts.GenerateUnicode(
-                    Font,
-                    Text,
-                    Hue,
-                    Cell,
-                    MaxWidth,
-                    Align,
-                    (ushort)FontStyle,
-                    SaveHitMap,
-                    MaxHeight
-                );
-            }
-            else
-            {
-                fi = Client.Game.UO.FileManager.Fonts.GenerateASCII(
-                    Font,
-                    Text,
-                    Hue,
-                    MaxWidth,
-                    Align,
-                    (ushort)FontStyle,
-                    SaveHitMap,
-                    MaxHeight
-                );
-            }
-
-            if (SaveHitMap)
-            {
-                ulong b = (ulong)(
-                    Text.GetHashCode()
-                    ^ Hue
-                    ^ ((int)Align)
-                    ^ ((int)FontStyle)
-                    ^ Font
-                    ^ (IsUnicode ? 0x01 : 0x00)
-                );
-                _picker.Set(b, fi.Width, fi.Height, fi.Data);
-            }
-
-            bool isValid = fi.Data != null && fi.Data.Length > 0;
-
-            if (isValid && (Texture == null || Texture.IsDisposed))
-            {
-                if (fi.Width < 0 || fi.Height < 0)
+                if (IsHTML)
                 {
-                    Log.Error("Invalid texture size: " + fi.Width + "x" + fi.Height);
-                } else
+                    fonts.SetUseHTML(true, HTMLColor, HasBackgroundColor);
+                }
+
+                fonts.RecalculateWidthByInfo = RecalculateWidthByInfo;
+
+                FontsLoader.FontInfo fi;
+                if (IsUnicode)
                 {
-                    Texture = new Texture2D(
-                        Client.Game.GraphicsDevice,
-                        fi.Width,
-                        fi.Height,
-                        false,
-                        SurfaceFormat.Color
+                    fi = fonts.GenerateUnicode(
+                        Font,
+                        Text,
+                        Hue,
+                        Cell,
+                        MaxWidth,
+                        Align,
+                        (ushort)FontStyle,
+                        SaveHitMap,
+                        MaxHeight
                     );
                 }
-            }
-
-            Links.Clear();
-            if (fi.Links != null)
-            {
-                for (int i = 0; i < fi.Links.Length; ++i)
+                else
                 {
-                    Links.Add(fi.Links[i]);
-                }
-            }
-
-            LinesCount = fi.LineCount;
-
-            if (Texture != null && isValid)
-            {
-                fixed (uint* dataPtr = fi.Data)
-                {
-                    Texture.SetDataPointerEXT(
-                        0,
-                        null,
-                        (IntPtr)dataPtr,
-                        fi.Width * fi.Height * sizeof(uint)
+                    fi = fonts.GenerateASCII(
+                        Font,
+                        Text,
+                        Hue,
+                        MaxWidth,
+                        Align,
+                        (ushort)FontStyle,
+                        SaveHitMap,
+                        MaxHeight
                     );
                 }
 
-                Width = Texture.Width;
-                Height = Texture.Height;
-            }
+                if (SaveHitMap)
+                {
+                    ulong b = (ulong)(
+                        Text.GetHashCode()
+                        ^ Hue
+                        ^ ((int)Align)
+                        ^ ((int)FontStyle)
+                        ^ Font
+                        ^ (IsUnicode ? 0x01 : 0x00)
+                    );
+                    _picker.Set(b, fi.Width, fi.Height, fi.Data);
+                }
 
-            if (IsHTML && Client.Game?.UO?.FileManager?.Fonts != null)
-            {
-                Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
-            }
+                bool isValid = fi.Data != null && fi.Data.Length > 0;
 
-            if (Client.Game?.UO?.FileManager?.Fonts != null)
+                if (isValid && (Texture == null || Texture.IsDisposed))
+                {
+                    if (fi.Width < 0 || fi.Height < 0)
+                    {
+                        Log.Error("Invalid texture size: " + fi.Width + "x" + fi.Height);
+                    }
+                    else
+                    {
+                        Texture = new Texture2D(
+                            Client.Game.GraphicsDevice,
+                            fi.Width,
+                            fi.Height,
+                            false,
+                            SurfaceFormat.Color
+                        );
+                    }
+                }
+
+                Links.Clear();
+                if (fi.Links != null)
+                {
+                    for (int i = 0; i < fi.Links.Length; ++i)
+                    {
+                        Links.Add(fi.Links[i]);
+                    }
+                }
+
+                LinesCount = fi.LineCount;
+
+                if (Texture != null && isValid)
+                {
+                    fixed (uint* dataPtr = fi.Data)
+                    {
+                        Texture.SetDataPointerEXT(
+                            0,
+                            null,
+                            (IntPtr)dataPtr,
+                            fi.Width * fi.Height * sizeof(uint)
+                        );
+                    }
+
+                    Width = Texture.Width;
+                    Height = Texture.Height;
+                }
+            }
+            finally
             {
-                Client.Game.UO.FileManager.Fonts.RecalculateWidthByInfo = false;
+                if (IsHTML)
+                {
+                    fonts.SetUseHTML(false);
+                }
+
+                fonts.RecalculateWidthByInfo = false;
             }
         }
 

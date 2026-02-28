@@ -44,21 +44,31 @@ namespace ClassicUO.Game.UI.Gumps
                 string text = Client.Game.UO.FileManager.Clilocs.GetString(item.Cliloc);
 
                 ushort hue = item.Hue;
+                bool useHtmlHue = item.ReplacedHue != 0;
 
-                if (item.ReplacedHue != 0)
+                if (useHtmlHue)
                 {
                     uint h = (HuesHelper.Color16To32(item.ReplacedHue) << 8) | 0xFF;
 
                     Client.Game.UO.FileManager.Fonts.SetUseHTML(true, h);
                 }
 
-                var label = new Label(text, true, hue, font: 1)
+                Label label;
+                try
                 {
-                    X = 10,
-                    Y = offsetY
-                };
-
-                Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
+                    label = new Label(text, true, hue, font: 1)
+                    {
+                        X = 10,
+                        Y = offsetY
+                    };
+                }
+                finally
+                {
+                    if (useHtmlHue)
+                    {
+                        Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
+                    }
+                }
 
                 var box = new HitBox(10, offsetY, label.Width, label.Height)
                 {

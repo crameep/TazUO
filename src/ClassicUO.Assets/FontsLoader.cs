@@ -1928,6 +1928,11 @@ namespace ClassicUO.Assets
                                             break;
                                         }
 
+                                        if (nowX < 0)
+                                        {
+                                            continue;
+                                        }
+
                                         byte cl = (byte)(@char.Data[scanLineOff + c] & (1 << (7 - j)));
                                         int block = testY * width + nowX;
 
