@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Timers;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.UI.Gumps;
@@ -250,6 +251,47 @@ namespace ClassicUO.Game.Managers
             }
 
             return null;
+        }
+
+        internal static bool IsOutsideBackpackDestination(Item destinationContainer, uint destinationDropSerial)
+        {
+            if (destinationContainer == null)
+                return false;
+
+            if (destinationContainer.OnGround)
+                return true;
+
+            return SerialHelper.IsMobile(destinationDropSerial);
+        }
+
+        internal static bool TryGetDestinationDistance(Item destinationContainer, uint destinationDropSerial, out int distance)
+        {
+            distance = int.MaxValue;
+
+            if (destinationContainer == null)
+                return false;
+
+            if (SerialHelper.IsMobile(destinationDropSerial))
+            {
+                Mobile mobile = World.Instance?.Mobiles.Get(destinationDropSerial);
+                if (mobile == null)
+                    return false;
+
+                distance = mobile.Distance;
+                return true;
+            }
+
+            distance = destinationContainer.Distance;
+            return true;
+        }
+
+        internal static bool IsDestinationWithinMoveRange(Item destinationContainer, uint destinationDropSerial, int maxRange = 2)
+        {
+            if (!IsOutsideBackpackDestination(destinationContainer, destinationDropSerial))
+                return true;
+
+            return TryGetDestinationDistance(destinationContainer, destinationDropSerial, out int distance)
+                   && distance <= maxRange;
         }
 
         public void ListOrganizers()
@@ -544,6 +586,32 @@ namespace ClassicUO.Game.Managers
                         skippedItems += itemsForThisDest.Count;
                         continue;
                     }
+                }
+
+                if (!IsDestinationWithinMoveRange(thisDestCont, thisDropSerial))
+                {
+                    int skippedForDestination = itemsForThisDest.Count;
+                    skippedItems += skippedForDestination;
+                    totalPlanned += skippedForDestination;
+
+                    if (TryGetDestinationDistance(thisDestCont, thisDropSerial, out int distance))
+                    {
+                        GameActions.Print(
+                            World.Instance,
+                            $"Destination 0x{destinationSerial:X} is out of range ({distance}). Move closer and retry organizer.",
+                            Constants.HUE_ERROR
+                        );
+                    }
+                    else
+                    {
+                        GameActions.Print(
+                            World.Instance,
+                            $"Destination 0x{destinationSerial:X} is not reachable right now.",
+                            Constants.HUE_ERROR
+                        );
+                    }
+
+                    continue;
                 }
 
                 var destItems = (Item)thisDestCont.Items;

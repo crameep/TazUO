@@ -305,6 +305,51 @@ namespace ClassicUO.UnitTests.Game.Managers
         }
 
         [Fact]
+        public void IsOutsideBackpackDestination_ShouldTreatGroundAndMobileDropsAsExternal()
+        {
+            bool originalUnitTestMode = ClassicUO.Client.UnitTestingActive;
+            ClassicUO.Client.UnitTestingActive = true;
+
+            try
+            {
+                var world = new World();
+                var groundContainer = Item.Create(world, 0x40000010);
+
+                OrganizerAgent.IsOutsideBackpackDestination(groundContainer, groundContainer.Serial).Should().BeTrue();
+
+                var bagContainer = Item.Create(world, 0x40000011);
+                bagContainer.Container = 0x40000099;
+                OrganizerAgent.IsOutsideBackpackDestination(bagContainer, bagContainer.Serial).Should().BeFalse();
+
+                OrganizerAgent.IsOutsideBackpackDestination(bagContainer, 0x00000042).Should().BeTrue();
+            }
+            finally
+            {
+                ClassicUO.Client.UnitTestingActive = originalUnitTestMode;
+            }
+        }
+
+        [Fact]
+        public void IsDestinationWithinMoveRange_ShouldAlwaysAllowInternalContainers()
+        {
+            bool originalUnitTestMode = ClassicUO.Client.UnitTestingActive;
+            ClassicUO.Client.UnitTestingActive = true;
+
+            try
+            {
+                var world = new World();
+                var bagContainer = Item.Create(world, 0x40000022);
+                bagContainer.Container = 0x400000AA;
+
+                OrganizerAgent.IsDestinationWithinMoveRange(bagContainer, bagContainer.Serial).Should().BeTrue();
+            }
+            finally
+            {
+                ClassicUO.Client.UnitTestingActive = originalUnitTestMode;
+            }
+        }
+
+        [Fact]
         public void TomeActionRunner_TargetEach_ShouldProcessAllItemsAndReportMovedCount()
         {
             var runtime = new FakeTomeRuntime();
