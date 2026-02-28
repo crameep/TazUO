@@ -25,6 +25,7 @@ internal static class EquipItem
         if (SerialHelper.IsValid(item.Container))
         {
             UIManager.GetGump<ContainerGump>(item.Container)?.RequestUpdateContents();
+            GridContainer.NotifyContainerUpdate(world, item.Container);
 
             UIManager.GetGump<PaperDollGump>(item.Container)?.RequestUpdateContents();
             UIManager.GetGump<ModernPaperdoll>(item.Container)?.RequestUpdateContents();

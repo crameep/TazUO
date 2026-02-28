@@ -114,9 +114,7 @@ internal static class ItemHelpers
 
                     #region GridContainer
 
-                    GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
-                    if (gridGump != null)
-                        gridGump.RequestUpdateContents();
+                    GridContainer.NotifyContainerUpdate(world, containerSerial);
 
                     #endregion
 

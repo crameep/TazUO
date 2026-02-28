@@ -38,9 +38,15 @@ public static class ObjectHelpers
             if (SerialHelper.IsValid(Client.Game.UO.GameCursor.ItemHold.Container))
             {
                 if (Client.Game.UO.GameCursor.ItemHold.Layer == 0)
+                {
                     UIManager
                         .GetGump<ContainerGump>(Client.Game.UO.GameCursor.ItemHold.Container)
                         ?.RequestUpdateContents();
+                    GridContainer.NotifyContainerUpdate(
+                        world,
+                        Client.Game.UO.GameCursor.ItemHold.Container
+                    );
+                }
                 else
                 {
                     UIManager.GetGump<PaperDollGump>(Client.Game.UO.GameCursor.ItemHold.Container)
