@@ -1,0 +1,879 @@
+[2026-02-28T21:16:37] OpenAI Codex v0.0.0 (research preview)
+[2026-02-28T21:16:37] binary: /usr/local/lib/node_modules/@just-every/code/bin/code-x86_64-unknown-linux-musl
+--------
+workdir: /home/crameep/LocalProjects/TazUo
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: auto
+--------
+[2026-02-28T21:16:37] User instructions:
+Investigate and explain why updates in tabbed inventory views are not visible until switching tabs. Provide root-cause analysis and concrete fix options (minimal-risk + robust). Context: project is ClassicUO fork in /home/crameep/LocalProjects/TazUo. User report: when in a tabbed inventory or dropping items into a tabbed inventory, UI changes only appear after tab switch. We need analysis/report (not necessarily code) but include candidate patches and where to change.
+
+Likely relevant files already observed:
+- src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs
+- src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs
+- src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs
+
+Known observation to verify/refute:
+- OpenContainer handles parent tab containers via GridContainer.FindParentGridContainer + RequestUpdateContentsForTab(serial).
+- ItemHelpers item-update path appears to call only UIManager.GetGump<GridContainer>(containerSerial)?.RequestUpdateContents(), which misses tabbed child containers with no direct gump, leading to stale tab until manual tab switch.
+
+Please independently inspect code paths for packet-driven updates, cache invalidation, and tab rendering/invalidations; identify exact code path mismatch and possible race/order issues. Deliver:
+1) Root cause(s) with file:line references.
+2) Repro event sequence.
+3) 2-3 fix options with tradeoffs.
+4) Recommended fix and deterministic test coverage ideas (unit/integration).
+
+[Running in read-only mode - no modifications allowed]
+
+[2026-02-28T21:16:40] thinking
+
+**Preparing read-only code inspection**
+[2026-02-28T21:16:40] codex
+
+I’ll inspect the relevant packet/UI update paths and trace the tabbed-container refresh flow end-to-end, then report exact root causes with file references and fix options.
+[2026-02-28T21:16:41] exec bash -lc 'rg -n "class GridContainer|RequestUpdateContents|RequestUpdateContentsForTab|FindParentGridContainer|tab|Tabbed|GetGump<GridContainer>|OpenContainer|ItemHelpers|OnItem|UpdateContents|Invalidate|NeedUpdate|CreateContent" src/ClassicUO.Client -S' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:41] bash -lc 'rg -n "class GridContainer|RequestUpdateContents|RequestUpdateContentsForTab|FindParentGridContainer|tab|Tabbed|GetGump<GridContainer>|OpenContainer|ItemHelpers|OnItem|UpdateContents|Invalidate|NeedUpdate|CreateContent" src/ClassicUO.Client -S' exited 127 in 59ms:
+ERROR
+bash: line 1: rg: command not found
+[2026-02-28T21:16:41] tokens used: 8,681
+
+[2026-02-28T21:16:44] thinking
+
+**Switching to grep/find due to rg absence**
+[2026-02-28T21:16:44] exec bash -lc 'grep -RInE "class GridContainer|RequestUpdateContents|RequestUpdateContentsForTab|FindParentGridContainer|GetGump<GridContainer>|OpenContainer|ItemHelpers|tab|Tabbed|Invalidate|UpdateContents" src/ClassicUO.Client | head -n 400' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:44] bash -lc 'grep -RInE "class GridContainer|RequestUpdateContents|RequestUpdateContentsForTab|FindParentGridContainer|GetGump<GridContainer>|OpenContainer|ItemHelpers|tab|Tabbed|Invalidate|UpdateContents" src/ClassicUO.Client | head -n 400' succeeded in 17ms:
+src/ClassicUO.Client/CUOEnviroment.cs:27:        public static readonly string ExecutablePath = ResolveBasePath();
+src/ClassicUO.Client/Game/Managers/SkillsGroupManager.cs:100:            byte* table = stackalloc byte[60];
+src/ClassicUO.Client/Game/Managers/SkillsGroupManager.cs:111:                        table[index++] = _list[j];
+src/ClassicUO.Client/Game/Managers/SkillsGroupManager.cs:120:                _list[j] = table[j];
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:126:            // Ground items use a shorter cooldown to avoid retry spam on unlootable/locked-down house items.
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:396:            EventSink.OnOpenContainer += OnOpenContainer;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:405:            EventSink.OnOpenContainer -= OnOpenContainer;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:477:        private void OnOpenContainer(object sender, uint e)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:705:                    string ancientPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles", "AutoLoot.json");
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:718:                        // State 4: AutoLoot.json at ancient executable path — READ only, flag for migration
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:1326:                rootpath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles");
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:35:            _dataDir = Path.Combine(CUOEnviroment.ExecutablePath, "Data");
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:58:                // Create/open database and initialize table
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:91:        /// Asynchronously adds a friendly to the database, inserting or replacing as needed.
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:129:        /// Asynchronously removes a friendly from the database by serial.
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:165:        /// Asynchronously checks if a serial is in the friendlies database.
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:241:        /// Asynchronously retrieves all friendlies from the database.
+src/ClassicUO.Client/Game/Managers/FriendliesSQLManager.cs:285:        /// Asynchronously clears all friendlies from the database.
+src/ClassicUO.Client/Game/Managers/SpellVisualRange/SpellVisualRangeManager.cs:27:        private string savePath = Path.Combine(CUOEnviroment.ExecutablePath ?? "", "Data", "Profiles", "SpellVisualRange.json");
+src/ClassicUO.Client/Game/Managers/FriendsListManager.cs:36:            string serverFolder = Path.Combine(CUOEnviroment.ExecutablePath, "Data", serverName);
+[2026-02-28T21:16:44] tokens used: 9,045
+
+[2026-02-28T21:16:46] thinking
+
+**Inspecting specific files for detail**
+[2026-02-28T21:16:47] exec bash -lc "sed -n '1,260p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:47] bash -lc "sed -n '1,260p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" succeeded in 4ms:
+﻿#region license
+
+// Copyright (c) 2021, andreakarasho
+// All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+// 1. Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+// 2. Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+// 3. All advertising materials mentioning features or use of this software
+//    must display the following acknowledgement:
+//    This product includes software developed by andreakarasho - https://github.com/andreakarasho
+// 4. Neither the name of the copyright holder nor the
+//    names of its contributors may be used to endorse or promote products
+//    derived from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+[2026-02-28T21:16:47] tokens used: 20,237
+[2026-02-28T21:16:50] exec bash -lc "grep -n \"RequestUpdateContents\\|RequestUpdateContentsForTab\\|FindParentGridContainer\\|UpdateContents\\|tab\\|SwitchToTab\\|ActiveTab\\|Invalidate\" src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | head -n 200" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:50] bash -lc "grep -n \"RequestUpdateContents\\|RequestUpdateContentsForTab\\|FindParentGridContainer\\|UpdateContents\\|tab\\|SwitchToTab\\|ActiveTab\\|Invalidate\" src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | head -n 200" succeeded in 5ms:
+93:        private readonly List<NiceButton> _tabButtons = new();
+94:        private readonly List<HitBox> _tabCloseButtons = new();
+114:        private readonly List<ContainerTab> _tabs = new();
+116:        private int _tabRowCount = 1;
+152:        private ContainerTab ActiveTab => _tabs.Count > 0 ? _tabs[_activeTabIndex] : null;
+153:        private bool TabBarVisible => _tabs.Count > 1 && ProfileManager.CurrentProfile.GridContainerTabsEnabled;
+154:        private int EffectiveTabBarHeight => TabBarVisible ? TAB_BAR_HEIGHT * _tabRowCount : 0;
+464:            _setLootBag = new NiceButton(0, Height - 20, 100, 20, ButtonAction.Default, "Set loot bag") { IsSelectable = false };
+496:            _tabs.Add(new ContainerTab
+516:            // Auto-open sub-container tabs based on profile setting
+519:            // Restore last active tab from save data
+520:            if (_gridContainerEntry.CurrentTabIndex > 0 && _gridContainerEntry.CurrentTabIndex < _tabs.Count)
+521:                SwitchToTab(_gridContainerEntry.CurrentTabIndex);
+771:                uint dropTarget = ActiveTab?.ContainerSerial ?? LocalSerial;
+830:                InvalidateContents = true
+853:            Item activeContainer = ActiveTab != null ? World.Items.Get(ActiveTab.ContainerSerial) : Container;
+862:            InvalidateContents = false;
+865:        protected override void UpdateContents()
+867:            if (InvalidateContents && !IsDisposed)
+947:            // Save tab data
+[2026-02-28T21:16:50] tokens used: 23,150
+
+[2026-02-28T21:16:55] thinking
+
+**Planning method inspection**
+[2026-02-28T21:16:55] exec bash -lc "sed -n '1368,1525p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:55] bash -lc "sed -n '1368,1525p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" succeeded in 4ms:
+            if (tab.ContainerSerial == LocalSerial)
+                return "Main";
+
+            Item item = World.Items.Get(tab.ContainerSerial);
+            if (item != null && World.OPL.TryGetNameAndData(item.Serial, out string name, out _))
+                return TruncateLabel(name, 10);
+
+            return "Bag";
+        }
+
+        private static string TruncateLabel(string text, int maxLen)
+        {
+            if (string.IsNullOrEmpty(text)) return "Bag";
+            // Strip HTML tags that OPL names may contain
+            text = Regex.Replace(text, "<.*?>", "");
+            return text.Length <= maxLen ? text : text[..maxLen] + "..";
+        }
+
+        private void SwitchToTab(int tabIndex)
+        {
+[2026-02-28T21:16:55] tokens used: 26,076
+
+[2026-02-28T21:16:58] thinking
+
+**Identifying methods for content update and invalidation**
+[2026-02-28T21:16:58] exec bash -lc "sed -n '800,930p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:16:58] bash -lc "sed -n '800,930p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" succeeded in 6ms:
+                    case 0x0051 when Client.Game.UO.Gumps.GetGump(0x06E7).Texture != null:
+                        graphic = 0x06E7;
+                        break;
+                    case 0x003E when Client.Game.UO.Gumps.GetGump(0x06E9).Texture != null:
+                        graphic = 0x06E9;
+                        break;
+                    case 0x004D when Client.Game.UO.Gumps.GetGump(0x06EA).Texture != null:
+                        graphic = 0x06EA;
+                        break;
+                    case 0x004E when Client.Game.UO.Gumps.GetGump(0x06E6).Texture != null:
+                        graphic = 0x06E6;
+                        break;
+                    case 0x004F when Client.Game.UO.Gumps.GetGump(0x06E5).Texture != null:
+                        graphic = 0x06E5;
+                        break;
+                    case 0x004A when Client.Game.UO.Gumps.GetGump(0x9CDD).Texture != null:
+                        graphic = 0x9CDD;
+                        break;
+                    case 0x0044 when Client.Game.UO.Gumps.GetGump(0x9CE3).Texture != null:
+                        graphic = 0x9CE3;
+[2026-02-28T21:16:58] tokens used: 27,683
+
+[2026-02-28T21:17:01] thinking
+
+**Identifying missing packet handlers**
+[2026-02-28T21:17:01] exec bash -lc "sed -n '1,260p' src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:01] bash -lc "sed -n '1,260p' src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs" succeeded in 5ms:
+using ClassicUO.Configuration;
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
+using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Utility.Logging;
+
+namespace ClassicUO.Network.PacketHandlers.Helpers;
+
+internal static class ItemHelpers
+{
+    public static void AddItemToContainer(
+        World world,
+        uint serial,
+        ushort graphic,
+        ushort amount,
+        ushort x,
+        ushort y,
+[2026-02-28T21:17:01] tokens used: 29,069
+
+[2026-02-28T21:17:03] thinking
+
+**Identifying missing dependency**
+[2026-02-28T21:17:03] exec bash -lc "sed -n '1,320p' src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:03] bash -lc "sed -n '1,320p' src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs" succeeded in 5ms:
+using System.Collections.Generic;
+using ClassicUO.Configuration;
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
+using ClassicUO.Game.UI.Gumps;
+using ClassicUO.IO;
+using ClassicUO.Utility.Logging;
+using Microsoft.Xna.Framework;
+using Gump = ClassicUO.Renderer.Gumps.Gump;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class OpenContainer
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+        if (world.Player == null)
+[2026-02-28T21:17:03] tokens used: 30,615
+
+[2026-02-28T21:17:05] thinking
+
+**Checking container update handlers**
+[2026-02-28T21:17:06] exec bash -lc "grep -RIn \"NotifyContainerUpdate\\|RequestUpdateContentsForTab\\|GetGump<GridContainer>\\(.*\\)\\?\\.RequestUpdateContents\" src/ClassicUO.Client/Network src/ClassicUO.Client/Game | head -n 300" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:06] bash -lc "grep -RIn \"NotifyContainerUpdate\\|RequestUpdateContentsForTab\\|GetGump<GridContainer>\\(.*\\)\\?\\.RequestUpdateContents\" src/ClassicUO.Client/Network src/ClassicUO.Client/Game | head -n 300" succeeded in 13ms:
+src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs:68:                GridContainer.NotifyContainerUpdate(world, cont);
+src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs:224:                                parentGC.RequestUpdateContentsForTab(serial);
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1455:        internal static void NotifyContainerUpdate(World world, uint containerSerial)
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1464:            parent?.RequestUpdateContentsForTab(containerSerial);
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1475:        public void RequestUpdateContentsForTab(uint containerSerial)
+src/ClassicUO.Client/Game/World.cs:380:                                GridContainer.NotifyContainerUpdate(this, container.Serial);
+src/ClassicUO.Client/Game/World.cs:635:                    GridContainer.NotifyContainerUpdate(this, containerSerial);
+[2026-02-28T21:17:06] tokens used: 32,955
+
+[2026-02-28T21:17:08] thinking
+
+**Verifying consistent usage in key modules**
+[2026-02-28T21:17:09] exec bash -lc "sed -n '1,140p' src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:09] bash -lc "sed -n '1,140p' src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs" succeeded in 5ms:
+using ClassicUO.Configuration;
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
+using ClassicUO.Game.UI.Gumps;
+using ClassicUO.IO;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class DeleteObject
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+        if (world.Player == null)
+            return;
+
+        uint serial = p.ReadUInt32BE();
+
+[2026-02-28T21:17:09] tokens used: 33,411
+
+[2026-02-28T21:17:10] codex
+
+[2026-02-28T21:17:11] exec bash -lc "sed -n '330,430p' src/ClassicUO.Client/Game/World.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:11] bash -lc "sed -n '330,430p' src/ClassicUO.Client/Game/World.cs" succeeded in 4ms:
+                Client.Game.Audio.PlayMusic(music, false);
+            }
+        }
+
+
+        /*[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool CheckToRemove(Entity obj, int distance)
+        {
+            if (Player == null || obj.Serial == Player.Serial)
+                return false;
+
+            return Math.Max(Math.Abs(obj.X - RangeSize.X), Math.Abs(obj.Y - RangeSize.Y)) > distance;
+        }
+        */
+
+        public void Update()
+        {
+            // Process asynchronously loaded map chunks once per frame
+            // instead of on every GetChunk call for better performance
+            Map?.ProcessLoadedChunks();
+[2026-02-28T21:17:11] tokens used: 34,686
+[2026-02-28T21:17:14] exec bash -lc "sed -n '590,680p' src/ClassicUO.Client/Game/World.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:14] bash -lc "sed -n '590,680p' src/ClassicUO.Client/Game/World.cs" succeeded in 4ms:
+        {
+            Mobile mob = Mobiles.Get(serial);
+
+            if (mob != null && mob.IsDestroyed)
+            {
+                Mobiles.Remove(serial);
+                mob = null;
+            }
+
+            if (mob == null /*|| mob.IsDestroyed*/)
+            {
+                mob = Mobile.Create(this, serial);
+                Mobiles.Add(mob);
+            }
+
+            return mob;
+        }
+
+        public void RemoveItemFromContainer(uint serial)
+        {
+[2026-02-28T21:17:14] tokens used: 35,603
+
+[2026-02-28T21:17:18] thinking
+
+**Analyzing container update flow**
+[2026-02-28T21:17:18] exec bash -lc "grep -RIn \"AddItemToContainer\\(\" src/ClassicUO.Client/Network | head -n 80" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:18] bash -lc "grep -RIn \"AddItemToContainer\\(\" src/ClassicUO.Client/Network | head -n 80" succeeded in 6ms:
+[2026-02-28T21:17:18] tokens used: 36,529
+
+[2026-02-28T21:17:20] thinking
+
+**Noting need for escape in fixed-string grep**
+[2026-02-28T21:17:21] exec bash -lc 'grep -RInF "AddItemToContainer(" src/ClassicUO.Client/Network | head -n 80' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:21] bash -lc 'grep -RInF "AddItemToContainer(" src/ClassicUO.Client/Network | head -n 80' succeeded in 7ms:
+src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItem.cs:30:            Helpers.ItemHelpers.AddItemToContainer(world, serial, graphic, amount, x, y, hue, containerSerial);
+src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:14:    public static void AddItemToContainer(
+src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs:45:                        Helpers.ItemHelpers.AddItemToContainer(
+src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItems.cs:39:            Helpers.ItemHelpers.AddItemToContainer(world, serial, graphic, amount, x, y, hue, containerSerial);
+[2026-02-28T21:17:21] tokens used: 36,784
+
+[2026-02-28T21:17:23] thinking
+
+**Considering sequential handler execution**
+[2026-02-28T21:17:24] exec bash -lc "sed -n '1,140p' src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItems.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:24] bash -lc "sed -n '1,140p' src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItems.cs" succeeded in 4ms:
+using System;
+using ClassicUO.Game;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.IO;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class UpdateContainedItems
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+        if (!world.InGame)
+            return;
+
+        ushort count = p.ReadUInt16BE();
+
+        for (int i = 0; i < count; i++)
+        {
+            uint serial = p.ReadUInt32BE();
+            ushort graphic = (ushort)(p.ReadUInt16BE() + p.ReadUInt8());
+[2026-02-28T21:17:24] tokens used: 37,147
+[2026-02-28T21:17:27] exec bash -lc "sed -n '1,130p' src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItem.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:27] bash -lc "sed -n '1,130p' src/ClassicUO.Client/Network/PacketHandlers/UpdateContainedItem.cs" succeeded in 5ms:
+using System;
+using ClassicUO.Game;
+using ClassicUO.IO;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class UpdateContainedItem
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+            if (!world.InGame)
+            {
+                return;
+            }
+
+            uint serial = p.ReadUInt32BE();
+            ushort graphic = (ushort)(p.ReadUInt16BE() + p.ReadUInt8());
+            ushort amount = Math.Max((ushort)1, p.ReadUInt16BE());
+            ushort x = p.ReadUInt16BE();
+            ushort y = p.ReadUInt16BE();
+[2026-02-28T21:17:27] tokens used: 37,672
+
+[2026-02-28T21:17:30] thinking
+
+**Inspecting update invalidation behavior**
+[2026-02-28T21:17:30] exec bash -lc "grep -RIn \"void RequestUpdateContents\\|RequestUpdateContents\\(\" src/ClassicUO.Client/Game/UI | head -n 120" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:30] bash -lc "grep -RIn \"void RequestUpdateContents\\|RequestUpdateContents\\(\" src/ClassicUO.Client/Game/UI | head -n 120" succeeded in 4ms:
+[2026-02-28T21:17:30] tokens used: 38,196
+
+[2026-02-28T21:17:32] thinking
+
+**Evaluating fixed string usage**
+[2026-02-28T21:17:33] exec bash -lc 'grep -RInF "RequestUpdateContents(" src/ClassicUO.Client/Game/UI | head -n 180' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:33] bash -lc 'grep -RInF "RequestUpdateContents(" src/ClassicUO.Client/Game/UI | head -n 180' succeeded in 6ms:
+src/ClassicUO.Client/Game/UI/NearbyLootGump.cs:124:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/NearbyLootGump.cs:134:                RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/NearbyLootGump.cs:137:        private void EventSink_OnPositionChanged(object sender, PositionChangedArgs e) => RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/NearbyLootGump.cs:162:                RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/PaperdollGump.cs:364:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/ModernOptionsGump.cs:2266:                                resizableGump.RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/PartyGump.cs:284:                    RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/ModernPaperdoll.cs:191:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/SpellbookGump.cs:148:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/TradingGump.cs:590:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/ImprovedBuffGump.cs:202:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/DurabilityGump.cs:109:            RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/Gump.cs:211:        public void RequestUpdateContents() => InvalidateContents = true;
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1045:                RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1453:        /// Use this instead of UIManager.GetGump&lt;GridContainer&gt;(serial)?.RequestUpdateContents().
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1460:                gc.RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/BuffGump.cs:197:                RequestUpdateContents();
+src/ClassicUO.Client/Game/UI/Gumps/BuffGump.cs:287:                            ((BuffGump)Parent.Parent)?.RequestUpdateContents();
+[2026-02-28T21:17:33] tokens used: 38,431
+
+[2026-02-28T21:17:37] thinking
+
+**Considering update call strategy**
+[2026-02-28T21:17:37] exec bash -lc "sed -n '1500,1625p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:37] bash -lc "sed -n '1500,1625p' src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs" succeeded in 4ms:
+
+        private void AutoOpenTabs()
+        {
+            int autoOpen = ProfileManager.CurrentProfile.GridContainerTabAutoOpen;
+            if (autoOpen == 0 || !ProfileManager.CurrentProfile.GridContainerTabsEnabled)
+                return;
+
+            Item root = Container;
+            if (root == null)
+                return;
+
+            if (autoOpen == 1) // Direct children only
+            {
+                for (LinkedObject i = root.Items; i != null; i = i.Next)
+                {
+                    var child = (Item)i;
+                    if (child.ItemData.IsContainer && !child.IsDestroyed)
+                        AddTab(child.Serial);
+                }
+            }
+[2026-02-28T21:17:37] tokens used: 39,155
+
+[2026-02-28T21:17:41] thinking
+
+**Adding line numbers for references**
+[2026-02-28T21:17:41] exec bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs | sed -n '80,190p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:41] bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs | sed -n '80,190p'" succeeded in 7ms:
+    80	        if (SerialHelper.IsMobile(containerSerial))
+    81	        {
+    82	            Mobile m = world.Mobiles.Get(containerSerial);
+    83	            Item secureBox = m?.GetSecureTradeBox();
+    84	
+    85	            if (secureBox != null)
+    86	                UIManager.GetTradingGump(secureBox)?.RequestUpdateContents();
+    87	            else
+    88	            {
+    89	                UIManager.GetGump<PaperDollGump>(containerSerial)?.RequestUpdateContents();
+    90	                UIManager.GetGump<ModernPaperdoll>(containerSerial)?.RequestUpdateContents();
+    91	            }
+    92	        }
+    93	        else if (SerialHelper.IsItem(containerSerial))
+    94	        {
+    95	            ItemDatabaseManager.Instance.AddOrUpdateItem(item, world);
+    96	
+    97	            Gump gump = UIManager.GetGump<BulletinBoardGump>(containerSerial);
+    98	
+    99	            if (gump != null)
+[2026-02-28T21:17:41] tokens used: 40,296
+
+[2026-02-28T21:17:46] thinking
+
+**Adding line references in methods**
+[2026-02-28T21:17:47] exec bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '1380,1515p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:47] bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '1380,1515p'" succeeded in 6ms:
+  1380	            if (string.IsNullOrEmpty(text)) return "Bag";
+  1381	            // Strip HTML tags that OPL names may contain
+  1382	            text = Regex.Replace(text, "<.*?>", "");
+  1383	            return text.Length <= maxLen ? text : text[..maxLen] + "..";
+  1384	        }
+  1385	
+  1386	        private void SwitchToTab(int tabIndex)
+  1387	        {
+  1388	            if (tabIndex < 0 || tabIndex >= _tabs.Count || tabIndex == _activeTabIndex)
+  1389	                return;
+  1390	
+  1391	            // Save current tab state
+  1392	            ContainerTab currentTab = _tabs[_activeTabIndex];
+  1393	            currentTab.ScrollPosition = _scrollArea.ScrollValue;
+  1394	
+  1395	            // Detach current tab's grid items from scroll area
+  1396	            foreach (GridItem gi in currentTab.SlotManager.GridSlots.Values)
+  1397	                _scrollArea.Remove(gi);
+  1398	
+  1399	            // Switch
+[2026-02-28T21:17:47] tokens used: 41,731
+
+[2026-02-28T21:17:48] thinking
+
+**Planning line reference update**
+[2026-02-28T21:17:49] exec bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '842,885p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:49] bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '842,885p'" succeeded in 8ms:
+   842	                return;
+   843	            }
+   844	
+   845	            PruneInvalidTabs();
+   846	
+   847	            _containerNameLabel.Text = GetContainerName();
+   848	            _containerNameLabel.SetTooltip(GetContainerName(true, false));
+   849	
+   850	            if (_autoSortContainer)
+   851	                overrideSort = true;
+   852	
+   853	            Item activeContainer = ActiveTab != null ? World.Items.Get(ActiveTab.ContainerSerial) : Container;
+   854	            if (activeContainer == null)
+   855	                activeContainer = Container;
+   856	
+   857	            List<Item> sortedContents = (ProfileManager.CurrentProfile is null || ProfileManager.CurrentProfile.GridContainerSearchMode == 0) && !string.IsNullOrEmpty(_searchBox.Text)
+   858	                ? SlotManager.SearchResults(_searchBox.Text)
+   859	                : GridSlotManager.GetItemsInContainer(World, activeContainer, _sortMode, overrideSort);
+   860	
+   861	            SlotManager.RebuildContainer(sortedContents, _searchBox.Text, overrideSort);
+[2026-02-28T21:17:49] tokens used: 43,771
+
+[2026-02-28T21:17:52] thinking
+
+**Planning container wrapping**
+[2026-02-28T21:17:52] exec bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs | sed -n '190,275p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:52] bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs | sed -n '190,275p'" succeeded in 6ms:
+   190	                            case 0x004F:
+   191	                                if (gumps.GetGump(0x06E5).Texture != null)
+   192	                                    graphic = 0x06E5;
+   193	
+   194	                                break;
+   195	
+   196	                            case 0x004A:
+   197	                                if (gumps.GetGump(0x9CDD).Texture != null)
+   198	                                    graphic = 0x9CDD;
+   199	
+   200	                                break;
+   201	
+   202	                            case 0x0044:
+   203	                                if (gumps.GetGump(0x9CE3).Texture != null)
+   204	                                    graphic = 0x9CE3;
+   205	
+   206	                                break;
+   207	                        }
+   208	                    }
+   209	
+[2026-02-28T21:17:52] tokens used: 44,537
+
+[2026-02-28T21:17:56] thinking
+
+**Checking for outdated grid requests**
+[2026-02-28T21:17:56] exec bash -lc 'grep -RIn "GetGump<GridContainer>(" src/ClassicUO.Client | head -n 200' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:56] bash -lc 'grep -RIn "GetGump<GridContainer>(" src/ClassicUO.Client | head -n 200' succeeded in 10ms:
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:940:                            UIManager.GetGump<GridContainer>(child)?.Dispose();
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1437:                GridContainer gc = UIManager.GetGump<GridContainer>(parentSerial);
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1457:            GridContainer gc = UIManager.GetGump<GridContainer>(containerSerial);
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1559:            UIManager.GetGump<GridContainer>(containerSerial)?.Dispose();
+src/ClassicUO.Client/Game/UI/Gumps/ContainerGump.cs:219:                        UIManager.GetGump<GridContainer>(LocalSerial)?.Dispose();
+src/ClassicUO.Client/Game/GameActions.cs:508:        g ??= UIManager.GetGump<GridContainer>(backpack);
+src/ClassicUO.Client/Game/GameActions.cs:531:            backpackGump = UIManager.GetGump<GridContainer>(backpack);
+src/ClassicUO.Client/Game/GameActions.cs:624:                Gump g = UIManager.GetGump<GridContainer>(serial);
+src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:117:                    GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs:213:                        GridContainer gridContainer = UIManager.GetGump<GridContainer>(serial);
+[2026-02-28T21:17:56] tokens used: 45,720
+
+[2026-02-28T21:17:58] thinking
+
+**Inspecting container disposal**
+[2026-02-28T21:17:59] exec bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '920,980p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:17:59] bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '920,980p'" succeeded in 6ms:
+   920	                _lastY = Y;
+   921	            }
+   922	
+   923	            Item currentContainer = Container;
+   924	
+   925	            if (currentContainer != null)
+   926	            {
+   927	                if (currentContainer == SelectedObject.CorpseObject)
+   928	                    SelectedObject.CorpseObject = null;
+   929	
+   930	                Item bank = World.Player.FindItemByLayer(Layer.Bank);
+   931	
+   932	                if (bank != null && (currentContainer.Serial == bank.Serial || currentContainer.Container == bank.Serial))
+   933	                {
+   934	                    for (LinkedObject i = currentContainer.Items; i != null; i = i.Next)
+   935	                    {
+   936	                        var child = (Item)i;
+   937	
+   938	                        if (child.Container == currentContainer)
+   939	                        {
+[2026-02-28T21:17:59] tokens used: 46,306
+
+[2026-02-28T21:18:04] thinking
+
+**Assessing container rebuild consistency**
+[2026-02-28T21:18:04] exec bash -lc "grep -RIn \"class GridSlotManager|RebuildContainer\\(|GetItemsInContainer\\(\" src/ClassicUO.Client/Game/UI/Gumps | head -n 80" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:04] bash -lc "grep -RIn \"class GridSlotManager|RebuildContainer\\(|GetItemsInContainer\\(\" src/ClassicUO.Client/Game/UI/Gumps | head -n 80" succeeded in 4ms:
+[2026-02-28T21:18:04] tokens used: 47,461
+
+[2026-02-28T21:18:06] thinking
+
+**Deciding class name style**
+[2026-02-28T21:18:07] exec bash -lc 'grep -RInF "class GridSlotManager" src/ClassicUO.Client/Game/UI/Gumps' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:07] bash -lc 'grep -RInF "class GridSlotManager" src/ClassicUO.Client/Game/UI/Gumps' succeeded in 5ms:
+src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:2494:        public class GridSlotManager
+[2026-02-28T21:18:07] tokens used: 47,684
+
+[2026-02-28T21:18:09] thinking
+
+**Planning method inspection and rebuild**
+[2026-02-28T21:18:09] exec bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '2490,3145p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:09] bash -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs | sed -n '2490,3145p'" succeeded in 6ms:
+  2490	                }
+  2491	            }
+  2492	        }
+  2493	
+  2494	        public class GridSlotManager
+  2495	        {
+  2496	            private Dictionary<int, GridItem> _gridSlots = new Dictionary<int, GridItem>();
+  2497	            private Item _container;
+  2498	            private List<Item> _containerContents;
+  2499	            private int _amount = 125;
+  2500	            private Control _area;
+  2501	            private Dictionary<int, uint> _itemPositions = new Dictionary<int, uint>();
+  2502	            private List<uint> _itemLocks = new List<uint>();
+  2503	            private World _world;
+  2504	            private GridContainer _gridContainer;
+  2505	
+  2506	            public Dictionary<int, GridItem> GridSlots => _gridSlots;
+  2507	            public List<Item> ContainerContents => _containerContents;
+  2508	            public Dictionary<int, uint> ItemPositions => _itemPositions;
+  2509	
+[2026-02-28T21:18:09] tokens used: 48,034
+
+[2026-02-28T21:18:19] thinking
+
+**Analyzing container update race conditions**
+[2026-02-28T21:18:19] exec bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs | sed -n '52,86p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:19] bash -lc "nl -ba src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs | sed -n '52,86p'" succeeded in 7ms:
+    52	                    }
+    53	                }
+    54	
+    55	                if (cont == world.Player && it.Layer == Layer.Invalid)
+    56	                    Client.Game.UO.GameCursor.ItemHold.Enabled = false;
+    57	
+    58	                if (it.Layer != Layer.Invalid)
+    59	                {
+    60	                    UIManager.GetGump<PaperDollGump>(cont)?.RequestUpdateContents();
+    61	                    UIManager.GetGump<ModernPaperdoll>(cont)?.RequestUpdateContents();
+    62	                }
+    63	
+    64	                UIManager.GetGump<ContainerGump>(cont)?.RequestUpdateContents();
+    65	
+    66	                #region GridContainer
+    67	
+    68	                GridContainer.NotifyContainerUpdate(world, cont);
+    69	
+    70	                #endregion
+    71	
+[2026-02-28T21:18:19] tokens used: 56,884
+
+[2026-02-28T21:18:21] thinking
+
+**Planning world reference extraction**
+[2026-02-28T21:18:22] exec bash -lc "nl -ba src/ClassicUO.Client/Game/World.cs | sed -n '368,388p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:22] bash -lc "nl -ba src/ClassicUO.Client/Game/World.cs | sed -n '368,388p'" succeeded in 6ms:
+   368	
+   369	                        if (container != null)
+   370	                        {
+   371	                            if (SerialHelper.IsMobile(container.Serial))
+   372	                            {
+   373	                                UIManager.GetGump<PaperDollGump>(container.Serial)?.RequestUpdateContents();
+   374	                                UIManager.GetGump<ModernPaperdoll>(container.Serial)?.RequestUpdateContents();
+   375	                            }
+   376	                            else if (SerialHelper.IsItem(container.Serial))
+   377	                            {
+   378	                                UIManager.GetGump<ContainerGump>(container.Serial)?.RequestUpdateContents();
+   379	                                #region GridContainer
+   380	                                GridContainer.NotifyContainerUpdate(this, container.Serial);
+   381	                                #endregion
+   382	
+   383	                                if (container.Graphic == 0x2006)
+   384	                                {
+   385	                                    UIManager.GetGump<GridLootGump>(container)?.RequestUpdateContents();
+   386	                                    UIManager.GetGump<NearbyLootGump>(container)?.RequestUpdateContents();
+   387	                                }
+[2026-02-28T21:18:22] tokens used: 57,565
+[2026-02-28T21:18:25] exec bash -lc "nl -ba src/ClassicUO.Client/Game/World.cs | sed -n '620,648p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:25] bash -lc "nl -ba src/ClassicUO.Client/Game/World.cs | sed -n '620,648p'" succeeded in 7ms:
+   620	            uint containerSerial = obj.Container;
+   621	
+   622	            // if entity is running the "dying" animation we have to reset container too.
+   623	            // SerialHelper.IsValid(containerSerial) is not ideal in this case
+   624	            if (containerSerial != 0xFFFF_FFFF)
+   625	            {
+   626	                if (SerialHelper.IsMobile(containerSerial))
+   627	                {
+   628	                    UIManager.GetGump<PaperDollGump>(containerSerial)?.RequestUpdateContents();
+   629	                    UIManager.GetGump<ModernPaperdoll>(containerSerial)?.RequestUpdateContents();
+   630	                }
+   631	                else if (SerialHelper.IsItem(containerSerial))
+   632	                {
+   633	                    UIManager.GetGump<ContainerGump>(containerSerial)?.RequestUpdateContents();
+   634	                    #region GridContainer
+   635	                    GridContainer.NotifyContainerUpdate(this, containerSerial);
+   636	                    #endregion
+   637	
+   638	                    UIManager.GetGump<NearbyLootGump>(containerSerial)?.RequestUpdateContents();
+   639	                }
+[2026-02-28T21:18:25] tokens used: 58,085
+
+[2026-02-28T21:18:27] thinking
+
+**Inspecting item drop path**
+[2026-02-28T21:18:28] exec bash -lc "sed -n '1,130p' src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:28] bash -lc "sed -n '1,130p' src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs" succeeded in 4ms:
+using System;
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Gumps;
+using ClassicUO.IO;
+using ClassicUO.Utility.Logging;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class DenyMoveItem
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+        if (!world.InGame)
+            return;
+
+        Item firstItem = world.Items.Get(Client.Game.UO.GameCursor.ItemHold.Serial);
+
+[2026-02-28T21:18:28] tokens used: 58,682
+
+[2026-02-28T21:18:32] thinking
+
+**Analyzing container update inconsistencies**
+[2026-02-28T21:18:33] exec bash -lc "grep -RIn \"GetGump<ContainerGump>.*RequestUpdateContents\\|GridContainer.NotifyContainerUpdate\\|GetGump<GridContainer>\" src/ClassicUO.Client/Network/PacketHandlers | sed -n '1,220p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:33] bash -lc "grep -RIn \"GetGump<ContainerGump>.*RequestUpdateContents\\|GridContainer.NotifyContainerUpdate\\|GetGump<GridContainer>\" src/ClassicUO.Client/Network/PacketHandlers | sed -n '1,220p'" succeeded in 7ms:
+src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:117:                    GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs:64:                UIManager.GetGump<ContainerGump>(cont)?.RequestUpdateContents();
+src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs:68:                GridContainer.NotifyContainerUpdate(world, cont);
+src/ClassicUO.Client/Network/PacketHandlers/EquipItem.cs:27:            UIManager.GetGump<ContainerGump>(item.Container)?.RequestUpdateContents();
+src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs:213:                        GridContainer gridContainer = UIManager.GetGump<GridContainer>(serial);
+[2026-02-28T21:18:33] tokens used: 60,135
+
+[2026-02-28T21:18:35] thinking
+
+**Assessing item movement notification**
+[2026-02-28T21:18:35] exec bash -lc "sed -n '1,120p' src/ClassicUO.Client/Network/PacketHandlers/EquipItem.cs" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:18:35] bash -lc "sed -n '1,120p' src/ClassicUO.Client/Network/PacketHandlers/EquipItem.cs" succeeded in 4ms:
+using ClassicUO.Game;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Gumps;
+using ClassicUO.IO;
+
+namespace ClassicUO.Network.PacketHandlers;
+
+internal static class EquipItem
+{
+    public static void Receive(World world, ref StackDataReader p)
+    {
+        if (!world.InGame)
+            return;
+
+        uint serial = p.ReadUInt32BE();
+
+        Item item = world.GetOrCreateItem(serial);
+
+[2026-02-28T21:18:35] tokens used: 60,584
+
+[2026-02-28T21:19:04] thinking
+
+**Analyzing tabbed inventory update race**
+[2026-02-28T21:19:04] codex
+
+Verified: your “known observation” is correct, and it explains the reported behavior.
+
+**Root Cause(s)**
+1. **Packet-driven add/update path only refreshes direct `GridContainer` gumps, not tab-hosted containers.**  
+   In `ItemHelpers.AddItemToContainer`, refresh logic does:
+   - `UIManager.GetGump<GridContainer>(containerSerial)` then `RequestUpdateContents()`  
+   - but **does not route to parent tabbed gump** when `containerSerial` is a tab child  
+   See `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:117` and `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:119`.
+
+2. **Tabbed architecture expects routed updates via parent gump.**  
+   `GridContainer` already has the correct routing API:
+   - `NotifyContainerUpdate(...)` resolves direct gump or parent tab host  
+   - `FindParentGridContainer(...)` walks container ancestry  
+   - `RequestUpdateContentsForTab(...)` updates active tab (`InvalidateContents = true`) or rebuilds inactive tab immediately  
+   See `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1455`, `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1427`, `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1475`.
+
+3. **Asymmetry in code paths causes “remove looks live, add looks stale.”**  
+   Removal paths already call `GridContainer.NotifyContainerUpdate(...)`:
+   - `src/ClassicUO.Client/Network/PacketHandlers/DeleteObject.cs:68`
+   - `src/ClassicUO.Client/Game/World.cs:380`
+   - `src/ClassicUO.Client/Game/World.cs:635`  
+   Add/update path (`AddItemToContainer`) does not, causing stale tab contents until a manual tab switch triggers rebuild.
+
+4. **Why tab switch “fixes” it visually:**  
+   `SwitchToTab(...)` always sets `InvalidateContents = true`, and `UpdateItems()` rebuilds from world state.  
+   See `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:1424` and `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs:865`.
+
+**Repro Event Sequence**
+1. Open root container `A` as `GridContainer`; open child `B` as a tab and view tab `B`.
+2. Drop/move item into `B` (or server updates an existing item in `B`).
+3. Server sends `0x25/0x3C`-style contained-item update; handler calls `ItemHelpers.AddItemToContainer(...)`.
+4. World model updates (`container.PushToBack(item)`), but UI refresh checks only `GetGump<GridContainer>(B)` and finds none (because only `A` has a gump).
+5. No `InvalidateContents` on host gump `A` for active tab `B`; display remains stale.
+6. User switches tabs; `SwitchToTab(...)` invalidates and rebuilds, so changes appear.
+
+**Fix Options**
+
+1. **Minimal-risk (recommended): replace direct grid-gump refresh with routed notify in `ItemHelpers`.**  
+   Change in `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs` around current lines `117-120`.
+
+   Candidate patch:
+   ```csharp
+   // old
+   GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+   if (gridGump != null)
+       gridGump.RequestUpdateContents();
+
+   // new
+   GridContainer.NotifyContainerUpdate(world, containerSerial);
+   ```
+
+   Tradeoff:
+   - Very low risk, localized.
+   - Aligns add/update path with already-correct delete/remove paths.
+   - Tiny extra ancestry walk cost.
+
+2. **Slightly broader hardening: centralize all container UI refresh calls into one helper and use it everywhere.**  
+   Example: add `ContainerUiRefresh.Notify(world, containerSerial)` and replace scattered direct calls in packet handlers.
+   
+   Tradeoff:
+   - More refactor churn.
+   - Best long-term consistency; prevents future regressions from “forgot parent-tab routing.”
+
+3. **Most robust architecture: maintain tab-ownership index (`containerSerial -> host GridContainer + tab index`).**  
+   Update map on `AddTab`, `CloseTab`, `Dispose`; notify via O(1) lookup before ancestry fallback.
+
+   Tradeoff:
+   - Highest complexity.
+   - Better determinism and less reliance on container-chain availability/order.
+
+**Recommendation**
+Use **Option 1 now**. It is the best minimal-risk fix and directly addresses the bug report.  
+Then optionally do Option 2 as cleanup once regression is closed.
+
+**Deterministic Test Coverage Ideas**
+
+1. **Regression integration test: active child tab receives item add/update.**
+   - Setup world containers `A` (root) and `B` (child of `A`), open `GridContainer(A)`, `AddTab(B)`, switch to `B`.
+   - Call `ItemHelpers.AddItemToContainer(..., containerSerial: B)`.
+   - Assert tab `B` visual model updates without tab switch (e.g., `SlotManager` contains new serial after update tick).
+
+2. **Regression integration test: inactive child tab background rebuild.**
+   - Active tab `A`, update item in child `B`.
+   - Assert `RequestUpdateContentsForTab(B)` path rebuilds inactive tab so switching to `B` is immediately correct without extra packet.
+
+3. **Non-tab safety test.**
+   - Standalone `GridContainer(C)` (no parent tabs).
+   - Add/update item into `C`.
+   - Assert behavior unchanged and refresh still occurs.
+
+If you want, I can draft exact patch diffs for Option 1 plus a concrete xUnit test scaffold targeting these scenarios.
+[2026-02-28T21:19:18] tokens used: 64,206

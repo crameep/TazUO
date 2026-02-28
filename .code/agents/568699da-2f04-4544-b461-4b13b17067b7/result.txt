@@ -1,0 +1,738 @@
+[2026-02-28T21:00:00] OpenAI Codex v0.0.0 (research preview)
+[2026-02-28T21:00:00] binary: /usr/local/lib/node_modules/@just-every/code/bin/code-x86_64-unknown-linux-musl
+--------
+workdir: /home/crameep/LocalProjects/TazUo
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: auto
+--------
+[2026-02-28T21:00:00] User instructions:
+Diagnose a behavior bug in ClassicUO (TazUo fork): "Auto looter seems to be trying to loot stuff in my house it can't loot."
+
+This is analysis-only (/solve), no code changes required unless you want to suggest a patch approach.
+
+Please investigate root-cause hypotheses and provide concrete evidence from code paths.
+
+Key context and likely files:
+- `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs` (main logic)
+- `src/ClassicUO.Client/Game/GameObjects/Item.cs` (flags/properties like OnGround, IsLocked, IsMovable)
+- related movement/action queue and event flows if relevant (`ObjectActionQueue`, move request path)
+
+What to answer:
+1) Under what conditions does AutoLootManager enqueue ground items/scavenger items?
+2) What guards exist to prevent looting unlootable/locked/secured/house items?
+3) Identify plausible reasons it would repeatedly try in a player house for items that are not actually lootable.
+4) Call out exact lines/conditions likely responsible (e.g., IsLocked heuristic, OnGround + scavenger gating, retry cadence).
+5) Distinguish likely user-config issue vs real code bug.
+6) Propose 1-3 best fixes (from minimal safe to stronger), with tradeoffs and risk.
+7) If there are server-specific differences that can make this unavoidable without extra checks, explain.
+
+Important:
+- Focus on diagnosis and recommendations.
+- Cite concrete code references and flow.
+- Keep answer concise but specific and actionable.
+
+[Running in read-only mode - no modifications allowed]
+
+[2026-02-28T21:00:03] thinking
+
+**Inspecting files with read-only status**
+[2026-02-28T21:00:04] exec git status --short in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:04] git status --short succeeded in 29ms:
+ M src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs
+?? .beads/.gitignore
+?? .beads/.jsonl.lock
+?? .beads/README.md
+?? .beads/config.yaml
+?? .beads/daemon-error
+?? .beads/formulas/
+?? .beads/interactions.jsonl
+?? .beads/metadata.json
+?? .choo-choo-ralph/
+?? .code/
+?? AGENTS.md
+?? AUTOLOOT_PERFORMANCE_ANALYSIS.md
+?? CODEBASE_DOCUMENTATION.md
+?? PRD_AUTOLOOT_PERFORMANCE.md
+?? PRD_AUTOLOOT_PRIORITY.md
+?? PRD_CUSTOM_LAUNCHER.md
+?? PRD_LOOT_PROFILES.md
+?? PRD_RENDER_SCALING_AND_UPSCALING.md
+?? PRD_SKILLS_MANAGEMENT_TAB.md
+[2026-02-28T21:00:04] tokens used: 8,585
+
+[2026-02-28T21:00:07] thinking
+
+**Planning line gathering without modification**
+[2026-02-28T21:00:09] exec rg -n 'class AutoLootManager|Scavenger|OnGround|IsLocked|IsMovable|CanLoot|Queue|AutoLoot' src/ClassicUO.Client/Game/Managers/AutoLootManager.cs src/ClassicUO.Client/Game/GameObjects/Item.cs src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs src/ClassicUO.Client/Game/Managers/ScavengerManager.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:09] rg -n 'class AutoLootManager|Scavenger|OnGround|IsLocked|IsMovable|CanLoot|Queue|AutoLoot' src/ClassicUO.Client/Game/Managers/AutoLootManager.cs src/ClassicUO.Client/Game/GameObjects/Item.cs src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs src/ClassicUO.Client/Game/Managers/ScavengerManager.cs exited -1 in 0ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:00:09] tokens used: 9,188
+
+[2026-02-28T21:00:11] thinking
+
+**Scanning managers directory**
+[2026-02-28T21:00:11] exec ls src/ClassicUO.Client/Game/Managers in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:11] ls src/ClassicUO.Client/Game/Managers succeeded in 2ms:
+ActiveIconsManager.cs
+AnchorManager.cs
+AnimatedStaticsManager.cs
+AnonMetrics.cs
+AudioManager.cs
+AuraManager.cs
+AutoLootManager.cs
+AutoUnequipActionManager.cs
+BandageManager.cs
+BoatMovingManager.cs
+BuySellAgent.cs
+ChatChannel.cs
+ChatManager.cs
+ChatStatus.cs
+CombatTracker.cs
+CommandManager.cs
+ContainerManager.cs
+CoolDownBarManager.cs
+CorpseManager.cs
+CorpseOpenQueue.cs
+[2026-02-28T21:00:11] tokens used: 9,635
+
+[2026-02-28T21:00:14] thinking
+
+**Inspecting AutoLoot manager contents**
+[2026-02-28T21:00:14] exec nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:14] nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs succeeded in 3ms:
+     1	using ClassicUO.Configuration;
+     2	using ClassicUO.Game.GameObjects;
+     3	using ClassicUO.Game.UI.Gumps;
+     4	using ClassicUO.Utility;
+     5	using Microsoft.Xna.Framework;
+     6	using System;
+     7	using System.Collections.Generic;
+     8	using System.IO;
+     9	using System.Text.Json;
+    10	using System.Text.Json.Serialization;
+    11	using System.Text.RegularExpressions;
+    12	using System.Linq;
+    13	using System.Threading.Tasks;
+    14	using ClassicUO.Game.Managers.Structs;
+    15	using ClassicUO.Utility.Logging;
+    16	
+    17	namespace ClassicUO.Game.Managers
+    18	{
+    19	    [JsonSerializable(typeof(AutoLootManager.AutoLootConfigEntry))]
+    20	    [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
+[2026-02-28T21:00:14] tokens used: 10,320
+
+[2026-02-28T21:00:17] thinking
+
+**Extracting event-related methods**
+[2026-02-28T21:00:17] exec sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | sed -n '410,760p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:17] sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | sed -n '410,760p'" succeeded in 20ms:
+   410	            _currentLootTotalCount = 0;
+   411	            ClearMatchCache();
+   412	            SaveAll();
+   413	            SaveExclusions();
+   414	            Instance = null;
+   415	        }
+   416	
+   417	        internal void OnPositionChanged(object sender, PositionChangedArgs e)
+   418	        {
+   419	            if (!_loaded) return;
+   420	
+   421	            if (ProfileManager.CurrentProfile.EnableScavenger)
+   422	            {
+   423	                if (_nearbyGroundItems.Count == 0)
+   424	                {
+   425	                    BootstrapNearbyGroundItems();
+   426	                    return;
+   427	                }
+   428	
+   429	                List<uint> toRemove = null;
+[2026-02-28T21:00:17] tokens used: 22,216
+
+[2026-02-28T21:00:21] thinking
+
+**Identifying relevant property lines**
+[2026-02-28T21:00:21] exec rg -n 'IsLocked|OnGround|IsMovable|RootContainer|CanBeDragged|House|LockedDown|Secured' src/ClassicUO.Client/Game/GameObjects/Item.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:21] rg -n 'IsLocked|OnGround|IsMovable|RootContainer|CanBeDragged|House|LockedDown|Secured' src/ClassicUO.Client/Game/GameObjects/Item.cs exited -1 in 2ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:00:21] tokens used: 26,870
+
+[2026-02-28T21:00:25] thinking
+
+**Exploring game object directory**
+[2026-02-28T21:00:25] exec ls src/ClassicUO.Client/Game in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:25] ls src/ClassicUO.Client/Game succeeded in 5ms:
+Constants.cs
+Data
+GameActions.cs
+GameCursor.cs
+GameObjects
+ItemHold.cs
+LinkedObject.cs
+LongDistancePathfinder.cs
+Managers
+Map
+Pathfinder.cs
+Processes
+ScanModeObject.cs
+ScanTypeObject.cs
+Scenes
+SelectedObject.cs
+SerialHelper.cs
+UI
+UltimaLive.cs
+Weather.cs
+[2026-02-28T21:00:25] tokens used: 27,147
+
+[2026-02-28T21:00:29] thinking
+
+**Listing game objects**
+[2026-02-28T21:00:29] exec ls src/ClassicUO.Client/Game/GameObjects in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:29] ls src/ClassicUO.Client/Game/GameObjects succeeded in 1ms:
+DragEffect.cs
+Entity.cs
+EntityCollection.cs
+EntityTextContainer.cs
+FixedEffect.cs
+GameEffect.cs
+GameObject.cs
+House.cs
+IsometricLight.cs
+Item.cs
+Land.cs
+LightningEffect.cs
+LineOfSightHelper.cs
+Mobile.cs
+MobileAnimation.cs
+MovingEffect.cs
+Multi.cs
+PlayerMobile.cs
+RenderedText.cs
+Static.cs
+[2026-02-28T21:00:29] tokens used: 27,451
+
+[2026-02-28T21:00:33] thinking
+
+**Isolating path issue with rg**
+[2026-02-28T21:00:33] exec rg -n 'IsLocked|OnGround|IsMovable|RootContainer|LockedDown|Secured' src/ClassicUO.Client/Game/GameObjects/Item.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:33] rg -n 'IsLocked|OnGround|IsMovable|RootContainer|LockedDown|Secured' src/ClassicUO.Client/Game/GameObjects/Item.cs exited -1 in 2ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:00:33] tokens used: 27,839
+
+[2026-02-28T21:00:36] thinking
+
+**Checking case sensitivity issues**
+[2026-02-28T21:00:37] exec nl -ba src/ClassicUO.Client/Game/GameObjects/Item.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:37] nl -ba src/ClassicUO.Client/Game/GameObjects/Item.cs succeeded in 1ms:
+     1	﻿// SPDX-License-Identifier: BSD-2-Clause
+     2	
+     3	using System;
+     4	using System.Threading.Tasks;
+     5	using ClassicUO.Game.Data;
+     6	using ClassicUO.Game.Managers;
+     7	using ClassicUO.Game.Scenes;
+     8	using ClassicUO.Game.UI.Gumps;
+     9	using ClassicUO.Assets;
+    10	using ClassicUO.Utility.Logging;
+    11	using Microsoft.Xna.Framework;
+    12	using MathHelper = ClassicUO.Utility.MathHelper;
+    13	
+    14	namespace ClassicUO.Game.GameObjects
+    15	{
+    16	    public partial class Item : Entity
+    17	    {
+    18	        private ushort? _displayedGraphic;
+    19	
+    20	        /// <summary>
+[2026-02-28T21:00:37] tokens used: 28,106
+
+[2026-02-28T21:00:41] thinking
+
+**Assessing action queue handling**
+[2026-02-28T21:00:42] exec rg -n "MoveRequest|Enqueue\\(|ActionPriority\\.LootItem|lift|drop|pickup|ObjectActionQueueItem|CanPickup|ItemHold|Denied" src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs src/ClassicUO.Client/Game in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:42] rg -n "MoveRequest|Enqueue\\(|ActionPriority\\.LootItem|lift|drop|pickup|ObjectActionQueueItem|CanPickup|ItemHold|Denied" src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs src/ClassicUO.Client/Game exited -1 in 2ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:00:42] tokens used: 34,512
+
+[2026-02-28T21:00:45] thinking
+
+**Checking multi-path error handling**
+[2026-02-28T21:00:45] exec nl -ba src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:45] nl -ba src/ClassicUO.Client/Game/Managers/ObjectActionQueue.cs succeeded in 3ms:
+     1	﻿using System;
+     2	using ClassicUO.Game.Data;
+     3	using ClassicUO.Game.GameObjects;
+     4	using ClassicUO.Game.Managers.Structs;
+     5	using ClassicUO.Utility;
+     6	
+     7	namespace ClassicUO.Game.Managers;
+     8	
+     9	public class ObjectActionQueue : ConcurrentPriorityQueue<ObjectActionQueueItem, ActionPriority>
+    10	{
+    11	    public static ObjectActionQueue Instance { get; } = new();
+    12	
+    13	    public int GetCurrentQueuedCount => _queue.Count;
+    14	
+    15	    private ObjectActionQueue() { }
+    16	
+    17	    public void Update()
+    18	    {
+    19	        if (IsEmpty || GlobalActionCooldown.IsOnCooldown) return; //Quick bool return if empty to avoid checking the queue when unnecessary
+    20	
+[2026-02-28T21:00:45] tokens used: 34,789
+
+[2026-02-28T21:00:49] thinking
+
+**Planning guard move request**
+[2026-02-28T21:00:50] exec rg -n "struct MoveRequest|record MoveRequest|class MoveRequest|Execute\\(|ToLootBag|Can" src/ClassicUO.Client/Game/Managers/Structs src/ClassicUO.Client/Game in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:50] rg -n "struct MoveRequest|record MoveRequest|class MoveRequest|Execute\\(|ToLootBag|Can" src/ClassicUO.Client/Game/Managers/Structs src/ClassicUO.Client/Game exited -1 in 3ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:00:50] tokens used: 36,289
+
+[2026-02-28T21:00:58] thinking
+
+**Checking directory existence**
+[2026-02-28T21:00:58] exec ls src/ClassicUO.Client/Game/Managers/Structs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:00:58] ls src/ClassicUO.Client/Game/Managers/Structs succeeded in 6ms:
+MoveRequest.cs
+[2026-02-28T21:00:58] tokens used: 36,490
+[2026-02-28T21:01:01] exec nl -ba src/ClassicUO.Client/Game/Managers/Structs/MoveRequest.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:01] nl -ba src/ClassicUO.Client/Game/Managers/Structs/MoveRequest.cs succeeded in 3ms:
+     1	﻿using ClassicUO.Configuration;
+     2	using ClassicUO.Game.Data;
+     3	using ClassicUO.Game.GameObjects;
+     4	using ClassicUO.Network;
+     5	
+     6	namespace ClassicUO.Game.Managers.Structs;
+     7	
+     8	/// <summary>
+     9	/// Create a move item request. If <param name="layer"></param> is not Layer.Invalid, it will be an equip request instead of a move item.
+    10	/// </summary>
+    11	/// <param name="serial"></param>
+    12	/// <param name="destination"></param>
+    13	/// <param name="amount"></param>
+    14	/// <param name="x"></param>
+    15	/// <param name="y"></param>
+    16	/// <param name="z"></param>
+    17	/// <param name="layer"></param>
+    18	public readonly struct MoveRequest(uint serial, uint destination, ushort amount = 0, int x = 0xFFFF, int y = 0xFFFF, int z = 0, Layer layer = Layer.Invalid, MoveType moveType = MoveType.Move)
+    19	{
+    20	    public uint Serial { get; } = serial;
+[2026-02-28T21:01:01] tokens used: 36,777
+
+[2026-02-28T21:01:04] thinking
+
+**Reviewing item lock heuristics**
+[2026-02-28T21:01:04] exec rg -n IsLocked src/ClassicUO.Client in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:04] rg -n IsLocked src/ClassicUO.Client exited -1 in 2ms:
+ERROR
+No such file or directory (os error 2)
+[2026-02-28T21:01:04] tokens used: 38,051
+
+[2026-02-28T21:01:08] thinking
+
+**Verifying search path existence**
+[2026-02-28T21:01:08] exec ls src in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:08] ls src succeeded in 3ms:
+APIToMarkdown
+ClassicUO.Assets
+ClassicUO.CUOAPI
+ClassicUO.Client
+ClassicUO.IO
+ClassicUO.Renderer
+ClassicUO.Utility
+Directory.Build.props
+[2026-02-28T21:01:08] tokens used: 38,317
+
+[2026-02-28T21:01:11] thinking
+
+**Adjusting command quoting to fix path issue**
+[2026-02-28T21:01:11] exec sh -lc "rg -n 'IsLocked' src/ClassicUO.Client | head" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:11] sh -lc "rg -n 'IsLocked' src/ClassicUO.Client | head" succeeded in 10ms:
+[2026-02-28T21:01:11] tokens used: 38,618
+
+[2026-02-28T21:01:16] thinking
+
+**Switching to grep for search**
+[2026-02-28T21:01:17] exec sh -lc 'grep -RIn --line-number --binary-files=without-match "IsLocked" src/ClassicUO.Client | head -n 50' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:17] sh -lc 'grep -RIn --line-number --binary-files=without-match "IsLocked" src/ClassicUO.Client | head -n 50' succeeded in 61ms:
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:154:            return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:444:                    if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+src/ClassicUO.Client/Game/Managers/NameOverHeadManager.cs:175:            if (item.IsLocked && ActiveOverheadOptions.HasFlag(NameOverheadOptions.LockedDown))
+src/ClassicUO.Client/Game/Managers/DelayedObjectClickManager.cs:34:                if (!_world.ClientFeatures.TooltipsEnabled || SerialHelper.IsItem(Serial) && ((Item) entity).IsLocked && ((Item) entity).ItemData.Weight == 255 && !((Item) entity).ItemData.IsContainer)
+src/ClassicUO.Client/Game/GameCursor.cs:537:                        && selectedItem.IsLocked
+src/ClassicUO.Client/Game/UI/XmlGumpHandler.cs:58:                                    gump.IsLocked = locked;
+src/ClassicUO.Client/Game/UI/XmlGumpHandler.cs:953:                            root.SetAttribute("locked", IsLocked.ToString());
+src/ClassicUO.Client/Game/UI/Gumps/PaperdollGump.cs:50:                IsLocked = ProfileManager.CurrentProfile.PaperdollLocked;
+src/ClassicUO.Client/Game/UI/Gumps/CounterBarGump.cs:78:            IsLocked = ProfileManager.CurrentProfile.CounterGumpLocked;
+src/ClassicUO.Client/Game/UI/Gumps/CounterBarGump.cs:265:                    IsLocked = ProfileManager.CurrentProfile.CounterGumpLocked = !IsLocked;
+src/ClassicUO.Client/Game/UI/Gumps/CounterBarGump.cs:338:            IsLocked = ProfileManager.CurrentProfile.CounterGumpLocked;
+src/ClassicUO.Client/Game/UI/Gumps/CounterBarGump.cs:569:                            pg.IsLocked = ProfileManager.CurrentProfile.CounterGumpLocked = !pg.IsLocked;
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:99:        private new bool IsLocked
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:143:                writer.WriteAttributeString("locked", IsLocked.ToString());
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:163:                    IsLocked = locked;
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:264:                            IsLocked = !IsLocked;
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:406:                    if (IsLocked)
+src/ClassicUO.Client/Game/UI/Gumps/HealthBarGump.cs:426:            if (IsLocked || IsLastAttackBar)
+src/ClassicUO.Client/Game/UI/Gumps/WorldMapGump.cs:122:            IsLocked = ProfileManager.CurrentProfile.WorldMapLocked;
+src/ClassicUO.Client/Game/UI/Gumps/WorldMapGump.cs:175:                    if (!IsLocked)
+[2026-02-28T21:01:17] tokens used: 38,924
+
+[2026-02-28T21:01:20] thinking
+
+**Identifying drag guard location**
+[2026-02-28T21:01:20] exec sh -lc "nl -ba src/ClassicUO.Client/Game/GameActions.cs | sed -n '780,860p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:20] sh -lc "nl -ba src/ClassicUO.Client/Game/GameActions.cs | sed -n '780,860p'" succeeded in 19ms:
+   780	    internal static void RequestPartyAccept(uint serial)
+   781	    {
+   782	        Socket.Send_PartyAccept(serial);
+   783	
+   784	        UIManager.GetGump<PartyInviteGump>()?.Dispose();
+   785	    }
+   786	
+   787	    internal static void RequestPartyRemoveMemberByTarget() => Socket.Send_PartyRemoveRequest(0x00);
+   788	
+   789	    internal static void RequestPartyRemoveMember(uint serial) => Socket.Send_PartyRemoveRequest(serial);
+   790	
+   791	    internal static void RequestPartyQuit(PlayerMobile player) => Socket.Send_PartyRemoveRequest(player.Serial);
+   792	
+   793	    internal static void RequestPartyInviteByTarget() => Socket.Send_PartyInviteRequest();
+   794	
+   795	    internal static void RequestPartyLootState(bool isLootable) => Socket.Send_PartyChangeLootTypeRequest(isLootable);
+   796	
+   797	    internal static bool PickUp
+   798	    (
+   799	        World world,
+[2026-02-28T21:01:20] tokens used: 40,618
+
+[2026-02-28T21:01:28] thinking
+
+**Analyzing auto loot flag and config logic**
+[2026-02-28T21:01:28] exec sh -lc 'grep -RIn --line-number --binary-files=without-match "ShouldAutoLoot" src/ClassicUO.Client | head -n 80' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:28] sh -lc 'grep -RIn --line-number --binary-files=without-match "ShouldAutoLoot" src/ClassicUO.Client | head -n 80' succeeded in 13ms:
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:171:            if (i.ShouldAutoLoot)
+src/ClassicUO.Client/Game/UI/Gumps/GridHighLight/GridHighLightData.cs:297:                            data.item.ShouldAutoLoot = true;
+src/ClassicUO.Client/Game/UI/Gumps/GridHighLight/GridHighLightData.cs:348:                item.ShouldAutoLoot = false;
+src/ClassicUO.Client/Game/GameObjects/Item.cs:35:        public bool ShouldAutoLoot;
+[2026-02-28T21:01:28] tokens used: 42,178
+[2026-02-28T21:01:31] exec sh -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridHighLight/GridHighLightData.cs | sed -n '250,380p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:31] sh -lc "nl -ba src/ClassicUO.Client/Game/UI/Gumps/GridHighLight/GridHighLightData.cs | sed -n '250,380p'" succeeded in 5ms:
+   250	
+   251	                // Check if item still exists
+   252	                if (!World.Items.TryGetValue(ser, out Item item))
+   253	                {
+   254	                    // Item was removed, remove from hashset and skip
+   255	                    _queuedItems.Remove(ser);
+   256	                    continue;
+   257	                }
+   258	
+   259	                // Check if item is still valid for highlighting
+   260	                if (item.OnGround || item.IsMulti || item.HighlightChecked)
+   261	                {
+   262	                    // Item moved to ground or is multi, remove from hashset and skip
+   263	                    _queuedItems.Remove(ser);
+   264	                    continue;
+   265	                }
+   266	
+   267	                // Check if OPL data exists
+   268	                if (!World.OPL.TryGetNameAndData(ser, out _, out _))
+   269	                {
+[2026-02-28T21:01:31] tokens used: 42,549
+
+[2026-02-28T21:01:40] thinking
+
+**Analyzing auto-loot conditions and lock handling**
+[2026-02-28T21:01:40] exec sh -lc 'grep -RIn --line-number --binary-files=without-match -E "PickUp|pickup|drag|cannot|deny|denied|lift|drop" src/ClassicUO.Client/Network | head -n 120' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:40] sh -lc 'grep -RIn --line-number --binary-files=without-match -E "PickUp|pickup|drag|cannot|deny|denied|lift|drop" src/ClassicUO.Client/Network | head -n 120' succeeded in 7ms:
+src/ClassicUO.Client/Network/OutgoingPackets.cs:516:        public static void Send_PickUpRequest(this AsyncNetClient socket, uint serial, ushort count)
+src/ClassicUO.Client/Network/PacketHandlers/Helpers/ObjectHelpers.cs:226:                // we want maintain the item data due to the denymoveitem packet
+[2026-02-28T21:01:40] tokens used: 44,564
+
+[2026-02-28T21:01:42] thinking
+
+**Exploring packet handling for item moves**
+[2026-02-28T21:01:43] exec sh -lc "grep -RIn --line-number --binary-files=without-match \"denymoveitem\\|DenyMoveItem\\|MoveItemRejected\\|0x27\\|drag\" src/ClassicUO.Client/Network/PacketHandlers | head -n 120" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:43] sh -lc "grep -RIn --line-number --binary-files=without-match \"denymoveitem\\|DenyMoveItem\\|MoveItemRejected\\|0x27\\|drag\" src/ClassicUO.Client/Network/PacketHandlers | head -n 120" succeeded in 7ms:
+src/ClassicUO.Client/Network/PacketHandlers/HandlerRegistry.cs:31:        (0x27, DenyMoveItem.Receive),
+src/ClassicUO.Client/Network/PacketHandlers/Helpers/ObjectHelpers.cs:226:                // we want maintain the item data due to the denymoveitem packet
+src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs:12:internal static class DenyMoveItem
+[2026-02-28T21:01:43] tokens used: 44,873
+[2026-02-28T21:01:47] exec nl -ba src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:47] nl -ba src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs succeeded in 1ms:
+     1	using System;
+     2	using ClassicUO.Game;
+     3	using ClassicUO.Game.Data;
+     4	using ClassicUO.Game.GameObjects;
+     5	using ClassicUO.Game.Managers;
+     6	using ClassicUO.Game.UI.Gumps;
+     7	using ClassicUO.IO;
+     8	using ClassicUO.Utility.Logging;
+     9	
+    10	namespace ClassicUO.Network.PacketHandlers;
+    11	
+    12	internal static class DenyMoveItem
+    13	{
+    14	    public static void Receive(World world, ref StackDataReader p)
+    15	    {
+    16	        if (!world.InGame)
+    17	            return;
+    18	
+    19	        Item firstItem = world.Items.Get(Client.Game.UO.GameCursor.ItemHold.Serial);
+    20	
+[2026-02-28T21:01:47] tokens used: 45,231
+
+[2026-02-28T21:01:52] thinking
+
+**Investigating auto-loot triggers and exclusions**
+[2026-02-28T21:01:53] exec sh -lc "grep -n \"IsExcluded\\|Exclusion\" -n src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | head -n 40" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:53] sh -lc "grep -n \"IsExcluded\\|Exclusion\" -n src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | head -n 40" succeeded in 6ms:
+66:        public List<AutoLootConfigEntry> ExclusionList { get; private set; } = new();
+85:            _exclusionsPath = Path.Combine(ProfileManager.ProfilePath, "AutoLootExclusions.json");
+193:            if (IsExcluded(i)) return null;
+390:            LoadExclusions();
+413:            SaveExclusions();
+923:        internal bool IsExcluded(Item i)
+925:            if (ExclusionList.Count == 0) return false;
+939:        public AutoLootConfigEntry AddExclusionEntry(ushort graphic = 0, ushort hue = ushort.MaxValue, string name = "")
+943:            foreach (AutoLootConfigEntry existing in ExclusionList)
+947:            ExclusionList.Add(entry);
+948:            RebuildExclusionIndex();
+950:            SaveExclusions();
+954:        public void RemoveExclusionEntry(string uid)
+956:            for (int i = 0; i < ExclusionList.Count; i++)
+958:                if (ExclusionList[i].Uid == uid)
+960:                    ExclusionList.RemoveAt(i);
+961:                    RebuildExclusionIndex();
+963:                    SaveExclusions();
+969:        internal void RebuildExclusionIndex()
+974:            foreach (AutoLootConfigEntry entry in ExclusionList)
+[2026-02-28T21:01:53] tokens used: 48,124
+[2026-02-28T21:01:56] exec sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | sed -n '900,980p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:56] sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/AutoLootManager.cs | sed -n '900,980p'" succeeded in 6ms:
+   900	
+   901	            foreach (AutoLootConfigEntry entry in _mergedEntries)
+   902	            {
+   903	                if (entry.Graphic == -1)
+   904	                {
+   905	                    _wildcardEntries.Add(entry);
+   906	                }
+   907	                else
+   908	                {
+   909	                    if (!_graphicIndex.TryGetValue(entry.Graphic, out List<AutoLootConfigEntry> bucket))
+   910	                    {
+   911	                        bucket = new List<AutoLootConfigEntry>();
+   912	                        _graphicIndex[entry.Graphic] = bucket;
+   913	                    }
+   914	                    bucket.Add(entry);
+   915	                }
+   916	            }
+   917	        }
+   918	
+   919	        /// <summary>
+[2026-02-28T21:01:56] tokens used: 48,839
+
+[2026-02-28T21:01:59] thinking
+
+**Inspecting profile settings for exclusions**
+[2026-02-28T21:01:59] exec sh -lc "grep -RIn --line-number --binary-files=without-match \"EnableScavenger\\|EnableAutoLoot\\|AutoOpenCorpseRange\\|MoveMultiObjectDelay\" src/ClassicUO.Client | head -n 80" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:01:59] sh -lc "grep -RIn --line-number --binary-files=without-match \"EnableScavenger\\|EnableAutoLoot\\|AutoOpenCorpseRange\\|MoveMultiObjectDelay\" src/ClassicUO.Client | head -n 80" succeeded in 21ms:
+src/ClassicUO.Client/Game/Managers/CorpseOpenQueue.cs:18:    private static long Cooldown => ProfileManager.CurrentProfile?.MoveMultiObjectDelay ?? 1000;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:76:        private bool IsEnabled => ProfileManager.CurrentProfile.EnableAutoLoot;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:319:            if (corpse.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:421:            if (ProfileManager.CurrentProfile.EnableScavenger)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:456:                    if (item.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:495:                if (ProfileManager.CurrentProfile.EnableScavenger)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:502:                        if (i.Distance <= ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:536:            if (!_loaded || (!IsEnabled && !ProfileManager.CurrentProfile.EnableScavenger) || !_world.InGame) return;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:587:            if (moveItem.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:590:                if (rc != null && rc.Distance > ProfileManager.CurrentProfile.AutoOpenCorpseRange)
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:645:            _nextLootTime = Time.Ticks + ProfileManager.CurrentProfile.MoveMultiObjectDelay;
+src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:650:            if (ProfileManager.CurrentProfile.EnableAutoLootProgressBar && (_progressBarGump == null || _progressBarGump.IsDisposed))
+src/ClassicUO.Client/Game/Managers/GlobalActionCooldown.cs:8:    private static long _cooldownDuration => ProfileManager.CurrentProfile?.MoveMultiObjectDelay ?? 1000;
+src/ClassicUO.Client/Game/UI/ImGuiControls/General/GeneralTabContent.cs:280:            _objectMoveDelay = ProfileManager.CurrentProfile.MoveMultiObjectDelay;
+src/ClassicUO.Client/Game/UI/ImGuiControls/General/GeneralTabContent.cs:285:                _profile.MoveMultiObjectDelay = _objectMoveDelay;
+src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs:53:            enableAutoLoot = profile.EnableAutoLoot;
+src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs:54:            enableScavenger = profile.EnableScavenger;
+src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs:55:            enableProgressBar = profile.EnableAutoLootProgressBar;
+src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs:70:                profile.EnableAutoLoot = enableAutoLoot;
+src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs:84:                profile.EnableScavenger = enableScavenger;
+[2026-02-28T21:01:59] tokens used: 50,126
+
+[2026-02-28T21:02:02] thinking
+
+**Investigating default config behavior**
+[2026-02-28T21:02:02] exec sh -lc "nl -ba src/ClassicUO.Client/Configuration/Profile.cs | sed -n '640,700p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:02:02] sh -lc "nl -ba src/ClassicUO.Client/Configuration/Profile.cs | sed -n '640,700p'" succeeded in 7ms:
+   640	
+   641	        public bool ForceResyncOnHang { get; set; } = false;
+   642	
+   643	        public bool UseOneHPBarForLastAttack { get; set; } = true;
+   644	
+   645	        public bool DisableMouseInteractionOverheadText { get; set; } = false;
+   646	
+   647	        public bool HiddenLayersEnabled { get; set; } = false;
+   648	        public List<int> HiddenLayers { get; set; } = new List<int>();
+   649	        public bool HideLayersForSelf { get; set; } = true;
+   650	
+   651	        public List<string> AutoOpenXmlGumps { get; set; } = new List<string>();
+   652	
+   653	        public int ControllerMouseSensativity { get => Input.Mouse.ControllerSensativity; set => Input.Mouse.ControllerSensativity = value; }
+   654	
+   655	        [JsonConverter(typeof(Point2Converter))]
+   656	        public Point PlayerOffset { get; set; } = new Point(0, 0);
+   657	
+   658	        public float CameraSmoothingFactor { get; set; } = 0f;
+   659	
+[2026-02-28T21:02:02] tokens used: 52,262
+
+[2026-02-28T21:02:05] thinking
+
+**Reviewing UI autoloot wording**
+[2026-02-28T21:02:06] exec sh -lc "nl -ba src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | sed -n '1,220p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:02:06] sh -lc "nl -ba src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | sed -n '1,220p'" succeeded in 12ms:
+     1	using System;
+     2	using ImGuiNET;
+     3	using ClassicUO.Configuration;
+     4	using ClassicUO.Game.Managers;
+     5	using ClassicUO.Game.GameObjects;
+     6	using ClassicUO.Utility;
+     7	using System.Numerics;
+     8	using System.Collections.Generic;
+     9	
+    10	namespace ClassicUO.Game.UI.ImGuiControls
+    11	{
+    12	    public class AutoLootTabContent : TabContent
+    13	    {
+    14	        private Profile profile;
+    15	        private bool enableAutoLoot, enableScavenger, enableProgressBar, autoLootHumanCorpses, hueAfterProcess;
+    16	
+    17	        private static readonly string[] _priorityNames = { "High", "Normal", "Low" };
+    18	        private static readonly AutoLootManager.AutoLootPriority[] _priorityValues = { AutoLootManager.AutoLootPriority.High, AutoLootManager.AutoLootPriority.Normal, AutoLootManager.AutoLootPriority.Low };
+    19	
+    20	        private string newGraphicInput = "";
+[2026-02-28T21:02:06] tokens used: 53,494
+
+[2026-02-28T21:02:09] thinking
+
+**Identifying scavenge default UI handling**
+[2026-02-28T21:02:10] exec sh -lc 'grep -n "Scavenge" -n src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | head -n 40' in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:02:10] sh -lc 'grep -n "Scavenge" -n src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | head -n 40' succeeded in 6ms:
+15:        private bool enableAutoLoot, enableScavenger, enableProgressBar, autoLootHumanCorpses, hueAfterProcess;
+54:            enableScavenger = profile.EnableScavenger;
+83:            if (ImGui.Checkbox("Enable Scavenger", ref enableScavenger))
+84:                profile.EnableScavenger = enableScavenger;
+85:            ImGuiComponents.Tooltip("Scavenger option allows to pick objects from ground.");
+1025:                    bool scavenge = entry.Scavenge;
+1028:                        entry.Scavenge = scavenge;
+[2026-02-28T21:02:10] tokens used: 56,604
+[2026-02-28T21:02:13] exec sh -lc "nl -ba src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | sed -n '980,1060p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:02:13] sh -lc "nl -ba src/ClassicUO.Client/Game/UI/ImGuiControls/Agents/AutoLootTabContent.cs | sed -n '980,1060p'" succeeded in 5ms:
+   980	                        entryGraphicInputs[entry.Uid] = graphicStr;
+   981	                        if (StringHelper.TryParseInt(graphicStr, out int newGraphic))
+   982	                        {
+   983	                            entry.Graphic = newGraphic;
+   984	                            AutoLootManager.Instance.NotifyEntryChanged();
+   985	                        }
+   986	                    }
+   987	                    SetTooltip("Set to -1 to match any graphic.");
+   988	
+   989	                    ImGui.TableNextColumn();
+   990	                    // Initialize input string if not exists
+   991	                    if (!entryHueInputs.ContainsKey(entry.Uid))
+   992	                    {
+   993	                        entryHueInputs[entry.Uid] = entry.Hue == ushort.MaxValue ? "-1" : entry.Hue.ToString();
+   994	                    }
+   995	                    string hueStr = entryHueInputs[entry.Uid];
+   996	                    if (ImGui.InputText($"##Hue{i}", ref hueStr, 10))
+   997	                    {
+   998	                        entryHueInputs[entry.Uid] = hueStr;
+   999	                        if (hueStr == "-1")
+[2026-02-28T21:02:13] tokens used: 57,005
+
+[2026-02-28T21:02:18] thinking
+
+**Analyzing locked state heuristics**
+[2026-02-28T21:02:19] exec sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/DelayedObjectClickManager.cs | sed -n '1,90p'" in /home/crameep/LocalProjects/TazUo
+[2026-02-28T21:02:19] sh -lc "nl -ba src/ClassicUO.Client/Game/Managers/DelayedObjectClickManager.cs | sed -n '1,90p'" succeeded in 7ms:
+     1	﻿// SPDX-License-Identifier: BSD-2-Clause
+     2	
+     3	using ClassicUO.Game.GameObjects;
+     4	using ClassicUO.Input;
+     5	
+     6	namespace ClassicUO.Game.Managers
+     7	{
+     8	    public sealed class DelayedObjectClickManager
+     9	    {
+    10	        private readonly World _world;
+    11	
+    12	        public DelayedObjectClickManager(World world) { _world = world; }
+    13	
+    14	        public uint Serial { get; private set; }
+    15	        public bool IsEnabled { get; private set; }
+    16	        public uint Timer { get; private set; }
+    17	        public int X { get; set; }
+    18	        public int Y { get; set; }
+    19	        public int LastMouseX { get; set; }
+    20	        public int LastMouseY { get; set; }
+[2026-02-28T21:02:19] tokens used: 58,548
+
+[2026-02-28T21:02:37] thinking
+
+**Summarizing autoloot retry issues**
+[2026-02-28T21:02:38] codex
+
+Likely diagnosis: this is a mix of **expected-by-current-config** behavior and a **real retry/eligibility bug** in the scavenger path.
+
+1. **When AutoLoot enqueues ground/scavenger items**
+1. `OnItemCreatedOrUpdated` tracks ground items when scavenger is enabled, then immediately calls `CheckAndLoot` if in range: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:495`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:502`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:503`.
+2. `OnPositionChanged` rechecks tracked ground items on movement and calls `CheckAndLoot` for in-range items: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:421`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:456`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:467`.
+3. Ground items only match list entries with `Scavenge == true`: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:225`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:238`.
+4. `AutoLootConfigEntry.Scavenge` defaults to `true`, so entries created for corpse looting also scavenge ground unless user disables per entry: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:1470`.
+5. Scavenger itself is default-enabled in profile defaults: `src/ClassicUO.Client/Configuration/Profile.cs:680`.
+
+2. **Current guards against unlootable/locked/secured/house items**
+1. Tracking guard is only `OnGround && !IsCorpse && !IsLocked`: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:152`.
+2. `IsLocked` is heuristic: `(Flags & Movable)==0 && ItemData.Weight > 90`: `src/ClassicUO.Client/Game/GameObjects/Item.cs:61`.
+3. There is no explicit house-permission/secured-container check in AutoLoot.
+4. AutoLoot move execution sends pickup/drop directly via `MoveRequest.Execute` with no pre-check equivalent to manual `GameActions.PickUp`: `src/ClassicUO.Client/Game/Managers/Structs/MoveRequest.cs:32`, `src/ClassicUO.Client/Game/Managers/Structs/MoveRequest.cs:34`.
+5. Manual drag path has stricter guard (`item.OnGround && (item.IsLocked || distance)`) but AutoLoot bypasses it: `src/ClassicUO.Client/Game/GameActions.cs:815`.
+
+3. **Why it can repeatedly try in a house**
+1. House-secured/locked-down items may not satisfy this client-side `IsLocked` heuristic, so they enter scavenger tracking anyway.
+2. If the server denies pickup (ownership/security rules), `DenyMoveItem` restores cursor/item but does not notify AutoLootManager to back off that ground item: `src/ClassicUO.Client/Network/PacketHandlers/DenyMoveItem.cs:14`.
+3. Ground items have no `_lootCooldowns` protection (cooldown only applied to non-ground items): `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:125`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:639`.
+4. `_recentlyLooted` is cleared every 5s, enabling repeat attempts: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:545`, `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:547`.
+
+4. **Most likely responsible conditions**
+1. Weak lockability check: `src/ClassicUO.Client/Game/GameObjects/Item.cs:61`.
+2. Scavenger admission gate too broad: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:152`.
+3. Ground retry cadence: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:547` with no ground cooldown (`src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:639`).
+4. Entry defaults making ground scavenging easy to enable unintentionally: `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs:1470`, with scavenger default on: `src/ClassicUO.Client/Configuration/Profile.cs:680`.
+
+5. **User-config vs code bug**
+1. User-config side (likely): scavenger enabled + entries still `Scavenge=true` for common graphics -> client tries house ground items that match.
+2. Code-bug side (also likely): repeated retries on denied ground items due missing denial-aware backoff and limited lock/permission gating.
+
+6. **Best fix options**
+1. Minimal safe: add ground-item cooldown/backoff on failed move (or on `DenyMoveItem`) so denied serials are skipped for N seconds.  
+Tradeoff: may delay legitimate reattempt if permissions change quickly.
+2. Medium: strengthen scavenger eligibility before enqueue (e.g., require `IsMovable`, optionally exclude known “locked-down-like” signatures such as weight heuristics used elsewhere).  
+Tradeoff: risk false negatives on shards with unusual flags.
+3. Strong: denial-memory system keyed by serial (or serial+position/graphic), invalidated on item update/container/position change; consult before `CheckAndLoot`.  
+Tradeoff: more state complexity but best at stopping spam without disabling scavenger utility.
+
+7. **Server-specific unavoidable part**
+1. Some shards enforce house security server-side without exposing enough client-visible metadata to know “lootable by this player” in advance.
+2. In those environments, perfect pre-check is impossible; robust behavior requires **post-denial suppression/backoff** rather than only pre-check heuristics.
+
+If you want, I can draft a concrete patch plan (no code changes yet) for option 1+3 combined, which should be low-risk and directly address the repeated-house-attempt symptom.
+[2026-02-28T21:02:53] tokens used: 61,821

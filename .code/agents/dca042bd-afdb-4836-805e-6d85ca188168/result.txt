@@ -1,0 +1,77 @@
+I will list the files in `src/ClassicUO.Client/Game/Managers` and `src/ClassicUO.Client/Game/GameObjects` to confirm the location of `AutoLootManager.cs` and `Item.cs`.
+I will read `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs` to identify the looting logic and the conditions under which items are looted.
+I will read `src/ClassicUO.Client/Game/GameObjects/Item.cs` to investigate the definitions of `IsLocked`, `OnGround`, and `IsMovable`, as well as any other properties that might be relevant to the issue.
+I will search for usages of the `IsLocked` property within the codebase to understand its intended purpose and ensure that modifying `IsTrackableGroundItem` to use `IsMovable` is a safe and appropriate change.
+I will search for the definition of the `Flags` enum to confirm that the `Movable` flag behaves as expected and that checking `IsMovable` is the correct solution.
+### Analysis of AutoLoot Behavior in House
+
+Based on the investigation of `AutoLootManager.cs` and `Item.cs`, here is the diagnosis of why the client attempts to loot non-lootable items in a player's house.
+
+#### 1. Conditions for Enqueuing Loot
+The AutoLoot Manager (specifically the **Scavenger** feature) identifies items to loot via the `IsTrackableGroundItem` method. An item is considered a candidate if:
+*   It is not null.
+*   `item.OnGround` is true.
+*   `!item.IsCorpse` is true.
+*   **`!item.IsLocked` is true.**
+
+This check is performed in two key places:
+1.  **`IsTrackableGroundItem`** (Line 154): Determines if an item enters the tracking list.
+2.  **`OnPositionChanged`** (Line 444): Determines if an item stays in the tracking list or is removed.
+
+#### 2. The Root Cause: Flawed `IsLocked` Heuristic
+The bug lies in the definition of the `IsLocked` property in `Item.cs`.
+
+**`src/ClassicUO.Client/Game/GameObjects/Item.cs`**
+```csharp
+public bool IsLocked => (Flags & Flags.Movable) == 0 && ItemData.Weight > 90;
+```
+
+The `IsLocked` property is a legacy heuristic that only returns `true` if an item is **immovable AND heavy** (Weight > 90).
+*   **Heavy House Items:** A locked-down anvil or chest (Weight > 90) returns `IsLocked = true`. The Scavenger correctly ignores it.
+*   **Light House Items:** A locked-down potion, reagent, scroll, or single coin (Weight <= 90) returns `IsLocked = false`.
+
+**Result:** The Scavenger sees these light, locked-down items as "not locked" (`!IsLocked` is true) and attempts to loot them. Since they are effectively immovable on the server side (`Movable` flag is clear), the loot request fails, but the client keeps retrying every time the `_recentlyLooted` cache clears (every 5 seconds) or the player moves.
+
+#### 3. Plausible Reasons for Behavior
+*   **Lightweight Decor/Resources:** The user likely has small items (reagents, gold, bottles, decoration) locked down on the floor of their house.
+*   **Scavenger Enabled:** The "Scavenger" feature (looting ground items) is active.
+*   **Retry Loop:** Ground items bypass the standard 30-second cooldown logic (Line 126 in `AutoLootManager.cs`), relying instead on position updates. This causes the client to "spam" attempts more aggressively than it would for container items.
+
+#### 4. Proposed Fix
+The correct fix is to check the `IsMovable` property, which directly reflects the server-sent `Movable` flag, instead of relying on the `IsLocked` heuristic.
+
+**File:** `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs`
+
+**Change 1: Update the tracking logic (Line 154)**
+```csharp
+// Current
+internal static bool IsTrackableGroundItem(Item item)
+{
+    return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
+}
+
+// Fixed
+internal static bool IsTrackableGroundItem(Item item)
+{
+    // Use IsMovable to correctly identify items that can be picked up
+    return item != null && item.OnGround && !item.IsCorpse && item.IsMovable;
+}
+```
+
+**Change 2: Update the cleanup logic (Line 444)**
+```csharp
+// Current
+if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+
+// Fixed
+// Remove if item is NOT movable (replaces item.IsLocked check)
+if (item == null || !item.OnGround || !item.IsMovable || item.IsCorpse)
+```
+
+#### 5. Tradeoffs and Risk
+*   **Safety:** High. The `IsMovable` flag (`0x20`) is the standard UO flag for whether an item can be lifted. If it is false, the server will reject the move request anyway.
+*   **Edge Cases:** Very few. This change effectively stops the client from trying to do something the server forbids. It will correctly ignore locked-down items, secure containers (if on ground), and static-like dynamic items.
+*   **Server Specifics:** On some custom servers, items might be movable but scripted to be "locked" in other ways. However, `IsLocked` in the client code doesn't handle those cases either (unless they are heavy). `IsMovable` is the most reliable check available to the client.
+
+#### 6. Summary
+This is a **code logic bug**, not a user configuration issue. The `IsLocked` check is insufficient for filtering all immovable items. Replacing it with `IsMovable` will resolve the issue.

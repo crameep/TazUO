@@ -1,0 +1,228 @@
+I have all I need. Let me now compile the full root-cause analysis.
+
+---
+
+## Root-Cause Analysis: Tabbed Inventory Updates Not Visible Until Tab Switch
+
+---
+
+### 1. Root Cause(s)
+
+**Primary Root Cause — Missing tab-aware routing in `ItemHelpers.AddItemToContainer`**
+
+`ItemHelpers.cs:117`
+```csharp
+GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+if (gridGump != null)
+    gridGump.RequestUpdateContents();
+```
+
+`UIManager.GetGump<T>(uint serial)` (`UIManager.cs:365`) matches registered top-level `Gump` objects by their `LocalSerial` field. A tabbed `GridContainer` has `LocalSerial = rootContainerSerial` (e.g. the backpack's serial). Sub-containers (bags-inside-the-backpack that appear as tabs) have **no standalone `Gump` entry in `UIManager.Gumps`**; they live as `ContainerTab` records inside the parent `GridContainer`.
+
+So when the server sends an `UpdateContainedItem` (0x25) or a bulk `UpdateContainedItems` (0x3C) packet for a sub-container serial, `AddItemToContainer` is called with `containerSerial = sub-container-serial`. The lookup at line 117 returns `null`, the item is written into the world model, and the UI update call is silently dropped. The bug affects:
+
+- **Inactive sub-container tabs**: item added to world model, never shown until tab switch forces a rebuild.
+- **Active sub-container tabs** (user switched to tab 2, which is a sub-bag): same outcome — no `NotifyContainerUpdate` call, no `InvalidateContents = true`, stale display.
+- **Root/main tab (tab 0, `LocalSerial == containerSerial`)**: unaffected, because `GetGump<GridContainer>(backpack-serial)` succeeds.
+
+**The fix already exists but is not called.** The codebase contains the correct routing method at `GridContainer.cs:1455`:
+```csharp
+/// Use this instead of UIManager.GetGump<GridContainer>(serial)?.RequestUpdateContents().
+internal static void NotifyContainerUpdate(World world, uint containerSerial)
+{
+    GridContainer gc = UIManager.GetGump<GridContainer>(containerSerial);
+    if (gc != null) { gc.RequestUpdateContents(); return; }
+    GridContainer parent = FindParentGridContainer(world, containerSerial);
+    parent?.RequestUpdateContentsForTab(containerSerial);
+}
+```
+This method is already used correctly in `World.cs:380` (item-moved-on-ground path) and `World.cs:635` (item-removed-from-container path) and `DeleteObject.cs:68` (deletion path). It was never wired into `AddItemToContainer`.
+
+---
+
+**Secondary Asymmetry — `RequestUpdateContentsForTab` for an inactive tab is technically correct but redundant**
+
+`GridContainer.cs:1481-1494`:
+```csharp
+if (i == _activeTabIndex)
+    InvalidateContents = true;          // fires UpdateItems() next frame — correct
+else
+{
+    // Rebuild inactive tab's slot manager now
+    _tabs[i].SlotManager.RebuildContainer(items, "", true);
+}
+```
+
+The inactive-tab branch pre-populates the slot manager with current world state. When the user later switches tabs, `SwitchToTab` re-attaches those items and sets `InvalidateContents = true` anyway (line 1424), which calls `UpdateItems()` again and rebuilds from the world model. So the `RebuildContainer` call in the inactive-tab branch is doubly-redundant — but harmless. The real problem is that this method is never reached from the item-update path.
+
+---
+
+**Why tab switching "fixes" it:**
+
+`SwitchToTab` (`GridContainer.cs:1386`) always sets `InvalidateContents = true` (line 1424), which triggers `UpdateContents()` → `UpdateItems()`, which queries `World.Items.Get(ActiveTab.ContainerSerial)` fresh from the world model and rebuilds the slot manager. Since the world model **was** updated by `AddItemToContainer`, the item appears correctly after the switch. The UI was just never told to re-render before that.
+
+---
+
+### 2. Repro Event Sequence
+
+```
+[Server] Drop item into sub-container (e.g. bag B, serial 0xAABB, inside backpack 0x1234)
+   │
+   ▼
+[Network] Packet 0x25 (UpdateContainedItem): serial=item, containerSerial=0xAABB
+   │
+   ▼
+[UpdateContainedItem.cs:30] → ItemHelpers.AddItemToContainer(world, ..., containerSerial=0xAABB)
+   │
+   ├─ Item written to world model under 0xAABB ✓
+   ├─ EventSink.InvokeOnItemUpdated(item) ✓  (but nothing subscribes for gump refresh)
+   │
+   └─ UI refresh block [ItemHelpers.cs:115-121]:
+        UIManager.GetGump<GridContainer>(0xAABB)
+        → searches Gumps list for gump.LocalSerial == 0xAABB
+        → finds nothing (parent GridContainer has LocalSerial=0x1234)
+        → returns null → update dropped ✗
+
+[User sees stale tab content]
+
+[User clicks a different tab]
+   │
+   ▼
+[GridContainer.SwitchToTab(newIndex)]
+   ├─ Detaches old tab's GridItems from scroll area
+   ├─ Attaches new tab's GridItems
+   └─ InvalidateContents = true
+
+[Next frame: UpdateContents() → UpdateItems()]
+   ├─ Queries world model for ActiveTab.ContainerSerial
+   └─ Rebuilds from current world state → item now visible ✓
+
+[User clicks back to the sub-container tab]
+   └─ Same SwitchToTab path → item now visible ✓
+```
+
+---
+
+### 3. Fix Options
+
+#### Option A — Minimal-risk, surgical (Recommended)
+
+**File:** `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:115-121`
+
+Replace:
+```csharp
+#region GridContainer
+
+GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+if (gridGump != null)
+    gridGump.RequestUpdateContents();
+
+#endregion
+```
+With:
+```csharp
+#region GridContainer
+
+GridContainer.NotifyContainerUpdate(world, containerSerial);
+
+#endregion
+```
+
+`NotifyContainerUpdate` already handles both cases:
+- Standalone gump → `RequestUpdateContents()`
+- Tab sub-container → `FindParentGridContainer` → `RequestUpdateContentsForTab(containerSerial)`
+
+**Tradeoffs:**
+- One line changed, no new abstraction needed.
+- Does not need the `world` parameter plumbing to change (it's already available at the call site).
+- `NotifyContainerUpdate` needs a small accessibility change: it is `internal` in `GridContainer.cs` and `ItemHelpers.cs` is in a different namespace (`ClassicUO.Network.PacketHandlers.Helpers`). You must either make it `public`, or (preferred) move the call into a helper that lives within the `ClassicUO.Game` assembly, or add a `using ClassicUO.Game.UI.Gumps` reference and ensure assembly-internal visibility is adequate.  
+  — Actually checking: `ItemHelpers.cs` is in `ClassicUO.Network.PacketHandlers.Helpers` and it already uses `UIManager`, `GridContainer`, etc. from `ClassicUO.Game.UI.Gumps` — they're in the same assembly. `internal` is sufficient, no change to visibility needed.
+- **Risk: Near zero.** The only behavioral difference is that tab sub-containers now get correctly notified, which is the intended behavior.
+
+---
+
+#### Option B — Normalize all item-update callers
+
+Additionally audit and normalize any remaining `GetGump<GridContainer>(someSerial)?.RequestUpdateContents()` calls used for **item-state notifications** (as opposed to lifecycle or focus events). The known call sites beyond ItemHelpers:
+
+- `OpenContainer.cs:213-216`: Already has the tab-aware fallback at lines 221-224; this path fires only on open-container events, not item additions.
+- `World.cs:380` and `World.cs:635`: Already use `NotifyContainerUpdate` correctly.
+- `GameActions.cs:624`: `GetGump<GridContainer>(serial)` there is for `SetInScreen` (bring-to-front focus), not an item-state notification — do not change.
+
+Verdict: Option A already covers the broken path. No other broken call sites exist.
+
+---
+
+#### Option C — Event-driven subscription (Architectural, higher effort)
+
+`AddItemToContainer` at lines 75-78 already fires `EventSink.InvokeOnItemUpdated(item)` and `EventSink.InvokeOnItemCreated(item)`. `GridContainer` could subscribe to these events in its constructor and unsubscribe in `Dispose`, checking if `item.Container` matches any of its tabs:
+
+```csharp
+// in constructor:
+EventSink.OnItemUpdated += OnEventSinkItemUpdated;
+EventSink.OnItemCreated += OnEventSinkItemCreated;
+
+private void OnEventSinkItemUpdated(Item item)
+{
+    if (IsDisposed) return;
+    if (item.Container == LocalSerial)
+        RequestUpdateContents();
+    else
+        RequestUpdateContentsForTab(item.Container); // no-op if not a tab
+}
+```
+
+**Tradeoffs:**
+- Cleanly decoupled — the network layer doesn't need to know about UI routing.
+- Every `GridContainer` instance receives every item-update event; for a world with many items and multiple open containers, this could add per-frame overhead. The method is fast (a short loop over tabs), but requires careful subscription management to avoid dangling references.
+- More code, more test surface.
+- Does not require `NotifyContainerUpdate` to be touched.
+- Higher risk of subtle lifecycle bugs (subscribe/unsubscribe order, event firing during dispose).
+
+---
+
+### 4. Recommended Fix
+
+**Option A.** One line change in `ItemHelpers.cs`, replacing the direct `GetGump<GridContainer>` call with `GridContainer.NotifyContainerUpdate(world, containerSerial)`.
+
+The `NotifyContainerUpdate` method was deliberately written with this exact contract documented in its XML comment ("Use this instead of `UIManager.GetGump<GridContainer>(serial)?.RequestUpdateContents()`") — it was just never hooked into the item-addition path.
+
+**Concrete patch:**
+
+```diff
+// ItemHelpers.cs, inside the `else if (SerialHelper.IsItem(containerSerial))` block
+ 
+ #region GridContainer
+
+-GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+-if (gridGump != null)
+-    gridGump.RequestUpdateContents();
++GridContainer.NotifyContainerUpdate(world, containerSerial);
+
+ #endregion
+```
+
+---
+
+### 5. Deterministic Test Coverage Ideas
+
+**Unit tests** (feasible without a running game engine, using minimal stubs):
+
+| # | What to test | How |
+|---|---|---|
+| U1 | `NotifyContainerUpdate` routes to `RequestUpdateContents` when a standalone `GridContainer` exists | Create a mock/test `GridContainer` registered in `UIManager`, call `NotifyContainerUpdate` with its serial, assert `InvalidateContents == true` |
+| U2 | `NotifyContainerUpdate` routes to `RequestUpdateContentsForTab` when the serial matches a tab | Create parent `GridContainer` with a tab added via `AddTab`, call `NotifyContainerUpdate` with the tab's serial, assert the tab's SlotManager was rebuilt (or `InvalidateContents == true` if tab was active) |
+| U3 | `RequestUpdateContentsForTab` on active tab sets `InvalidateContents = true` | Direct unit test on a `GridContainer` with 2 tabs; switch to tab 1; call `RequestUpdateContentsForTab(tab1-serial)`; assert `InvalidateContents == true` |
+| U4 | `RequestUpdateContentsForTab` on inactive tab calls `SlotManager.RebuildContainer` | Same setup; remain on tab 0; call with tab 1's serial; assert tab 1's slot count updated |
+| U5 | `FindParentGridContainer` walks parent chain correctly | Create a world with nested items (A→B→C); open `GridContainer` for A; call `FindParentGridContainer(world, C-serial)`; assert returns A's GridContainer |
+
+**Regression / integration test:**
+
+| # | Scenario | Expected |
+|---|---|---|
+| R1 | Drop item into active sub-container tab (tab is currently displayed) | Item appears in current view without switching tabs |
+| R2 | Drop item into inactive sub-container tab (not currently displayed) | Switching to that tab shows the item immediately (no second switch needed) |
+| R3 | Drop item into root/main tab | Still works as before (not regressed) |
+| R4 | Bulk container refresh (`UpdateContainedItems` 0x3C) | All tabs (active and inactive) update correctly |
+
+Tests R1-R4 are hard to automate without the game loop running, but could be written as integration tests that drive the packet-handler code and then inspect `GridContainer` state (e.g., `SlotManager.GridSlots.Count`, `InvalidateContents`) without needing actual rendering.

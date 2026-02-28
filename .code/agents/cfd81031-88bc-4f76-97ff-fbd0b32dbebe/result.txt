@@ -1,0 +1,67 @@
+I will begin by investigating the `AutoLootManager.cs` file to understand the logic for identifying and enqueuing items for looting, specifically focusing on how it handles ground items and any existing guards against unlootable objects.
+I'll start by searching for keywords related to ground items, scavenger, and item flags like `IsLocked` or `IsMovable` within `AutoLootManager.cs` to identify the relevant logic for item enqueuing and filtering.
+I've identified several key lines in `AutoLootManager.cs` and `Item.cs` that define the logic for ground item tracking and the `IsLocked` property. I'll now examine the first 600 lines of `AutoLootManager.cs` to gain a deeper understanding of `IsTrackableGroundItem`, `CheckAndLoot`, and the scavenger scan logic, specifically how the `Weight > 90` condition affects item filtering.
+I've noticed that `Item.cs` defines `IsLocked` based on the `Movable` flag and a weight threshold of 90. If a server clears the `Movable` flag but keeps the weight at or below 90 for locked-down items, `IsLocked` will be false, potentially leading `AutoLootManager` to attempt looting. I'll now examine `Item.cs` to confirm the definitions of `IsLocked` and `IsMovable` and see if this discrepancy is the root cause.
+`IsLocked` currently requires both a non-movable flag and a weight over 90. If an item is non-movable but has a lower weight, `AutoLootManager` still considers it trackable. I'm questioning why we'd ever try to loot a non-movable ground item. I suspect `IsLocked` might be failing to filter out these items, so I'll examine the rest of the `Update` loop in `AutoLootManager.cs` to see how it handles the actual movement attempt.
+I've discovered that `AutoLootManager` enqueues `MoveRequest`s for ground items that aren't marked as `IsLocked`. However, the current `IsLocked` definition (requiring a weight > 90) might be missing many unmovable items. While `_recentlyLooted` should prevent spamming, it clears every 5 seconds. I suspect that the manager should be checking `IsMovable` instead of, or alongside, `IsLocked`. I'll now search `AutoLootManager.cs` for `IsMovable` to see if and how it's being used.
+`AutoLootManager` exclusively uses `IsLocked`, which incorrectly identifies non-movable, low-weight items (like locked-down chairs) as trackable. This causes the auto-looter to repeatedly attempt to loot these items, as reported. I've confirmed that `IsLocked` is failing for items with static weight ≤ 90. I'll now re-examine `Item.cs` to see how it handles instance weight and if there's a more reliable way to identify truly movable items.
+`AutoLootManager` incorrectly identifies non-movable, low-weight items as lootable because it relies on a flawed `IsLocked` heuristic (static weight > 90). This leads to repeated, failed looting attempts in player houses, triggered every 5 seconds or upon movement. I've identified the specific code responsible and conclude this is a bug, not a configuration issue. I'll now evaluate the safety of redefining `IsLocked` in `Item.cs` by checking its usage across other files, ultimately recommending an explicit `IsMovable` check in `AutoLootManager` as a safer alternative.
+Based on my investigation of the `ClassicUO.Client` codebase, here is the diagnosis and recommended fix for the Auto Looter behavior.
+
+### 1. Root Cause Analysis
+The primary issue is a flawed heuristic used to identify "lootable" ground items. The `AutoLootManager` relies on the `Item.IsLocked` property to decide whether to ignore a ground item. However, the definition of `IsLocked` in the client is too restrictive for auto-looting purposes.
+
+**Code References:**
+*   **The Flawed Guard (`Item.cs` line 61):**
+    ```csharp
+    public bool IsLocked => (Flags & Flags.Movable) == 0 && ItemData.Weight > 90;
+    ```
+    This property only returns `true` if an item is both non-movable **and** has a static weight greater than 90 (0x5A). 
+*   **The Scavenger Filter (`AutoLootManager.cs` line 154):**
+    ```csharp
+    internal static bool IsTrackableGroundItem(Item item) => 
+        item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
+    ```
+    Because many household items (chairs, daggers, clothing, decorations) have a static weight $\le 90$, they are **not** considered "Locked" by the client even when the server has cleared their `Movable` flag (e.g., when they are locked down or secured in a house).
+
+### 2. Why it "Spams"
+The system repeatedly attempts to loot these items due to the following flow:
+1.  **Detection:** When the player moves or an item is updated, `OnPositionChanged` or `OnItemCreatedOrUpdated` checks `IsTrackableGroundItem`.
+2.  **Enqueuing:** Since the item is not "Locked" (weight $\le 90$), it is added to the loot queue.
+3.  **Failure:** The client sends a `MoveRequest`. The server rejects it because the item is actually unmovable.
+4.  **Retry Cadence:** Unlike container items, ground items in this manager **do not get a long cooldown** upon failure. Instead, they rely on the `_recentlyLooted` cache, which is **cleared every 5 seconds** (`AutoLootManager.cs` line 544).
+5.  **Movement Trigger:** Every single step the player takes calls `OnPositionChanged`, which re-evaluates all nearby items. If the 5-second cache has cleared, the looter immediately tries to grab the house items again.
+
+### 3. Diagnosis Summary
+*   **Is it a config issue?** No. Even if the user excludes these items manually, the looter still has to iterate and match them against the exclusion list on every step, and any "wildcard" loot entries will still match them.
+*   **Is it a code bug?** Yes. The looter should never attempt to move an item that has the `Movable` flag cleared by the server.
+
+### 4. Proposed Fixes
+
+#### Fix A: Explicit `IsMovable` Check (Recommended)
+Update the `AutoLootManager` ground filters to respect the `IsMovable` flag directly. This is the safest and most correct fix for the looter.
+
+**Changes:**
+1.  Update `AutoLootManager.IsTrackableGroundItem`:
+    ```csharp
+    internal static bool IsTrackableGroundItem(Item item) => 
+        item != null && item.OnGround && !item.IsCorpse && item.IsMovable;
+    ```
+2.  Update the guard in `AutoLootManager.OnPositionChanged` (around line 444):
+    ```csharp
+    // Change:
+    if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+    // To:
+    if (item == null || !item.OnGround || !item.IsMovable || item.IsCorpse)
+    ```
+
+**Tradeoffs/Risks:** 
+*   **Risk:** Extremely low. If `IsMovable` is false, the server will reject the move anyway. 
+*   **Benefit:** Immediately stops all attempts to loot house-secured or map-static items that the server identifies as unmovable.
+
+#### Fix B: Redefine `IsLocked` (Higher Impact)
+Redefine `IsLocked` in `Item.cs` to simply mean `!IsMovable`.
+*   **Risk:** Moderate. `IsLocked` is used by `NameOverHeadManager`, `Pathfinder`, and `GameSceneDrawingSorting`. Changing it globally might change how items are colored in overheads or how the pathfinder treats obstacles. Current logic uses a 3-way distinction (Movable, Locked, and Immovable).
+
+### 5. Recommendation
+I recommend **Fix A**. It surgically addresses the `AutoLootManager`'s failure to distinguish between "lootable" and "immovable-but-light" items without risking regressions in the renderer or pathfinding logic. This will completely silence the looter in houses while maintaining its performance on actual loot.

@@ -725,7 +725,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (entry.Graphic < 0) continue;
 
                 OrganizerItemConfig itemConfig = config.NewItemConfig();
-                itemConfig.Graphic = (ushort)entry.Graphic;
+                itemConfig.Graphic = entry.Graphic;
                 itemConfig.Hue = entry.Hue;
                 itemConfig.DestContSerial = entry.DestinationContainer;
             }

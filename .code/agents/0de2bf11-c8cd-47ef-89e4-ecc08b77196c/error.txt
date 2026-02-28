@@ -1,0 +1,52 @@
+Command failed: 2026-02-28T18:49:24.317430Z ERROR code_core::codex::streaming: stream disconnected - retries exhausted retries=5 max_retries=5 auto_compact_attempted=false error=unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:15] OpenAI Codex v0.0.0 (research preview)
+[2026-02-28T18:49:15] binary: /usr/local/lib/node_modules/@just-every/code/bin/code-x86_64-unknown-linux-musl
+--------
+workdir: /home/crameep/.code/working/TazUo/branches/code-code-gpt-5-3-codex-spark-implement-this-behavior
+model: gpt-5.3-codex-spark
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: medium
+reasoning summaries: auto
+--------
+[2026-02-28T18:49:15] User instructions:
+Implement this behavior in the ClassicUO repo: "when it's done with a tome it should close the gump".
+
+Context:
+- Tome execution pipeline is in `src/ClassicUO.Client/Game/Managers/TomeActionRunner.cs`.
+- Runner uses `ITomeRuntime` / `LiveTomeRuntime` and currently arms next gump / targets and resets pending automation on completion/failure.
+- Completion paths include `CompleteCurrentOperation()` and `FailCurrentOperation(...)`, and `TargetRepeat` also currently calls `CancelTargeting()` before completion.
+- Existing tests for tome modes are in `tests/ClassicUO.UnitTests/Game/Managers/OrganizerAgentTest.cs` using `FakeTomeRuntime`.
+
+Requirements:
+1) On tome operation terminal state (success or failure/timeout), close the tome gump.
+2) Make this consistent across all modes and paths by centralizing where practical (avoid duplicated per-mode close logic).
+3) Keep behavior safe/idempotent if gump is already closed.
+4) Update/extend tests to verify gump-close behavior on at least:
+   - normal completion path
+   - failure/timeout path
+5) Keep changes scoped to organizer/tome flow.
+6) Run relevant tests and report what you ran.
+
+Implementation guidance:
+- You may add API on `ITomeRuntime` / `LiveTomeRuntime` as needed.
+- Reuse existing mechanisms in the codebase for closing gumps if possible.
+- Avoid broad refactors; do the smallest robust change.
+
+Deliverables:
+- Code changes
+- Tests updated/added
+- Brief summary of approach + commands run/results.
+[2026-02-28T18:49:16] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:16] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 188ms…
+[2026-02-28T18:49:16] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:16] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 439ms…
+[2026-02-28T18:49:17] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:17] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 819ms…
+[2026-02-28T18:49:18] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:18] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 1.736s…
+[2026-02-28T18:49:20] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:20] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 3.304s…
+[2026-02-28T18:49:24] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T18:49:24] ERROR: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}

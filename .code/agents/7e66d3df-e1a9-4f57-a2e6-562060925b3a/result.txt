@@ -1,0 +1,77 @@
+I will list the files in the `src/ClassicUO.Client/Game/UI/Gumps/` and `src/ClassicUO.Client/Network/PacketHandlers/` directories to confirm the file paths and structure.
+I will read `src/ClassicUO.Client/Game/UI/Gumps/GridContainer.cs` to understand how tabs and content updates are managed, and `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs` to analyze how item updates are propagated to the UI.
+I will read `src/ClassicUO.Client/Network/PacketHandlers/OpenContainer.cs` to verify the container opening logic and check for any existing update mechanisms that might be failing.
+Here is the root-cause analysis and recommended fix for the issue where tabbed inventory views do not update until the tab is switched.
+
+### 1. Root Cause Analysis
+The issue resides in `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs`.
+
+When an item is added to a container, the `AddItemToContainer` method is responsible for notifying the UI to refresh. Currently, it attempts to find a **direct** `GridContainer` window for the container receiving the item:
+
+```csharp
+// src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs:115
+GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+if (gridGump != null)
+    gridGump.RequestUpdateContents();
+```
+
+**The Failure:**
+If `containerSerial` corresponds to a sub-container (e.g., a bag) that is currently open as a **tab** inside a parent `GridContainer` (e.g., Backpack), there is no standalone `GridContainer` window for that serial. `UIManager.GetGump<GridContainer>(containerSerial)` returns `null`.
+
+Consequently, the parent window (which holds the tab) never receives a notification to update the tab's contents. The data is updated in the background, but the UI remains stale until a manual tab switch forces a redraw.
+
+### 2. Reproduction Sequence
+1.  **Setup:** Enable "Grid Containers" and "Grid Container Tabs" in profile options.
+2.  **Open Parent:** Open the player's Backpack. It opens as a `GridContainer`.
+3.  **Open Child:** Open a bag inside the Backpack. It opens as a new **tab** within the Backpack window.
+4.  **Action:** Drag and drop an item from the ground (or another source) into the **bag** (the child container).
+5.  **Observation:** The item disappears from the source but does **not** appear in the bag's grid view.
+6.  **Workaround:** Click the "Main" tab, then click the "Bag" tab again. The item appears.
+
+### 3. Fix Options
+
+**Option A: Use `GridContainer.NotifyContainerUpdate` (Recommended)**
+Replace the direct `GetGump` check with the static helper method already available in `GridContainer`. This method specifically handles the logic of finding the parent container and updating the specific tab.
+
+*   **Pros:** Uses existing, tested logic (`FindParentGridContainer`). Minimal code change (1 line).
+*   **Cons:** Introduces a slightly tighter coupling between `ItemHelpers` and `GridContainer` (already exists, so negligible).
+
+**Option B: Manual Parent Lookup in `ItemHelpers`**
+Copy the "Find Parent" logic from `GridContainer.cs` into `ItemHelpers.cs`.
+
+*   **Pros:** Keeps logic isolated.
+*   **Cons:** Code duplication. If the parent-child lookup logic changes in `GridContainer`, this copy will drift.
+
+**Option C: Global Event Subscription**
+Have `GridContainer` instances subscribe to a global `ItemAdded` event and filter by serial.
+
+*   **Pros:** Decoupled.
+*   **Cons:** High risk of performance overhead (checking every item add against every window) and significantly more complex implementation.
+
+### 4. Recommended Fix
+
+Apply **Option A**. The `GridContainer` class already contains a static helper method `NotifyContainerUpdate` designed exactly for this purpose.
+
+**File to Modify:** `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs`
+
+**Change:**
+Locate the `GridContainer` update block (~line 113) and replace it:
+
+```csharp
+// << REPLACE THIS BLOCK >>
+GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+if (gridGump != null)
+    gridGump.RequestUpdateContents();
+
+// << WITH THIS >>
+GridContainer.NotifyContainerUpdate(world, containerSerial);
+```
+
+**Verification:**
+The `NotifyContainerUpdate` method (in `GridContainer.cs`) performs the following safe operations:
+1.  Checks if a direct window exists.
+2.  If not, walks the container hierarchy to find a parent `GridContainer`.
+3.  Calls `parent.RequestUpdateContentsForTab(containerSerial)`, which correctly invalidates the specific tab if active, or rebuilds the background list if inactive.
+
+**Test Coverage:**
+*   **Unit/Integration Test Idea:** Create a test scenario with a mock `World`. Create a `GridContainer` for Item A. Add Item B to Item A (as a tab). Simulate an `UpdateContainedItem` packet for Item C moving into Item B. Assert that the `GridContainer` for Item A received an invalidation request or updated its slot manager for Tab B.

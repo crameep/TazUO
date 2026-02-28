@@ -1,0 +1,51 @@
+Command failed: 2026-02-28T21:00:09.495497Z ERROR code_core::codex::streaming: stream disconnected - retries exhausted retries=5 max_retries=5 auto_compact_attempted=false error=unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:00] OpenAI Codex v0.0.0 (research preview)
+[2026-02-28T21:00:00] binary: /usr/local/lib/node_modules/@just-every/code/bin/code-x86_64-unknown-linux-musl
+--------
+workdir: /home/crameep/LocalProjects/TazUo
+model: gpt-5.3-codex-spark
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: medium
+reasoning summaries: auto
+--------
+[2026-02-28T21:00:00] User instructions:
+Diagnose a behavior bug in ClassicUO (TazUo fork): "Auto looter seems to be trying to loot stuff in my house it can't loot."
+
+This is analysis-only (/solve), no code changes required unless you want to suggest a patch approach.
+
+Please investigate root-cause hypotheses and provide concrete evidence from code paths.
+
+Key context and likely files:
+- `src/ClassicUO.Client/Game/Managers/AutoLootManager.cs` (main logic)
+- `src/ClassicUO.Client/Game/GameObjects/Item.cs` (flags/properties like OnGround, IsLocked, IsMovable)
+- related movement/action queue and event flows if relevant (`ObjectActionQueue`, move request path)
+
+What to answer:
+1) Under what conditions does AutoLootManager enqueue ground items/scavenger items?
+2) What guards exist to prevent looting unlootable/locked/secured/house items?
+3) Identify plausible reasons it would repeatedly try in a player house for items that are not actually lootable.
+4) Call out exact lines/conditions likely responsible (e.g., IsLocked heuristic, OnGround + scavenger gating, retry cadence).
+5) Distinguish likely user-config issue vs real code bug.
+6) Propose 1-3 best fixes (from minimal safe to stronger), with tradeoffs and risk.
+7) If there are server-specific differences that can make this unavoidable without extra checks, explain.
+
+Important:
+- Focus on diagnosis and recommendations.
+- Cite concrete code references and flow.
+- Keep answer concise but specific and actionable.
+
+[Running in read-only mode - no modifications allowed]
+[2026-02-28T21:00:01] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:01] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 190ms…
+[2026-02-28T21:00:01] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:01] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 426ms…
+[2026-02-28T21:00:02] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:02] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 843ms…
+[2026-02-28T21:00:03] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:03] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 1.578s…
+[2026-02-28T21:00:05] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:05] ERROR: stream error: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}; retrying in 3.447s…
+[2026-02-28T21:00:09] ERROR: [transport] failed to start stream: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}
+[2026-02-28T21:00:09] ERROR: unexpected status 400 Bad Request: {"detail":"The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."}

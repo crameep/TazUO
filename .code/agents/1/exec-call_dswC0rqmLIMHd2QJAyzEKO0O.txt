@@ -1,0 +1,293 @@
+            if (ImGui.Button("Target Item to Add"))
+            {
+                World.Instance.TargetManager.SetTargeting((obj) =>
+                {
+                    if (obj == null || !(obj is Entity objEntity) || !SerialHelper.IsItem(objEntity))
+                    {
+                        GameActions.Print("Only items can be added!");
+                        return;
+                    }
+
+                    OrganizerItemConfig newItemConfig = _selectedConfig.NewItemConfig();
+                    newItemConfig.Graphic = objEntity.Graphic;
+                    newItemConfig.Hue = objEntity.Hue;
+
+                    GameActions.Print($"Added item: Graphic {objEntity.Graphic:X}, Hue {objEntity.Hue:X}");
+                });
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Add Item Manually"))
+            {
+                _showAddItemManual = !_showAddItemManual;
+            }
+
+            // Manual add item section
+            if (_showAddItemManual)
+            {
+                ImGui.SeparatorText("Manual Entry:");
+                ImGui.Text("Graphic:");
+                ImGuiComponents.Tooltip("Hex value, e.g. 0x0EED.");
+                ImGui.SetNextItemWidth(110);
+                ImGui.InputText("##graphic", ref _addItemGraphicInput, 10);
+                ImGui.Text("Hue:");
+                ImGuiComponents.Tooltip("Set to -1 to match any hue.");
+                ImGui.SetNextItemWidth(110);
+                ImGui.InputText("##hue", ref _addItemHueInput, 10);
+                if (ImGui.Button(" Add "))
+                {
+                    if (ushort.TryParse(_addItemGraphicInput, System.Globalization.NumberStyles.HexNumber, null, out ushort graphic))
+                    {
+                        OrganizerItemConfig newItemConfig = _selectedConfig.NewItemConfig();
+                        newItemConfig.Graphic = graphic;
+
+                        if (int.TryParse(_addItemHueInput, out int hue) && hue >= -1)
+                        {
+                            newItemConfig.Hue = hue == -1 ? ushort.MaxValue : (ushort)hue;
+                        }
+
+                        _addItemGraphicInput = "";
+                        _addItemHueInput = "";
+                        _showAddItemManual = false;
+                    }
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Cancel"))
+                {
+                    _addItemGraphicInput = "";
+                    _addItemHueInput = "";
+                    _showAddItemManual = false;
+                }
+            }
+
+            // Items table
+            if (ImGui.BeginTable("ItemsTable", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, ImGuiTheme.Dimensions.STANDARD_TABLE_SCROLL_HEIGHT)))
+            {
+                ImGui.TableSetupColumn("Graphic", ImGuiTableColumnFlags.WidthFixed, 55);
+                ImGui.TableSetupColumn("Hue", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Amount", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Destination", ImGuiTableColumnFlags.WidthFixed, 120);
+                ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableSetupColumn("Del", ImGuiTableColumnFlags.WidthFixed, ImGuiTheme.Dimensions.STANDARD_INPUT_WIDTH);
+                ImGui.TableHeadersRow();
+
+                for (int i = _selectedConfig.ItemConfigs.Count - 1; i >= 0; i--)
+                {
+                    OrganizerItemConfig itemConfig = _selectedConfig.ItemConfigs[i];
+                    ImGui.TableNextRow();
+
+                    ImGui.TableSetColumnIndex(0);
+                    if (!DrawArt(itemConfig.Graphic, new Vector2(50, 50)))
+                        ImGui.Text($"{itemConfig.Graphic:X4}");
+                    SetTooltip($"Graphic: {itemConfig.Graphic:X4}");
+
+                    ImGui.TableSetColumnIndex(1);
+                    string hueText = itemConfig.Hue == ushort.MaxValue ? "ANY" : itemConfig.Hue.ToString();
+                    if (ImGui.InputText($"##Hue{i}", ref hueText, 5))
+                    {
+                        if (hueText == "ANY" || hueText == "-1")
+                            itemConfig.Hue = ushort.MaxValue;
+                        else if (ushort.TryParse(hueText, System.Globalization.NumberStyles.HexNumber, null, out ushort hue))
+                            itemConfig.Hue = hue == 0xFFFF ? ushort.MaxValue : hue;
+                    }
+
+                    SetTooltip("Set to ANY or -1 to match any hue.");
+
+                    ImGui.TableSetColumnIndex(2);
+                    int amount = itemConfig.Amount;
+                    if (ImGui.InputInt($"##Amount{i}", ref amount, 0, 0))
+                    {
+                        itemConfig.Amount = (ushort)Math.Max(0, Math.Min(65535, amount));
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("This takes into account the items in the destination container.\n(0 = move all items)");
+                    }
+
+                    ImGui.TableSetColumnIndex(3);
+                    // Per-item destination
+                    if (itemConfig.DestContSerial != 0)
+                    {
+                        string destLabel = GetDestinationLabel(itemConfig.DestContSerial);
+                        ImGui.Text(destLabel);
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("Per-item destination");
+                        ImGui.SameLine();
+                        if (ImGui.SmallButton($"X##ClearDest{i}"))
+                            itemConfig.DestContSerial = 0;
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("Clear and use config destination");
+                    }
+                    else
+                    {
+                        ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), "Config");
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("Using configuration's destination");
+                        ImGui.SameLine();
+                        if (ImGui.SmallButton($"Set##SetDest{i}"))
+                        {
+                            OrganizerItemConfig currentItemConfig = itemConfig;
+                            GameActions.Print("Select [DESTINATION] Container or Pack Animal", 82);
+                            World.Instance.TargetManager.SetTargeting((destination) =>
+                            {
+                                if (destination == null || !(destination is Entity destEntity) ||
+                                    (!SerialHelper.IsItem(destEntity) && !SerialHelper.IsMobile(destEntity)))
+                                {
+                                    GameActions.Print("Select a container or pack animal!");
+                                    return;
+                                }
+                                currentItemConfig.DestContSerial = destEntity.Serial;
+                                string label = SerialHelper.IsMobile(destEntity) ? "Pack animal" : "Container";
+                                GameActions.Print($"Per-item destination set to {label}: {destEntity.Serial:X}", Constants.HUE_SUCCESS);
+                            });
+                        }
+                        if (ImGui.IsItemHovered())
+                            ImGui.SetTooltip("Set per-item destination (container or pack animal)");
+                    }
+
+                    ImGui.TableSetColumnIndex(4);
+                    bool enabled = itemConfig.Enabled;
+                    if (ImGui.Checkbox($"##Enabled{i}", ref enabled))
+                        itemConfig.Enabled = enabled;
+
+                    ImGui.TableSetColumnIndex(5);
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.8f, 0.2f, 0.2f, 1.0f));
+                    if (ImGui.Button($"X##Delete{i}"))
+                    {
+                        _selectedConfig.DeleteItemConfig(itemConfig);
+                    }
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip("Delete this item");
+                    }
+
+                    ImGui.PopStyleColor();
+                }
+
+                ImGui.EndTable();
+            }
+        }
+
+        private void DrawTomeSettings()
+        {
+            ImGui.SeparatorText("Tome Settings (Capture):");
+
+            if (ImGui.Button("Set Tome"))
+            {
+                GameActions.Print("Select a [TOME] item", 82);
+                World.Instance.TargetManager.SetTargeting((target) =>
+                {
+                    if (target == null || target is not Entity entity || !SerialHelper.IsItem(entity))
+                    {
+                        GameActions.Print("Only tome items can be selected!");
+                        return;
+                    }
+
+                    _selectedConfig.TomeSerial = entity.Serial;
+                    GameActions.Print($"Tome set to 0x{entity.Serial:X4} ({entity.Name})", Constants.HUE_SUCCESS);
+                });
+            }
+
+            ImGui.SameLine();
+            if (!_captureNextTomeButton)
+            {
+                if (ImGui.Button("Capture Next Gump Button"))
+                {
+                    _captureNextTomeButton = true;
+                    _captureStartSequence = GumpButtonCapture.Sequence;
+                    GameActions.Print("Capture armed. Click the tome button you want to record.", 82);
+                }
+            }
+            else if (ImGui.Button("Cancel Capture"))
+            {
+                _captureNextTomeButton = false;
+                GameActions.Print("Tome gump button capture canceled.");
+            }
+
+            if (_selectedConfig.TomeSerial != 0)
+                ImGui.Text($"Tome: 0x{_selectedConfig.TomeSerial:X4}");
+            else
+                ImGui.Text("Tome: Not set");
+
+            ImGui.SetNextItemWidth(130);
+            if (ImGui.InputText("Tome Gump ID", ref _tomeGumpIdInput, 20))
+            {
+                if (TryParseUInt(_tomeGumpIdInput, out uint gumpId))
+                    _selectedConfig.TomeGumpId = gumpId;
+                else if (string.IsNullOrWhiteSpace(_tomeGumpIdInput))
+                    _selectedConfig.TomeGumpId = 0;
+            }
+            ImGuiComponents.Tooltip("Decimal or hex (for example 305419896 or 0x12345678).");
+
+            ImGui.SetNextItemWidth(130);
+            if (ImGui.InputText("Add Button ID", ref _tomeButtonIdInput, 12))
+            {
+                if (int.TryParse(_tomeButtonIdInput, out int buttonId))
+                    _selectedConfig.TomeAddButtonId = buttonId;
+                else if (string.IsNullOrWhiteSpace(_tomeButtonIdInput))
+                    _selectedConfig.TomeAddButtonId = 0;
+            }
+            ImGuiComponents.Tooltip("The gump button ID that will be replayed on the tome gump.");
+        }
+
+        private void EnsureTomeInputsBound()
+        {
+            if (_tomeInputBoundConfig == _selectedConfig)
+                return;
+
+            _tomeInputBoundConfig = _selectedConfig;
+            _tomeGumpIdInput = _selectedConfig.TomeGumpId == 0 ? string.Empty : $"0x{_selectedConfig.TomeGumpId:X8}";
+            _tomeButtonIdInput = _selectedConfig.TomeAddButtonId.ToString();
+        }
+
+        private void TryApplyCapturedTomeButton()
+        {
+            if (!_captureNextTomeButton || _selectedConfig == null)
+                return;
+
+            if (GumpButtonCapture.Sequence == _captureStartSequence)
+                return;
+
+            _selectedConfig.TomeGumpId = GumpButtonCapture.LastGumpId;
+            _selectedConfig.TomeAddButtonId = GumpButtonCapture.LastButtonId;
+            _tomeGumpIdInput = $"0x{_selectedConfig.TomeGumpId:X8}";
+            _tomeButtonIdInput = _selectedConfig.TomeAddButtonId.ToString();
+            _captureNextTomeButton = false;
+
+            GameActions.Print($"Captured tome mapping: gump 0x{_selectedConfig.TomeGumpId:X8}, button {_selectedConfig.TomeAddButtonId}.", Constants.HUE_SUCCESS);
+        }
+
+        private static bool TryParseUInt(string value, out uint result)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                result = 0;
+                return false;
+            }
+
+            string text = value.Trim();
+
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(text.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out result);
+
+            return uint.TryParse(text, out result);
+        }
+
+        private static string GetDestinationLabel(uint serial)
+        {
+            if (serial == 0) return "Not set";
+
+            Mobile mob = World.Instance?.Mobiles.Get(serial);
+            if (mob != null)
+                return $"{mob.Name ?? "Pack Animal"} (0x{serial:X4})";
+
+            Item item = World.Instance?.Items.Get(serial);
+            if (item != null)
+                return $"{item.Name ?? "Container"} (0x{serial:X4})";
+
+            return $"(0x{serial:X4})";
+        }
+    }
+}

@@ -1,0 +1,207 @@
+Perfect. I now have complete evidence of the root cause. Let me compile my analysis.
+
+---
+
+## **Systematic Debugging - Phase 1: Root Cause Investigation Complete**
+
+I've traced through the AutoLoot system and identified the exact issue. Here's the diagnosis:
+
+---
+
+## **1) UNDER WHAT CONDITIONS DOES AUTOLOOT ENQUEUE ITEMS?**
+
+AutoLoot enqueues ground items through two paths:
+
+**Path A: Scavenger (OnPositionChanged, line 417-468)**
+- When player moves, `OnPositionChanged` checks all items in `_nearbyGroundItems` (spatial tracking set)
+- For items that pass distance/IsLocked checks, calls `CheckAndLoot(item)` → `LootItem(item, entry)`
+
+**Path B: Item Creation (OnItemCreatedOrUpdated, line 482-511)**
+- When new item appears on ground, immediately checks if it matches loot list
+- If within range: `CheckAndLoot(i)` → `LootItem()`
+
+**Path C: Corpse (OnOpenContainer/OnPositionChanged)**
+- Corpses are handled separately via `HandleCorpse()`, iterating container items
+
+**Enqueueing logic (LootItem, line 119-141):**
+```csharp
+public void LootItem(Item item, AutoLootConfigEntry entry = null)
+{
+    if (item == null || !_recentlyLooted.Add(item.Serial) || !_quickContainsLookup.Add(item.Serial)) 
+        return;
+
+    // COOLDOWN CHECK ONLY FOR NON-GROUND ITEMS:
+    if (!item.OnGround && _lootCooldowns.TryGetValue(item.Serial, out long cooldownUntil) 
+        && Time.Ticks < cooldownUntil)
+    {
+        _recentlyLooted.Remove(item.Serial);
+        _quickContainsLookup.Remove(item.Serial);
+        return;
+    }
+
+    int pri = entry != null ? -(int)entry.Priority : -(int)AutoLootPriority.Normal;
+    if (!item.OnGround) pri -= 100;
+    _lootItems.Enqueue((item.Serial, entry), pri);  // ← ALWAYS ENQUEUES HERE
+    _currentLootTotalCount++;
+    _nextClearRecents = Time.Ticks + 5000;
+}
+```
+
+---
+
+## **2) WHAT GUARDS EXIST TO PREVENT LOOTING UNLOOTABLE ITEMS?**
+
+**Guard 1: IsTrackableGroundItem (line 152-155)**
+```csharp
+internal static bool IsTrackableGroundItem(Item item)
+{
+    return item != null && item.OnGround && !item.IsCorpse && !item.IsLocked;
+}
+```
+- Applied at: initial scavenger bootstrap, OnItemCreatedOrUpdated
+- Prevents **locked** items from being tracked
+- **IsLocked** check: `(Flags & Flags.Movable) == 0 && ItemData.Weight > 90`
+
+**Guard 2: Removal on stale state (OnPositionChanged, line 444)**
+```csharp
+if (item == null || !item.OnGround || item.IsLocked || item.IsCorpse)
+{
+    (toRemove ??= new List<uint>()).Add(serial);  // Removed from tracking
+    continue;
+}
+```
+- Checks if item is still trackable; removes if conditions change
+
+**Guard 3: Distance check (line 450)**
+- Items beyond 20 tiles removed from scavenger tracking
+
+**Guard 4: Exclusion list (IsOnLootList, line 192-193)**
+```csharp
+// Check global exclusion list before profile matching
+if (IsExcluded(i)) return null;
+```
+
+**NO GUARD FOR SERVER-SIDE REJECTION:** There is NO mechanism that checks if a pickup actually succeeds before re-enqueueing.
+
+---
+
+## **3) PLAUSIBLE ROOT CAUSE: HOUSE ITEMS REPEATEDLY RETRIED**
+
+The bug occurs with house items (or secured containers) that:
+
+1. **Start with Flags.Movable = 1** (appear as normal ground items)
+2. **Pass IsTrackableGroundItem check** → Added to `_nearbyGroundItems`
+3. **Match loot profile** → Enqueued in `_lootItems`
+4. **Server rejects pickup** (DenyMoveItem packet, line 639 in DenyMoveItem.cs)
+   - Item returns to ground but **Flags may not change**
+   - Or Weight-based IsLocked heuristic doesn't apply
+5. **No cooldown applied** because `item.OnGround == true` (line 639-640 in Update())
+6. **Every OnPositionChanged triggers CheckAndLoot again**
+   - Every player move re-enqueues the item
+7. **Retry cadence is fast:** `MoveMultiObjectDelay` (typically 100-200ms)
+8. **Infinite loop:** Server rejects pickup → item re-enqueued → repeat
+
+---
+
+## **4) EXACT LINES/CONDITIONS RESPONSIBLE**
+
+| Issue | File | Line | Code |
+|-------|------|------|------|
+| **No cooldown for ground items** | AutoLootManager.cs | 639-640 | `if (!moveItem.OnGround) _lootCooldowns[moveItem.Serial] = Time.Ticks + 30000;` |
+| **IsLocked heuristic incomplete** | Item.cs | 61 | `public bool IsLocked => (Flags & Flags.Movable) == 0 && ItemData.Weight > 90;` |
+| **No failure feedback** | AutoLootManager.cs | 570-641 | `Update()` dequeues and tries to move, but never checks if move succeeded |
+| **Retry on every move** | AutoLootManager.cs | 417-468 | `OnPositionChanged()` always calls CheckAndLoot for tracked items |
+| **_recentlyLooted cleared periodically** | AutoLootManager.cs | 545-549 | `_recentlyLooted.Clear()` every 5 seconds allows re-retry |
+
+---
+
+## **5) USER CONFIG VS CODE BUG**
+
+**This is a CODE BUG, not user configuration.**
+
+Even if autoloot is configured correctly and profile matches the item graphic, the system will still spam retries because:
+- IsLocked check doesn't catch all unlootable house items
+- No retry prevention for failed ground-item pickups
+- Server rejection feedback is ignored
+
+**User workaround (incomplete):**
+- Add item to Exclusion list → stops future retries
+- But won't stop in-flight queue items
+
+---
+
+## **6) PROPOSED FIXES (SAFETY RANKED)**
+
+### **Option 1: MINIMAL - Add cooldown for all failed pickups (Safest)**
+**Approach:** When a move attempt is made, record the time. Don't retry the same serial before cooldown expires.
+
+**Changes:**
+- In `LootItem()`: Apply cooldown to **ground items too** if they fail
+- In `Update()`: Check cooldown before enqueueing `MoveRequest`
+- Set 5-10 second cooldown on ground items to allow retries if item moves, but prevent spam if server rejects
+
+**Risk:** Low. Cooldowns already exist for corpse items.  
+**Tradeoff:** Small delay if item legitimately fails once, then becomes pickupable.
+
+---
+
+### **Option 2: MODERATE - Detect server rejection via DenyMoveItem callback**
+**Approach:** Hook `DenyMoveItem` packet handler to notify AutoLoot when pickups fail.
+
+**Changes:**
+- Add event hook in `DenyMoveItem.cs` to call `AutoLootManager.OnMoveItemDenied(serial)`
+- Track denials in AutoLoot: if item denied, add long cooldown (30s like corpses)
+- Remove from `_nearbyGroundItems` tracking
+
+**Risk:** Moderate. Requires cross-module coordination. Must ensure event fires before AutoLoot retries.  
+**Tradeoff:** More robust; prevents re-enqueueing denied items.
+
+---
+
+### **Option 3: STRONGER - Improve IsLocked heuristic for house items**
+**Approach:** Add server-provided flags or additional checks for secured/house items.
+
+**Changes:**
+- Extend `IsLocked` to check for house-specific item states (if server provides them)
+- Or check if item's root container is a multi (house); if so and player doesn't own it, treat as locked
+- May require server protocol changes or additional packet sniffing
+
+**Risk:** Higher. Requires understanding of house item server attributes. May have false positives.  
+**Tradeoff:** Prevents house items from being tracked in the first place.
+
+---
+
+## **7) SERVER-SPECIFIC DIFFERENCES**
+
+**This is unavoidable WITHOUT extra checks because:**
+
+1. **Server decides what's lootable** - Client's `Flags.Movable` bit is set by server based on:
+   - Container access rights (locked chests, house containers)
+   - House security (secured items)
+   - Permission flags not visible to client
+
+2. **Flags don't update on denial** - When DenyMoveItem is sent:
+   - Item returns to world/cursor
+   - Flags **may not change** (especially if item was always marked Movable but server-side perms rejected it)
+   - Client has no way to know why pickup failed
+
+3. **Different server codebases**:
+   - Official UO servers may have different item property encodings
+   - Private servers may not send proper flag updates
+   - RunUO-based servers might have custom item pickup rules
+
+**Solution:** Must implement retry prevention **regardless of flag state** (Option 1 or 2).
+
+---
+
+## **SUMMARY**
+
+**Root Cause:** Ground items that the server rejects for pickup are not given cooldowns and are re-enqueued on every player movement, causing infinite retry loops.
+
+**Evidence:**
+- Line 639-640: Cooldowns only for non-ground items
+- Line 61: IsLocked heuristic incomplete (Weight > 90 doesn't catch house items)
+- Line 545-549: _recentlyLooted cleared every 5s, allowing fresh retries
+- No DenyMoveItem callback to stop retries
+
+**Best Fix:** Option 1 (minimal) — add cooldown for all items failing pickup, starting with ground items. Low risk, high impact.

@@ -1,0 +1,83 @@
+I will begin by locating the `GridContainer.cs` file and other relevant source files to understand the current implementation of tabbed inventory updates.
+I'll now examine `GridContainer.cs` to understand the tab management and UI update logic.
+I will now examine the code in `GridContainer.cs` around lines 1450 to 1480 to understand the recommended update procedure and the implementation of `RequestUpdateContentsForTab`.
+I'll now investigate how `ItemHelpers.cs` handles container updates.
+In `ItemHelpers.cs`, I've noticed that `GridContainer` updates are only triggered if a `GridContainer` with a matching serial is found, which misses cases where the container is a tab. I'll now examine `OpenContainer.cs` to see how it handles this.
+In `OpenContainer.cs`, the update logic correctly accounts for tabbed containers, but `ItemHelpers.AddItemToContainer` does not, causing the issue when items are added to a tabbed `GridContainer`. I'll now examine `DeleteObject.cs` and other locations where `RequestUpdateContents` is used for `GridContainer` to ensure consistency.
+`DeleteObject.cs` correctly uses `GridContainer.NotifyContainerUpdate`, but `ItemHelpers.AddItemToContainer` is still using the old method for updates. I'll re-examine `ItemHelpers.cs` for other functions and then check `EquipItem.cs` for similar issues.
+`EquipItem.cs` lacks `GridContainer` logic, and while it updates the old container, it should likely also call `GridContainer.NotifyContainerUpdate`. I'll now search for other `UIManager.GetGump<GridContainer>` calls to identify similar omissions.
+I'll examine `GameActions.cs` to see how it uses `UIManager.GetGump<GridContainer>` and if there are any missed update opportunities.
+`GameActions.cs` has some root-container-only logic, but `OpenContainer.cs` seems to handle tab routing correctly. The reported issue likely stems from `ItemHelpers.AddItemToContainer`, which I'll now re-examine, specifically focusing on how it handles `GridContainer` updates and potential null `gump` references when grid layout is enabled.
+I've identified that `AddItemToContainer` in `ItemHelpers.cs` needs to use `GridContainer.NotifyContainerUpdate`. I'll now check `UpdateObject.cs` to see if similar fixes are needed when items are updated within a container.
+The issue where tabbed inventories don't refresh when items are added or dropped is likely due to `AddItemToContainer` in `ItemHelpers.cs` failing to notify the parent `GridContainer`. Since the tab's container serial differs from the root `GridContainer`'s serial, `UIManager.GetGump<GridContainer>` returns null. I'll now check `World.cs` for other `RequestUpdateContents` calls to see if they also need to be updated to use `GridContainer.NotifyContainerUpdate`.
+`World.cs` and `DeleteObject.cs` correctly use `GridContainer.NotifyContainerUpdate` for item removal, but `ItemHelpers.cs` misses this for item additions, causing the reported issue. I'll now examine `FindParentGridContainer` in `GridContainer.cs` to ensure its routing logic is correct.
+`FindParentGridContainer` searches the container chain for a `GridContainer`, but I need to understand how `GridContainer` handles tabs and whether they're actually children in that chain. I'll examine `AddTab` to clarify.
+`FindParentGridContainer` correctly identifies the root `GridContainer` for nested containers. When an item is added to a tabbed pouch, `NotifyContainerUpdate` should trigger a refresh via `RequestUpdateContentsForTab`. I'll now examine the implementation of `RequestUpdateContentsForTab` to see why the UI might fail to refresh without a manual tab switch.
+`RequestUpdateContentsForTab` correctly handles both active and inactive tabs, setting `InvalidateContents` for the former. I'll now examine `GridContainer.UpdateContents` to ensure it actually triggers a redraw when `InvalidateContents` is set.
+I'll now examine `GridContainer.UpdateContents` at line 865.
+`UpdateContents()` calls `UpdateItems()`, so I'll check `UpdateItems()` next.
+There are two `UpdateItems()` methods, one in `GridContainer` at line 837 and another in what seems to be a nested class at line 2765. I'll examine the implementation of `GridContainer.UpdateItems(bool overrideSort = false)` around line 837.
+`GridContainer.cs` has the correct logic for updating both active and inactive tabs, but `ItemHelpers.AddItemToContainer` fails to use `NotifyContainerUpdate`, which is why tabbed inventories don't refresh on item drops. I've confirmed that `DeleteObject.cs` and `World.cs` already use this routing logic, so I'll now check for other missed `RequestUpdateContents` calls in the `PacketHandlers` directory.
+`EquipItem.cs` is missing `GridContainer` logic, which it needs since `ContainerGump` won't be open if grid layout is enabled. I'll now check `DenyMoveItem.cs` to see if it also requires `GridContainer.NotifyContainerUpdate`.
+`DenyMoveItem.cs` is missing `GridContainer` logic, but fixing `AddItemToContainer` will help since it's called there. However, `EquipItem.cs` manually adds items and thus requires an explicit `GridContainer.NotifyContainerUpdate`. I'll now examine `ObjectHelpers.cs` to see if it needs similar updates.
+`ObjectHelpers.UpdateGameObject` also misses `GridContainer` logic, similar to `EquipItem.cs` and `DenyMoveItem.cs`. The root cause is the inconsistent use of `GridContainer.NotifyContainerUpdate`. While `NotifyContainerUpdate` correctly handles updates for both active and inactive tabs, I've noticed a potential issue when dropping items into the root container while viewing a different tab; the root container's slot manager only updates upon switching back. I'll now check the `_tabs` initialization in `GridContainer` to see if the root container is consistently treated as a tab.
+I'll examine the `GridContainer` constructor.
+I'll locate where `_tabs` is populated.
+`_tabs.Add\(` should work.
+`_tabs[0]` is indeed the root container, but `NotifyContainerUpdate` has a slight inconsistency: it only refreshes the active tab if it finds the root Gump, whereas for sub-containers, it rebuilds the `SlotManager` even in the background. I'll recommend a comprehensive fix, replacing direct `GridContainer` checks with `NotifyContainerUpdate` across multiple packet handlers, specifically `ItemHelpers.cs`, `EquipItem.cs`, and `DenyMoveItem.cs`. I'll now re-verify the exact lines in the latter two files for precise implementation.
+Analysis of the codebase confirms that the primary reason tabbed inventory views fail to refresh is the inconsistent use of `GridContainer.NotifyContainerUpdate`. While this routing helper was specifically designed to handle updates for both root and tabbed containers, it was only applied to a subset of container-modifying code paths. Specifically, `ItemHelpers.AddItemToContainer`—the most frequent path for item additions and drop confirmations—only checks for a `GridContainer` matching the target serial, which fails when that serial is a nested tab.
+
+### Root Cause Analysis
+
+**File & Logic Failure:**
+In `src/ClassicUO.Client/Network/PacketHandlers/Helpers/ItemHelpers.cs` (Line 117), the code performs a direct Gump lookup:
+```csharp
+GridContainer gridGump = UIManager.GetGump<GridContainer>(containerSerial);
+if (gridGump != null)
+    gridGump.RequestUpdateContents();
+```
+Because tabbed sub-containers do not have their own Gump registrations (they are managed internally by the root `GridContainer` Gump), `UIManager.GetGump` returns `null` for any serial representing a tab. Consequently, the UI remains stale until a manual tab switch forces a rebuild.
+
+**Reproduction Sequence:**
+1. Enable Grid Layout and Grid Container Tabs.
+2. Open a backpack (`GridContainer`) and open a pouch inside it as a tab.
+3. With the pouch tab active, drop an item into it.
+4. `AddItemToContainer` is called for the pouch serial; it fails to find the Gump and skips the update.
+
+### Proposed Fixes
+
+#### Option 1: Robust Routing (Recommended)
+Systematically replace direct `GridContainer` updates with the `GridContainer.NotifyContainerUpdate(world, serial)` helper. This helper correctly identifies if a container is a tab and rebuilds the appropriate `SlotManager`.
+
+**Target Changes:**
+- **`ItemHelpers.AddItemToContainer`**: Replace lines 117–121 with `GridContainer.NotifyContainerUpdate(world, containerSerial);`.
+- **`EquipItem.cs`**: Add `GridContainer.NotifyContainerUpdate(world, item.Container);` at line 27 to handle items being removed from/added to containers via equipment changes.
+- **`DenyMoveItem.cs`**: Add `GridContainer.NotifyContainerUpdate(world, Client.Game.UO.GameCursor.ItemHold.Container);` at line 58.
+- **`ObjectHelpers.cs`**: Add `GridContainer.NotifyContainerUpdate(world, Client.Game.UO.GameCursor.ItemHold.Container);` at line 43.
+
+#### Option 2: Minimal Risk
+Only apply the fix to `ItemHelpers.AddItemToContainer`, as this covers the majority of user-reported issues (dropping and looting).
+
+### Recommended Implementation Details
+
+In `ItemHelpers.cs`:
+```csharp
+#region GridContainer
+GridContainer.NotifyContainerUpdate(world, containerSerial);
+#endregion
+```
+
+In `EquipItem.cs`:
+```csharp
+if (SerialHelper.IsValid(item.Container))
+{
+    UIManager.GetGump<ContainerGump>(item.Container)?.RequestUpdateContents();
+    GridContainer.NotifyContainerUpdate(world, item.Container); // Add this
+    // ... paperdoll updates ...
+}
+```
+
+### Verification & Testing
+To ensure the fix is deterministic:
+- **Reproduction Test:** Verify that dropping an item into a pouch tab immediately updates the active grid view without a tab switch.
+- **Background Update Test:** Drop an item into a sub-container that is open as an *inactive* tab; verify that switching to that tab shows the new item immediately (indicating the background rebuild of that tab's `SlotManager` worked).
