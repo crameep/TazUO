@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.UI.Gumps;
 
 namespace ClassicUO.Game.Managers
 {
@@ -291,7 +292,8 @@ namespace ClassicUO.Game.Managers
         private void CloseCurrentTomeGump()
         {
             uint gumpId = _currentOperation?.Definition?.GumpId ?? 0;
-            _runtime.CloseTomeGump(gumpId);
+            uint tomeSerial = _currentOperation?.Definition?.TomeSerial ?? 0;
+            _runtime.CloseTomeGump(gumpId, tomeSerial);
         }
 
         private int GetOperationItemCount()
@@ -376,7 +378,7 @@ namespace ClassicUO.Game.Managers
         uint GetPlayerSerial();
         void CancelTargeting();
         void ResetPendingAutomation();
-        void CloseTomeGump(uint gumpId);
+        void CloseTomeGump(uint gumpId, uint tomeSerial);
     }
 
     internal sealed class LiveTomeRuntime : ITomeRuntime
@@ -442,26 +444,48 @@ namespace ClassicUO.Game.Managers
             NextGumpConfig.Reset();
         }
 
-        public void CloseTomeGump(uint gumpId)
+        public void CloseTomeGump(uint gumpId, uint tomeSerial)
         {
             World world = World.Instance;
             if (world == null)
                 return;
 
-            uint resolvedGumpId = gumpId != 0 ? gumpId : world.Player?.LastGumpID ?? 0;
-            if (resolvedGumpId == 0)
-                return;
+            Gump gump = null;
 
-            var gump = UIManager.GetGumpServer(resolvedGumpId);
-            if (gump != null)
+            if (gumpId != 0)
+                gump = UIManager.GetGumpServer(gumpId);
+
+            // If the configured gump id is missing/wrong, close by sender serial (the tome's serial).
+            if (gump == null && tomeSerial != 0)
             {
-                GameActions.ReplyGump(world, gump.LocalSerial, gump.ServerSerial, 0);
-                gump.Dispose();
-                return;
+                for (LinkedListNode<Gump> node = UIManager.Gumps.Last; node != null; node = node.Previous)
+                {
+                    Gump candidate = node.Value;
+                    if (!candidate.IsDisposed && candidate.IsFromServer && candidate.LocalSerial == tomeSerial)
+                    {
+                        gump = candidate;
+                        break;
+                    }
+                }
             }
 
-            // Fallback for callers that accidentally persisted local serial as gump id.
-            UIManager.GetGump(resolvedGumpId)?.Dispose();
+            if (gump == null)
+            {
+                uint fallbackId = gumpId != 0 ? gumpId : world.Player?.LastGumpID ?? 0;
+                if (fallbackId != 0)
+                {
+                    gump = UIManager.GetGumpServer(fallbackId);
+                    gump ??= UIManager.GetGump(fallbackId);
+                }
+            }
+
+            if (gump != null)
+            {
+                if (gump.ServerSerial != 0)
+                    GameActions.ReplyGump(world, gump.LocalSerial, gump.ServerSerial, 0);
+
+                gump.Dispose();
+            }
         }
     }
 }

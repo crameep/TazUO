@@ -344,6 +344,8 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Value.Skipped.Should().Be(0);
             runtime.UseTomeCalls.Should().Be(2);
             runtime.CloseGumpCalls.Should().Be(1);
+            runtime.LastClosedGumpId.Should().Be(0x11111111);
+            runtime.LastClosedTomeSerial.Should().Be(0x40001234);
         }
 
         [Fact]
@@ -624,6 +626,8 @@ namespace ClassicUO.UnitTests.Game.Managers
         public int WalkRequests { get; private set; }
         public int CancelCalls { get; private set; }
         public int CloseGumpCalls { get; private set; }
+        public uint LastClosedGumpId { get; private set; }
+        public uint LastClosedTomeSerial { get; private set; }
         public List<uint> ArmedTargets { get; } = new();
 
         public void ArmNextGump(uint gumpId, int buttonId)
@@ -670,9 +674,11 @@ namespace ClassicUO.UnitTests.Game.Managers
             IsGumpActionPending = false;
         }
 
-        public void CloseTomeGump(uint gumpId)
+        public void CloseTomeGump(uint gumpId, uint tomeSerial)
         {
             CloseGumpCalls++;
+            LastClosedGumpId = gumpId;
+            LastClosedTomeSerial = tomeSerial;
         }
     }
 }
