@@ -390,6 +390,11 @@ namespace ClassicUO.Game.Managers
         public void ArmNextGump(uint gumpId, int buttonId)
         {
             NextGumpConfig.Reset();
+
+            // Never arm wildcard gump automation. Serial==0 matches any server gump.
+            if (gumpId == 0)
+                return;
+
             NextGumpConfig.Enabled = true;
             NextGumpConfig.Serial = gumpId;
             NextGumpConfig.AutoClose = true;
@@ -450,34 +455,10 @@ namespace ClassicUO.Game.Managers
             if (world == null)
                 return;
 
-            Gump gump = null;
+            if (gumpId == 0)
+                return;
 
-            if (gumpId != 0)
-                gump = UIManager.GetGumpServer(gumpId);
-
-            // If the configured gump id is missing/wrong, close by sender serial (the tome's serial).
-            if (gump == null && tomeSerial != 0)
-            {
-                for (LinkedListNode<Gump> node = UIManager.Gumps.Last; node != null; node = node.Previous)
-                {
-                    Gump candidate = node.Value;
-                    if (!candidate.IsDisposed && candidate.IsFromServer && candidate.LocalSerial == tomeSerial)
-                    {
-                        gump = candidate;
-                        break;
-                    }
-                }
-            }
-
-            if (gump == null)
-            {
-                uint fallbackId = gumpId != 0 ? gumpId : world.Player?.LastGumpID ?? 0;
-                if (fallbackId != 0)
-                {
-                    gump = UIManager.GetGumpServer(fallbackId);
-                    gump ??= UIManager.GetGump(fallbackId);
-                }
-            }
+            Gump gump = UIManager.GetGumpServer(gumpId) ?? UIManager.GetGump(gumpId);
 
             if (gump != null)
             {
