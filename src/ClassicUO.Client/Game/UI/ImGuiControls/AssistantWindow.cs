@@ -7,6 +7,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         private GeneralTabContent _generalTab;
         private AgentsTabContent _agentsTab;
         private OrganizerTabContent _organizerTab;
+        private TomeTabContent _tomesTab;
         private FiltersTabContent _filtersTab;
         private ItemDatabaseTabContent _itemDatabaseTab;
         private MacrosTabContent _macrosTab;
@@ -19,6 +20,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _generalTab = new GeneralTabContent();
             _agentsTab = new AgentsTabContent();
             _organizerTab = new OrganizerTabContent();
+            _tomesTab = new TomeTabContent();
             _filtersTab = new FiltersTabContent();
             _itemDatabaseTab = new ItemDatabaseTabContent();
             _macrosTab = new MacrosTabContent();
@@ -45,6 +47,12 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 if (ImGui.BeginTabItem("Organizer"))
                 {
                     _organizerTab.DrawContent();
+                    ImGui.EndTabItem();
+                }
+
+                if (ImGui.BeginTabItem("Tomes"))
+                {
+                    _tomesTab.DrawContent();
                     ImGui.EndTabItem();
                 }
 
@@ -80,6 +88,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
         {
             base.Update();
             _macrosTab?.Update();
+            _tomesTab?.Update();
         }
 
         public override void Dispose()
@@ -87,6 +96,7 @@ namespace ClassicUO.Game.UI.ImGuiControls
             _generalTab?.Dispose();
             _agentsTab?.Dispose();
             _organizerTab?.Dispose();
+            _tomesTab?.Dispose();
             _filtersTab?.Dispose();
             _itemDatabaseTab?.Dispose();
             _macrosTab?.Dispose();

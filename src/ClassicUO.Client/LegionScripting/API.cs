@@ -983,6 +983,25 @@ namespace ClassicUO.LegionScripting
         }
 
         /// <summary>
+        /// Runs all enabled organizers in a group.
+        /// Example:
+        /// ```py
+        /// API.OrganizerGroup("Reagents")
+        /// ```
+        /// </summary>
+        /// <param name="groupName">Organizer group name</param>
+        public void OrganizerGroup(string groupName)
+        {
+            if (string.IsNullOrWhiteSpace(groupName))
+            {
+                GameActions.Print("Invalid organizer group name", Constants.HUE_ERROR);
+                return;
+            }
+
+            OrganizerAgent.Instance.RunOrganizerGroup(groupName);
+        }
+
+        /// <summary>
         /// Executes a client command as if typed in the game console
         /// </summary>
         /// <param name="command">The command to execute (including any arguments)</param>

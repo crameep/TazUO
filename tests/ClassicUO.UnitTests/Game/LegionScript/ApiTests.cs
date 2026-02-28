@@ -45,4 +45,22 @@ public class ApiTests
         
         Assert.Equal(expected, api.KnownAbilityNames());
     }
+
+    [Fact]
+    public void OrganizerGroup_WithEmptyName_DoesNotThrow()
+    {
+        api.OrganizerGroup("");
+    }
+
+    [Fact]
+    public void OrganizerGroup_WithWhitespaceName_DoesNotThrow()
+    {
+        api.OrganizerGroup("   ");
+    }
+
+    [Fact]
+    public void OrganizerGroup_WithValidName_DoesNotThrow()
+    {
+        api.OrganizerGroup("Reagents");
+    }
 }

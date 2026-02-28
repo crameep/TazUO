@@ -981,6 +981,7 @@ namespace ClassicUO.Game.Scenes
 
             CorpseOpenQueue.Update();
             ObjectActionQueue.Instance.Update();
+            OrganizerAgent.Instance?.Update();
             AutoLootManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);
 
