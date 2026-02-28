@@ -271,6 +271,7 @@ namespace ClassicUO.Game.Managers
         {
             int moved = _movedInCurrentOperation;
             int skipped = Math.Max(0, GetOperationItemCount() - moved);
+            CloseCurrentTomeGump();
             _runtime.CancelTargeting();
             _runtime.ResetPendingAutomation();
             _currentOperation.OnFinished?.Invoke(new TomeOperationResult(false, moved, skipped, reason));
@@ -281,9 +282,16 @@ namespace ClassicUO.Game.Managers
         {
             int moved = _movedInCurrentOperation;
             int skipped = Math.Max(0, GetOperationItemCount() - moved);
+            CloseCurrentTomeGump();
             _runtime.ResetPendingAutomation();
             _currentOperation.OnFinished?.Invoke(new TomeOperationResult(true, moved, skipped, string.Empty));
             ResetToIdle();
+        }
+
+        private void CloseCurrentTomeGump()
+        {
+            uint gumpId = _currentOperation?.Definition?.GumpId ?? 0;
+            _runtime.CloseTomeGump(gumpId);
         }
 
         private int GetOperationItemCount()
@@ -368,6 +376,7 @@ namespace ClassicUO.Game.Managers
         uint GetPlayerSerial();
         void CancelTargeting();
         void ResetPendingAutomation();
+        void CloseTomeGump(uint gumpId);
     }
 
     internal sealed class LiveTomeRuntime : ITomeRuntime
@@ -430,6 +439,15 @@ namespace ClassicUO.Game.Managers
         {
             TargetManager.NextAutoTarget.Clear();
             NextGumpConfig.Reset();
+        }
+
+        public void CloseTomeGump(uint gumpId)
+        {
+            if (gumpId == 0)
+                return;
+
+            UIManager.GetGumpServer(gumpId)?.Dispose();
+            UIManager.GetGump(gumpId)?.Dispose();
         }
     }
 }

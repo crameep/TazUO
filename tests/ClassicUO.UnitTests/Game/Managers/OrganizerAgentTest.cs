@@ -343,6 +343,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Value.Moved.Should().Be(2);
             result.Value.Skipped.Should().Be(0);
             runtime.UseTomeCalls.Should().Be(2);
+            runtime.CloseGumpCalls.Should().Be(1);
         }
 
         [Fact]
@@ -389,6 +390,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Value.Moved.Should().Be(3);
             runtime.ArmedTargets.Should().ContainInOrder(10u, 11u, 12u);
             runtime.CancelCalls.Should().Be(1);
+            runtime.CloseGumpCalls.Should().Be(1);
         }
 
         [Fact]
@@ -421,6 +423,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Value.Success.Should().BeFalse();
             result.Value.Moved.Should().Be(0);
             result.Value.Skipped.Should().Be(3);
+            runtime.CloseGumpCalls.Should().Be(1);
         }
 
         [Fact]
@@ -464,6 +467,7 @@ namespace ClassicUO.UnitTests.Game.Managers
             result.Value.Success.Should().BeTrue();
             result.Value.Moved.Should().Be(2);
             runtime.ArmedTargets.Should().ContainSingle().Which.Should().Be(0x00000077);
+            runtime.CloseGumpCalls.Should().Be(1);
         }
 
         [Fact]
@@ -619,6 +623,7 @@ namespace ClassicUO.UnitTests.Game.Managers
         public int UseTomeCalls { get; private set; }
         public int WalkRequests { get; private set; }
         public int CancelCalls { get; private set; }
+        public int CloseGumpCalls { get; private set; }
         public List<uint> ArmedTargets { get; } = new();
 
         public void ArmNextGump(uint gumpId, int buttonId)
@@ -663,6 +668,11 @@ namespace ClassicUO.UnitTests.Game.Managers
         {
             IsAutoTargetPending = false;
             IsGumpActionPending = false;
+        }
+
+        public void CloseTomeGump(uint gumpId)
+        {
+            CloseGumpCalls++;
         }
     }
 }
