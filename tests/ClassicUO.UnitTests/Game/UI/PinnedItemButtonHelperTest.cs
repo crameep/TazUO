@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
@@ -110,6 +111,35 @@ public class PinnedItemButtonHelperTest
         );
 
         selfConflict.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("120", 72, 120)]
+    [InlineData("999", 72, PinnedItemButtonGump.MaxSize)]
+    [InlineData("1", 72, PinnedItemButtonGump.MinSize)]
+    [InlineData("", 96, 96)]
+    [InlineData("invalid", 20, PinnedItemButtonGump.MinSize)]
+    public void ResolveRestoredSize_ShouldPreferSavedValueAndClampInvalidInputs(
+        string savedSize,
+        int profileDefault,
+        int expected
+    )
+    {
+        int resolved = PinnedItemButtonHelper.ResolveRestoredSize(savedSize, profileDefault);
+
+        resolved.Should().Be(expected);
+    }
+
+    [Fact]
+    public void UpdateProfileDefaultSize_ShouldClampAssignedValue()
+    {
+        var profile = new Profile();
+
+        PinnedItemButtonHelper.UpdateProfileDefaultSize(profile, 999);
+        profile.PinnedItemButtonDefaultSize.Should().Be(PinnedItemButtonGump.MaxSize);
+
+        PinnedItemButtonHelper.UpdateProfileDefaultSize(profile, 1);
+        profile.PinnedItemButtonDefaultSize.Should().Be(PinnedItemButtonGump.MinSize);
     }
 
     private static Item CreateItem(World world, uint serial, ushort graphic, ushort hue, uint container)

@@ -378,6 +378,11 @@ namespace ClassicUO.Configuration
         public int AutoFollowDistance { get; set; } = 2;
         public bool DisableAutoFollowAlt { get; set; } = false;
         [JsonConverter(typeof(Point2Converter))] public Point ResizeJournalSize { get; set; } = new Point(410, 350);
+        public int PinnedItemButtonDefaultSize
+        {
+            get;
+            set => field = Math.Clamp(value, 36, 140);
+        } = 72;
         public bool FollowingMode { get; set; } = false;
         public uint FollowingTarget { get; set; }
         public bool NamePlateHealthBar { get; set; } = true;
@@ -1482,6 +1487,9 @@ namespace ClassicUO.Configuration
                                         break;
                                     case GumpType.PaperDoll:
                                         gump = new ModernPaperdoll(world, world.Player.Serial);
+                                        break;
+                                    case GumpType.PinnedItemButton:
+                                        gump = new PinnedItemButtonGump(world);
                                         break;
                                 }
 

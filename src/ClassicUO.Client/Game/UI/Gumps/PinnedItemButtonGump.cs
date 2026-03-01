@@ -3,6 +3,7 @@
 using System;
 using System.Xml;
 using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
@@ -17,6 +18,33 @@ namespace ClassicUO.Game.UI.Gumps;
 
 internal static class PinnedItemButtonHelper
 {
+    internal static int GetDefaultSizeFromProfile(int fallbackSize)
+    {
+        int configuredSize = ProfileManager.CurrentProfile?.PinnedItemButtonDefaultSize ?? fallbackSize;
+
+        return ClampSize(configuredSize);
+    }
+
+    internal static int ResolveRestoredSize(string savedSize, int profileDefaultSize)
+    {
+        if (int.TryParse(savedSize, out int parsedSize))
+        {
+            return ClampSize(parsedSize);
+        }
+
+        return ClampSize(profileDefaultSize);
+    }
+
+    internal static void UpdateProfileDefaultSize(Profile profile, int size)
+    {
+        if (profile == null)
+        {
+            return;
+        }
+
+        profile.PinnedItemButtonDefaultSize = ClampSize(size);
+    }
+
     internal static Item ResolveTargetItem(
         uint playerSerial,
         uint itemSerial,
@@ -134,11 +162,11 @@ internal static class PinnedItemButtonHelper
     }
 }
 
-public sealed class PinnedItemButtonGump : Gump
+public sealed class PinnedItemButtonGump : AnchorableGump
 {
     internal const int MinSize = 36;
     internal const int MaxSize = 140;
-    private const int DefaultSize = 72;
+    internal const int DefaultSize = 72;
 
     private ushort _graphic;
     private ushort _hue;
@@ -152,8 +180,10 @@ public sealed class PinnedItemButtonGump : Gump
         CanMove = true;
         AcceptMouseInput = true;
         CanCloseWithRightClick = false;
-        Width = _size;
-        Height = _size;
+        WidthMultiplier = 1;
+        HeightMultiplier = 1;
+        AnchorType = ANCHOR_TYPE.PINNED_ITEM;
+        SetSize(PinnedItemButtonHelper.GetDefaultSizeFromProfile(DefaultSize), false);
         SetInScreen();
     }
 
@@ -303,14 +333,14 @@ public sealed class PinnedItemButtonGump : Gump
             _itemSerial = itemSerial;
         }
 
-        if (int.TryParse(xml.GetAttribute("size"), out int size))
-        {
-            _size = PinnedItemButtonHelper.ClampSize(size);
-        }
+        _size = PinnedItemButtonHelper.ResolveRestoredSize(
+            xml.GetAttribute("size"),
+            PinnedItemButtonHelper.GetDefaultSizeFromProfile(DefaultSize)
+        );
 
         _macroName = xml.GetAttribute("macroName") ?? string.Empty;
 
-        SetSize(_size);
+        SetSize(_size, false);
         RefreshHotkeyLabel();
     }
 
@@ -390,11 +420,19 @@ public sealed class PinnedItemButtonGump : Gump
         GameActions.DoubleClick(World, item);
     }
 
-    private void SetSize(int size)
+    private void SetSize(int size, bool updateProfileDefault = true)
     {
         _size = PinnedItemButtonHelper.ClampSize(size);
         Width = _size;
         Height = _size;
+        GroupMatrixWidth = _size;
+        GroupMatrixHeight = _size;
+
+        if (updateProfileDefault)
+        {
+            PinnedItemButtonHelper.UpdateProfileDefaultSize(ProfileManager.CurrentProfile, _size);
+        }
+
         RefreshHotkeyLabel();
         SetInScreen();
     }
