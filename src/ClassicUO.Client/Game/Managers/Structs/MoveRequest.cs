@@ -2,7 +2,6 @@
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Network;
-using System;
 
 namespace ClassicUO.Game.Managers.Structs;
 
@@ -32,30 +31,12 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
 
     public void Execute()
     {
-        Item item = World.Instance?.Items.Get(Serial);
-        bool isStackable = item?.ItemData.IsStackable ?? true;
-        ushort availableAmount = item?.Amount ?? (ushort)1;
-        ushort pickupAmount = ResolvePickupAmount(Amount, availableAmount, isStackable);
-
-        AsyncNetClient.Socket.Send_PickUpRequest(Serial, pickupAmount);
+        AsyncNetClient.Socket.Send_PickUpRequest(Serial, Amount);
 
         if(moveType == MoveType.Move)
             GameActions.DropItem(Serial, X, Y, Z, Destination, true);
         else
             AsyncNetClient.Socket.Send_EquipRequest(Serial, Layer, Destination);
-    }
-
-    internal static ushort ResolvePickupAmount(ushort requestedAmount, ushort availableAmount, bool isStackable)
-    {
-        if (!isStackable)
-            return 1;
-
-        ushort safeAvailable = availableAmount == 0 ? (ushort)1 : availableAmount;
-
-        if (requestedAmount == 0 || requestedAmount == ushort.MaxValue)
-            return safeAvailable;
-
-        return (ushort)Math.Min(requestedAmount, safeAvailable);
     }
 
     public static MoveRequest? ToLootBag(uint serial)
