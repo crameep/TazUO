@@ -189,6 +189,15 @@ public class PinnedItemButtonHelperTest
         control.Height.Should().Be(PinnedItemButtonGump.MinSize);
     }
 
+    [Theory]
+    [InlineData("Control+Left Mouse Button", "Ctrl+LMB")]
+    [InlineData("Alt+Mouse Wheel Up", "Alt+MW Up")]
+    [InlineData("Shift+Right Mouse Button", "Shift+RMB")]
+    public void ToReadableHotkey_ShouldCondenseVerboseMouseNames(string input, string expected)
+    {
+        PinnedItemButtonHelper.ToReadableHotkey(input).Should().Be(expected);
+    }
+
     private static Item CreateItem(World world, uint serial, ushort graphic, ushort hue, uint container)
     {
         ClassicUO.Client.UnitTestingActive = true;

@@ -181,6 +181,22 @@ internal static class PinnedItemButtonHelper
     {
         return Math.Clamp(size, PinnedItemButtonGump.MinSize, PinnedItemButtonGump.MaxSize);
     }
+
+    internal static string ToReadableHotkey(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        return text
+            .Replace("Left Mouse Button", "LMB")
+            .Replace("Right Mouse Button", "RMB")
+            .Replace("Middle Mouse Button", "MMB")
+            .Replace("Mouse Wheel Up", "MW Up")
+            .Replace("Mouse Wheel Down", "MW Down")
+            .Replace("Control", "Ctrl");
+    }
 }
 
 public sealed class PinnedItemButtonGump : AnchorableGump
@@ -233,8 +249,6 @@ public sealed class PinnedItemButtonGump : AnchorableGump
 
     public override bool Draw(UltimaBatcher2D batcher, int x, int y)
     {
-        bool drew = base.Draw(batcher, x, y);
-
         Color backgroundColor = MouseIsOver ? new Color(70, 70, 70, 220) : new Color(40, 40, 40, 220);
         batcher.Draw(
             SolidColorTextureCache.GetTexture(backgroundColor),
@@ -266,7 +280,24 @@ public sealed class PinnedItemButtonGump : AnchorableGump
 
         DrawItemIcon(batcher, x, y);
 
-        return drew;
+        if (_hotkeyLabel != null)
+        {
+            int badgeX = x + Math.Max(0, _hotkeyLabel.X - 2);
+            int badgeY = y + Math.Max(0, _hotkeyLabel.Y - 1);
+            int badgeW = Math.Min(Width - 2, _hotkeyLabel.Width + 4);
+            int badgeH = _hotkeyLabel.Height + 2;
+
+            if (badgeW > 0 && badgeH > 0)
+            {
+                batcher.Draw(
+                    SolidColorTextureCache.GetTexture(new Color(0, 0, 0, 170)),
+                    new Rectangle(badgeX, badgeY, badgeW, badgeH),
+                    ShaderHueTranslator.GetHueVector(0)
+                );
+            }
+        }
+
+        return base.Draw(batcher, x, y);
     }
 
     protected override void OnMouseWheel(MouseEventType delta)
@@ -362,7 +393,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
 
         _macroName = xml.GetAttribute("macroName") ?? string.Empty;
 
-        SetSize(_size, false);
+        SetSize(_size, false, false);
         RefreshHotkeyLabel();
     }
 
@@ -442,12 +473,32 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         GameActions.DoubleClick(World, item);
     }
 
-    private void SetSize(int size, bool updateProfileDefault = true)
+    private void SetSize(int size, bool updateProfileDefault = true, bool propagateToLinked = true)
     {
         _size = PinnedItemButtonHelper.ClampSize(size);
         PinnedItemButtonHelper.ApplyManualSize(this, _size);
         GroupMatrixWidth = _size;
         GroupMatrixHeight = _size;
+
+        if (propagateToLinked)
+        {
+            AnchorManager.AnchorGroup anchorGroup = UIManager.AnchorManager[this];
+
+            if (anchorGroup != null)
+            {
+                UIManager.ForEach<AnchorableGump>(gump =>
+                {
+                    if (
+                        gump != this
+                        && gump is PinnedItemButtonGump linkedPinnedItem
+                        && UIManager.AnchorManager[gump] == anchorGroup
+                    )
+                    {
+                        linkedPinnedItem.SetSize(_size, updateProfileDefault: false, propagateToLinked: false);
+                    }
+                });
+            }
+        }
 
         if (updateProfileDefault)
         {
@@ -649,17 +700,18 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         }
 
         string text = BuildHotkeyText(macro);
+        text = PinnedItemButtonHelper.ToReadableHotkey(text);
 
         if (string.IsNullOrWhiteSpace(text))
         {
             return;
         }
 
-        _hotkeyLabel = new Label(text, true, 0x0481, 0, 1, FontStyle.BlackBorder)
+        _hotkeyLabel = new Label(text, true, 0x0035, 0, 1, FontStyle.BlackBorder)
         {
             AcceptMouseInput = false,
             X = 2,
-            Y = Math.Max(1, Height - 16)
+            Y = 2
         };
 
         Add(_hotkeyLabel);
