@@ -18,6 +18,27 @@ namespace ClassicUO.Game.UI.Gumps;
 
 internal static class PinnedItemButtonHelper
 {
+    internal static void DisableAutoSizing(Control control)
+    {
+        if (control != null)
+        {
+            control.WantUpdateSize = false;
+        }
+    }
+
+    internal static void ApplyManualSize(Control control, int size)
+    {
+        if (control == null)
+        {
+            return;
+        }
+
+        int clampedSize = ClampSize(size);
+        control.Width = clampedSize;
+        control.Height = clampedSize;
+        control.WantUpdateSize = false;
+    }
+
     internal static int GetDefaultSizeFromProfile(int fallbackSize)
     {
         int configuredSize = ProfileManager.CurrentProfile?.PinnedItemButtonDefaultSize ?? fallbackSize;
@@ -183,6 +204,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         WidthMultiplier = 1;
         HeightMultiplier = 1;
         AnchorType = ANCHOR_TYPE.PINNED_ITEM;
+        PinnedItemButtonHelper.DisableAutoSizing(this);
         SetSize(PinnedItemButtonHelper.GetDefaultSizeFromProfile(DefaultSize), false);
         SetInScreen();
     }
@@ -423,8 +445,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
     private void SetSize(int size, bool updateProfileDefault = true)
     {
         _size = PinnedItemButtonHelper.ClampSize(size);
-        Width = _size;
-        Height = _size;
+        PinnedItemButtonHelper.ApplyManualSize(this, _size);
         GroupMatrixWidth = _size;
         GroupMatrixHeight = _size;
 
@@ -618,6 +639,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
     {
         _hotkeyLabel?.Dispose();
         _hotkeyLabel = null;
+        PinnedItemButtonHelper.DisableAutoSizing(this);
 
         Macro macro = GetAssociatedMacro();
 
@@ -641,6 +663,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         };
 
         Add(_hotkeyLabel);
+        PinnedItemButtonHelper.DisableAutoSizing(this);
     }
 
     private static string BuildHotkeyText(Macro macro)

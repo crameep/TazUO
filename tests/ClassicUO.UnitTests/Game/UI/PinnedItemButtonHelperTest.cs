@@ -3,6 +3,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using FluentAssertions;
@@ -140,6 +141,52 @@ public class PinnedItemButtonHelperTest
 
         PinnedItemButtonHelper.UpdateProfileDefaultSize(profile, 1);
         profile.PinnedItemButtonDefaultSize.Should().Be(PinnedItemButtonGump.MinSize);
+    }
+
+    [Fact]
+    public void DisableAutoSizing_ShouldPreventChildDrivenShrink()
+    {
+        const int initialSize = 72;
+
+        var autoSizeControl = new Area
+        {
+            Width = initialSize,
+            Height = initialSize,
+            WantUpdateSize = true
+        };
+        autoSizeControl.Add(new Area { X = 2, Y = 56, Width = 8, Height = 8 });
+        autoSizeControl.Update();
+        autoSizeControl.Width.Should().Be(10);
+        autoSizeControl.Height.Should().Be(64);
+
+        var pinnedLikeControl = new Area
+        {
+            Width = initialSize,
+            Height = initialSize,
+            WantUpdateSize = true
+        };
+        pinnedLikeControl.Add(new Area { X = 2, Y = 56, Width = 8, Height = 8 });
+
+        PinnedItemButtonHelper.DisableAutoSizing(pinnedLikeControl);
+        pinnedLikeControl.Update();
+
+        pinnedLikeControl.Width.Should().Be(initialSize);
+        pinnedLikeControl.Height.Should().Be(initialSize);
+    }
+
+    [Fact]
+    public void ApplyManualSize_ShouldClampAndDisableAutoSizing()
+    {
+        var control = new Area { WantUpdateSize = true };
+
+        PinnedItemButtonHelper.ApplyManualSize(control, 999);
+        control.Width.Should().Be(PinnedItemButtonGump.MaxSize);
+        control.Height.Should().Be(PinnedItemButtonGump.MaxSize);
+        control.WantUpdateSize.Should().BeFalse();
+
+        PinnedItemButtonHelper.ApplyManualSize(control, 1);
+        control.Width.Should().Be(PinnedItemButtonGump.MinSize);
+        control.Height.Should().Be(PinnedItemButtonGump.MinSize);
     }
 
     private static Item CreateItem(World world, uint serial, ushort graphic, ushort hue, uint container)
