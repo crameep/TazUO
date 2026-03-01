@@ -1986,6 +1986,21 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 base.OnMouseUp(x, y, e);
 
+                if (
+                    e == MouseButtonType.Right
+                    && Keyboard.Shift
+                    && _profile.EnableFastDropModifier
+                    && _item != null
+                )
+                {
+                    if (GameActions.QuickDropItemToGround(_world, _item.Serial))
+                    {
+                        Mouse.CancelDoubleClick = true;
+                    }
+
+                    return;
+                }
+
                 if (e == MouseButtonType.Left)
                 {
                     if (Client.Game.UO.GameCursor.ItemHold.Enabled)

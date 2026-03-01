@@ -219,6 +219,16 @@ namespace ClassicUO.Game.UI.Controls
 
         protected override void OnMouseUp(int x, int y, MouseButtonType button)
         {
+            if (
+                button == MouseButtonType.Right
+                && Keyboard.Shift
+                && ProfileManager.CurrentProfile.EnableFastDropModifier
+                && _gump is ContainerGump
+            )
+            {
+                GameActions.QuickDropItemToGround(_gump.World, LocalSerial);
+            }
+
             SelectedObject.Object = _gump.World.Get(LocalSerial);
             base.OnMouseUp(x, y, button);
         }

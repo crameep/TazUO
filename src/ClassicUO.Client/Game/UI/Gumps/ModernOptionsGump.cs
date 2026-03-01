@@ -2338,6 +2338,21 @@ namespace ClassicUO.Game.UI.Gumps
                 (
                     "",
                     new CheckboxWithLabel
+                        (lang.GetContainers.ShiftRightClickFastDropItem, 0, profile.EnableFastDropModifier, (b) => { profile.EnableFastDropModifier = b; }),
+                    MainContent.RightWidth, (int)PAGE.Containers
+                )
+            );
+
+            PositionHelper.PositionControl(s.FullControl);
+            PositionHelper.BlankLine();
+
+
+            options.Add
+            (
+                s = new SettingsOption
+                (
+                    "",
+                    new CheckboxWithLabel
                     (
                         lang.GetContainers.HighlightContainerOnGroundWhenMouseIsOverAContainerGump, 0, profile.HighlightContainerWhenSelected,
                         (b) => { profile.HighlightContainerWhenSelected = b; }

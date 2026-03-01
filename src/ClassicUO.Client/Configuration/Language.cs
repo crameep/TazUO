@@ -385,6 +385,7 @@ namespace ClassicUO.Configuration
             public string UseLargeContainerGumps { get; set; } = "Use large container gumps";
             public string DoubleClickToLootItemsInsideContainers { get; set; } = "Double click to loot items inside containers";
             public string RelativeDragAndDropItemsInContainers { get; set; } = "Relative drag and drop items in containers";
+            public string ShiftRightClickFastDropItem { get; set; } = "Shift + right-click to quickly drop item to ground";
             public string HighlightContainerOnGroundWhenMouseIsOverAContainerGump { get; set; } = "Highlight container on ground when mouse is over a container gump";
             public string RecolorContainerGumpByWithContainerHue { get; set; } = "Recolor container gump with container hue";
             public string OverrideContainerGumpLocations { get; set; } = "Override container gump locations";

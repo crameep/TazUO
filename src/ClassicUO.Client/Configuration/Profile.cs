@@ -307,6 +307,8 @@ namespace ClassicUO.Configuration
 
         public bool RelativeDragAndDropItems { get; set; }
 
+        public bool EnableFastDropModifier { get; set; }
+
         public bool HighlightContainerWhenSelected { get; set; }
 
         public bool UseNewTargetSystem { get; set; } = true;

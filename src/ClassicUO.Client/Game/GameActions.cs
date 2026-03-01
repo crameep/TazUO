@@ -908,6 +908,28 @@ internal static class GameActions
         }
     }
 
+    internal static bool QuickDropItemToGround(World world, uint serial)
+    {
+        if (world?.Player == null)
+            return false;
+
+        if (Client.Game.UO.GameCursor.ItemHold.Enabled || world.TargetManager.IsTargeting)
+            return false;
+
+        Item item = world.Items.Get(serial);
+        if (item == null || item.OnGround)
+            return false;
+
+        ushort amount = item.Amount > 0 ? item.Amount : (ushort)1;
+
+        ObjectActionQueue.Instance.Enqueue(
+            new MoveRequest(item.Serial, 0, amount, world.Player.X + 1, world.Player.Y, world.Player.Z + 1).ToObjectActionQueueItem(),
+            ActionPriority.MoveItem
+        );
+
+        return true;
+    }
+
     internal static void Equip(World world, uint container = 0)
     {
         if (Client.Game.UO.GameCursor.ItemHold.Enabled && !Client.Game.UO.GameCursor.ItemHold.IsFixedPosition && Client.Game.UO.GameCursor.ItemHold.ItemData.IsWearable)
