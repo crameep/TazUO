@@ -196,20 +196,15 @@ namespace ClassicUO.Game.UI.Gumps
         }
 
         /// <summary>
-        /// Switches between minimized and maximized position states
+        /// Saves current position to both minimized and maximized states so the
+        /// container stays in place when toggling.
         /// </summary>
-        /// <param name="fromMinimized">True if switching from minimized to maximized, false otherwise</param>
-        private void SwitchPositionState(bool fromMinimized)
+        private void SyncPositionToBothStates()
         {
             if (_gridContainerEntry == null) return;
 
-            // Save current position for current state
-            _gridContainerEntry.SetPositionForState(X, Y, fromMinimized);
-
-            // Load position for new state
-            Point newPos = _gridContainerEntry.GetPositionForState(!fromMinimized);
-            X = newPos.X;
-            Y = newPos.Y;
+            _gridContainerEntry.SetPositionForState(X, Y, true);
+            _gridContainerEntry.SetPositionForState(X, Y, false);
         }
 
         /// <summary>
@@ -563,7 +558,7 @@ namespace ClassicUO.Game.UI.Gumps
                 // Store current height before minimizing
                 _heightBeforeMinimize = Height;
 
-                SwitchPositionState(false);
+                SyncPositionToBothStates();
 
                 SetControlsVisibility(false);
 
@@ -580,7 +575,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
             else
             {
-                SwitchPositionState(true);
+                SyncPositionToBothStates();
 
                 SetControlsVisibility(true);
 
@@ -890,7 +885,8 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (_gridContainerEntry != null)
             {
-                _gridContainerEntry.SetPositionForState(X, Y, IsMinimized);
+                _gridContainerEntry.SetPositionForState(X, Y, true);
+                _gridContainerEntry.SetPositionForState(X, Y, false);
             }
 
             // Backpack special handling
