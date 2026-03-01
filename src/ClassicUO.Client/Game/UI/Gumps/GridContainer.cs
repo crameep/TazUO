@@ -2098,11 +2098,14 @@ namespace ClassicUO.Game.UI.Gumps
                 }
                 else if (e == MouseButtonType.Right && _item != null)
                 {
+                    var menu = new ContextMenuControl(_gridContainer);
+                    menu.Add("Pin Item Button", () => PinnedItemButtonGump.CreateFromItem(_world, _item));
+
                     if (_hasMapCoords || TryParseCoordinatesFromOPL(_item.Serial, out _mapX, out _mapY))
                     {
                         _hasMapCoords = true;
                         _coordsParsed = true;
-                        var menu = new ContextMenuControl(_gridContainer);
+                        menu.Add("", null);
                         menu.Add("Go To on World Map", () =>
                         {
                             WorldMapGump map = UIManager.GetGump<WorldMapGump>();
@@ -2115,8 +2118,9 @@ namespace ClassicUO.Game.UI.Gumps
                         {
                             _world.Player.Pathfinder.WalkTo(_mapX, _mapY, 0, 1);
                         });
-                        menu.Show();
                     }
+
+                    menu.Show();
                 }
             }
 

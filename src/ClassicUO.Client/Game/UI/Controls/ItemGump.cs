@@ -227,6 +227,20 @@ namespace ClassicUO.Game.UI.Controls
             )
             {
                 GameActions.QuickDropItemToGround(_gump.World, LocalSerial);
+                return;
+            }
+
+            if (button == MouseButtonType.Right && _gump is ContainerGump)
+            {
+                Item item = _gump.World.Items.Get(LocalSerial);
+
+                if (item != null)
+                {
+                    var menu = new ContextMenuControl(_gump);
+                    menu.Add("Pin Item Button", () => PinnedItemButtonGump.CreateFromItem(_gump.World, item));
+                    menu.Show();
+                    return;
+                }
             }
 
             SelectedObject.Object = _gump.World.Get(LocalSerial);

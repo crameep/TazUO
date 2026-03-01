@@ -1328,6 +1328,10 @@ namespace ClassicUO.Configuration
                                 case GumpType.HealthBarCollector:
                                     gump = new HealthbarCollectorGump(world);
                                     break;
+
+                                case GumpType.PinnedItemButton:
+                                    gump = new PinnedItemButtonGump(world);
+                                    break;
                             }
 
                             if (gump == null)
