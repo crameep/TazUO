@@ -47,12 +47,19 @@ public readonly struct MoveRequest(uint serial, uint destination, ushort amount 
 
     internal static ushort ResolvePickupAmount(ushort requestedAmount, ushort availableAmount, bool isStackable)
     {
-        if (!isStackable)
+        ushort safeAvailable = availableAmount == 0 ? (ushort)1 : availableAmount;
+        bool effectiveStackable = isStackable || safeAvailable > 1;
+
+        if (!effectiveStackable)
             return 1;
 
-        ushort safeAvailable = availableAmount == 0 ? (ushort)1 : availableAmount;
+        // Preserve legacy semantics for stackables:
+        // - 0 means "all" (send concrete amount from current stack)
+        // - ushort.MaxValue is intentionally passed through for server-side full-stack behavior
+        if (requestedAmount == ushort.MaxValue)
+            return ushort.MaxValue;
 
-        if (requestedAmount == 0 || requestedAmount == ushort.MaxValue)
+        if (requestedAmount == 0)
             return safeAvailable;
 
         return (ushort)Math.Min(requestedAmount, safeAvailable);
