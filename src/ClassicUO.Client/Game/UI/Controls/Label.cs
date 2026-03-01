@@ -20,7 +20,9 @@ namespace ClassicUO.Game.UI.Controls
             byte font = 0xFF,
             FontStyle style = FontStyle.None,
             TEXT_ALIGN_TYPE align = TEXT_ALIGN_TYPE.TS_LEFT,
-            bool ishtml = false
+            bool ishtml = false,
+            uint htmlColor = 0xFFFF_FFFF,
+            bool hasBackgroundColor = false
         )
         {
             _gText = RenderedText.Create
@@ -32,7 +34,9 @@ namespace ClassicUO.Game.UI.Controls
                 style,
                 align,
                 maxwidth,
-                isHTML: ishtml
+                isHTML: ishtml,
+                htmlColor: htmlColor,
+                hasBackgroundColor: hasBackgroundColor
             );
 
             AcceptMouseInput = false;

@@ -168,6 +168,8 @@ namespace ClassicUO.Game
             int maxWidth = 0,
             byte cell = 30,
             bool isHTML = false,
+            uint htmlColor = 0xFFFF_FFFF,
+            bool hasBackgroundColor = false,
             bool recalculateWidthByInfo = false,
             bool saveHitmap = false
         )
@@ -195,8 +197,8 @@ namespace ClassicUO.Game
             r.Width = 0;
             r.Height = 0;
             r.SaveHitMap = saveHitmap;
-            r.HTMLColor = 0xFFFF_FFFF;
-            r.HasBackgroundColor = false;
+            r.HTMLColor = htmlColor;
+            r.HasBackgroundColor = hasBackgroundColor;
 
             if (r.Text != text)
             {

@@ -46,29 +46,13 @@ namespace ClassicUO.Game.UI.Gumps
                 ushort hue = item.Hue;
                 bool useHtmlHue = item.ReplacedHue != 0;
 
-                if (useHtmlHue)
-                {
-                    uint h = (HuesHelper.Color16To32(item.ReplacedHue) << 8) | 0xFF;
+                uint htmlColor = useHtmlHue ? ((HuesHelper.Color16To32(item.ReplacedHue) << 8) | 0xFF) : 0xFFFF_FFFF;
 
-                    Client.Game.UO.FileManager.Fonts.SetUseHTML(true, h);
-                }
-
-                Label label;
-                try
+                var label = new Label(text, true, hue, font: 1, ishtml: useHtmlHue, htmlColor: htmlColor)
                 {
-                    label = new Label(text, true, hue, font: 1)
-                    {
-                        X = 10,
-                        Y = offsetY
-                    };
-                }
-                finally
-                {
-                    if (useHtmlHue)
-                    {
-                        Client.Game.UO.FileManager.Fonts.SetUseHTML(false);
-                    }
-                }
+                    X = 10,
+                    Y = offsetY
+                };
 
                 var box = new HitBox(10, offsetY, label.Width, label.Height)
                 {
