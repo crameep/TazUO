@@ -182,6 +182,16 @@ internal static class PinnedItemButtonHelper
         return Math.Clamp(size, PinnedItemButtonGump.MinSize, PinnedItemButtonGump.MaxSize);
     }
 
+    internal static int CalculateGridOffset(int delta, int previousSize)
+    {
+        if (previousSize <= 0)
+        {
+            return 0;
+        }
+
+        return (int)MathF.Round((float)delta / previousSize);
+    }
+
     internal static string ToReadableHotkey(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -279,23 +289,6 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         );
 
         DrawItemIcon(batcher, x, y);
-
-        if (_hotkeyLabel != null)
-        {
-            int badgeX = x + Math.Max(0, _hotkeyLabel.X - 2);
-            int badgeY = y + Math.Max(0, _hotkeyLabel.Y - 1);
-            int badgeW = Math.Min(Width - 2, _hotkeyLabel.Width + 4);
-            int badgeH = _hotkeyLabel.Height + 2;
-
-            if (badgeW > 0 && badgeH > 0)
-            {
-                batcher.Draw(
-                    SolidColorTextureCache.GetTexture(new Color(0, 0, 0, 170)),
-                    new Rectangle(badgeX, badgeY, badgeW, badgeH),
-                    ShaderHueTranslator.GetHueVector(0)
-                );
-            }
-        }
 
         return base.Draw(batcher, x, y);
     }
@@ -475,12 +468,11 @@ public sealed class PinnedItemButtonGump : AnchorableGump
 
     private void SetSize(int size, bool updateProfileDefault = true, bool propagateToLinked = true)
     {
-        _size = PinnedItemButtonHelper.ClampSize(size);
-        PinnedItemButtonHelper.ApplyManualSize(this, _size);
-        GroupMatrixWidth = _size;
-        GroupMatrixHeight = _size;
+        int previousSize = _size;
 
-        if (propagateToLinked)
+        var linkedPins = new System.Collections.Generic.List<(PinnedItemButtonGump Gump, int CellX, int CellY)>();
+
+        if (propagateToLinked && previousSize > 0)
         {
             AnchorManager.AnchorGroup anchorGroup = UIManager.AnchorManager[this];
 
@@ -494,10 +486,25 @@ public sealed class PinnedItemButtonGump : AnchorableGump
                         && UIManager.AnchorManager[gump] == anchorGroup
                     )
                     {
-                        linkedPinnedItem.SetSize(_size, updateProfileDefault: false, propagateToLinked: false);
+                        int cellX = PinnedItemButtonHelper.CalculateGridOffset(linkedPinnedItem.X - X, previousSize);
+                        int cellY = PinnedItemButtonHelper.CalculateGridOffset(linkedPinnedItem.Y - Y, previousSize);
+                        linkedPins.Add((linkedPinnedItem, cellX, cellY));
                     }
                 });
             }
+        }
+
+        _size = PinnedItemButtonHelper.ClampSize(size);
+        PinnedItemButtonHelper.ApplyManualSize(this, _size);
+        GroupMatrixWidth = _size;
+        GroupMatrixHeight = _size;
+
+        foreach ((PinnedItemButtonGump linkedPinnedItem, int cellX, int cellY) in linkedPins)
+        {
+            linkedPinnedItem.SetSize(_size, updateProfileDefault: false, propagateToLinked: false);
+            linkedPinnedItem.X = X + (cellX * _size);
+            linkedPinnedItem.Y = Y + (cellY * _size);
+            linkedPinnedItem.SetInScreen();
         }
 
         if (updateProfileDefault)

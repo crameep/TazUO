@@ -198,6 +198,17 @@ public class PinnedItemButtonHelperTest
         PinnedItemButtonHelper.ToReadableHotkey(input).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(72, 72, 1)]
+    [InlineData(-72, 72, -1)]
+    [InlineData(150, 72, 2)]
+    [InlineData(0, 72, 0)]
+    [InlineData(80, 0, 0)]
+    public void CalculateGridOffset_ShouldRoundUsingPreviousSize(int delta, int previousSize, int expected)
+    {
+        PinnedItemButtonHelper.CalculateGridOffset(delta, previousSize).Should().Be(expected);
+    }
+
     private static Item CreateItem(World world, uint serial, ushort graphic, ushort hue, uint container)
     {
         ClassicUO.Client.UnitTestingActive = true;
