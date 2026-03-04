@@ -695,6 +695,7 @@ namespace ClassicUO.Configuration
         public bool DisableGrayEnemies { get; set; }
         public bool EnablePostProcessingEffects { get; set; }
         public ushort PostProcessingType { get; set; }
+        public byte ColorblindMode { get; set; }
         public bool DisableHotkeys { get; set; }
         public bool DisableDismountInWarMode { get; set; }
         public bool EnableASyncMapLoading { get; set; } = true;

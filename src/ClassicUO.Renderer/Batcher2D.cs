@@ -1748,5 +1748,8 @@ namespace ClassicUO.Renderer
 
         [FileEmbed.FileEmbed("shaders/xBR.fxc")]
         public static partial ReadOnlySpan<byte> GetXBRShader();
+
+        [FileEmbed.FileEmbed("shaders/Colorblind.fxc")]
+        public static partial ReadOnlySpan<byte> GetColorblindShader();
     }
 }

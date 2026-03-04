@@ -60,6 +60,9 @@ namespace ClassicUO.Game.Scenes
         });
 
         private static XBREffect _xbr;
+        private static ColorblindEffect _colorblind;
+        private static byte _colorblindMode;
+        private RenderTarget2D _colorblindTempTarget;
         private bool _alphaChanged;
         private long _alphaTimer;
         private bool _forceStopScene;
@@ -153,10 +156,13 @@ namespace ClassicUO.Game.Scenes
             if (!ProfileManager.CurrentProfile.EnablePostProcessingEffects)
             {
                 _filterMode = PostProcessingType.Point;
-                return;
+            }
+            else
+            {
+                _filterMode = (PostProcessingType)ProfileManager.CurrentProfile.PostProcessingType;
             }
 
-            _filterMode = (PostProcessingType)ProfileManager.CurrentProfile.PostProcessingType;
+            _colorblindMode = ProfileManager.CurrentProfile.ColorblindMode;
         }
         private long _nextProfileSave = Time.Ticks + 1000*60*60;
 
@@ -467,6 +473,10 @@ namespace ClassicUO.Game.Scenes
             _worldRenderTarget?.Dispose();
             _xbr?.Dispose();
             _xbr = null;
+            _colorblindTempTarget?.Dispose();
+            _colorblindTempTarget = null;
+            _colorblind?.Dispose();
+            _colorblind = null;
 
             _world.CommandManager.UnRegisterAll();
             _world.Weather.Reset();
@@ -1232,15 +1242,56 @@ namespace ClassicUO.Game.Scenes
             var destRect = new Rectangle(0, 0, vpW, vpH);
 
             UpdatePostProcessState(gd);
+            EnsureColorblindEffect(gd);
 
-            if (_postFx == _xbr && _xbr != null)
+            bool hasColorblind = _colorblindMode != 0 && _colorblind != null;
+            bool hasPostFx = _postFx != null;
+
+            if (hasColorblind && hasPostFx)
             {
-                BindXbrParams(gd);
+                // Two-pass: post-fx → temp RT, then colorblind → backbuffer
+                EnsureColorblindTempTarget(gd, vpW, vpH);
+                gd.SetRenderTarget(_colorblindTempTarget);
+                gd.Clear(Color.Black);
+
+                if (_postFx == _xbr && _xbr != null)
+                    BindXbrParams(gd);
+
+                batcher.Begin(_postFx, Matrix.Identity);
+                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); } catch { batcher.SetSampler(SamplerState.PointClamp); }
+                batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
+                batcher.End();
+
+                gd.SetRenderTarget(null);
+                gd.Viewport = cameraViewport;
+
+                BindColorblindParams(gd, vpW, vpH);
+                batcher.Begin(_colorblind, Matrix.Identity);
+                batcher.SetSampler(SamplerState.PointClamp);
+                batcher.Draw(_colorblindTempTarget, destRect, destRect, new Vector3(0, 0, 1));
+                batcher.End();
             }
-            batcher.Begin(_postFx, Matrix.Identity);
-            try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); } catch { batcher.SetSampler(SamplerState.PointClamp); }
-            batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
-            batcher.End();
+            else if (hasColorblind)
+            {
+                // Single pass: colorblind shader replaces the post-fx
+                BindColorblindParams(gd, vpW, vpH);
+                batcher.Begin(_colorblind, Matrix.Identity);
+                batcher.SetSampler(_postSampler ?? SamplerState.PointClamp);
+                batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
+                batcher.End();
+            }
+            else
+            {
+                // Original path: post-fx or plain sampler
+                if (_postFx == _xbr && _xbr != null)
+                    BindXbrParams(gd);
+
+                batcher.Begin(_postFx, Matrix.Identity);
+                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); } catch { batcher.SetSampler(SamplerState.PointClamp); }
+                batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
+                batcher.End();
+            }
+
             batcher.SetSampler(null);
             batcher.SetBlendState(null);
 
@@ -1629,6 +1680,78 @@ namespace ClassicUO.Game.Scenes
             _xbr.Parameters?["invTextureSize"]?.SetValue(new Vector2(1f / w, 1f / h));
             _xbr.Parameters?["TextureSizeInv"]?.SetValue(new Vector2(1f / w, 1f / h));
             _xbr.Parameters?["decal"]?.SetValue(_worldRenderTarget);
+        }
+
+        // Machado et al. simulation matrices for colorblind rendering.
+        // Each row set transforms RGB to simulate the given deficiency.
+        private static readonly Vector3[][] ColorblindMatrices =
+        [
+            // 0 = unused (Off)
+            null,
+            // 1 = Deuteranopia (green-blind, most common)
+            [new Vector3(0.625f, 0.375f, 0.000f),
+             new Vector3(0.700f, 0.300f, 0.000f),
+             new Vector3(0.000f, 0.300f, 0.700f)],
+            // 2 = Protanopia (red-blind)
+            [new Vector3(0.567f, 0.433f, 0.000f),
+             new Vector3(0.558f, 0.442f, 0.000f),
+             new Vector3(0.000f, 0.242f, 0.758f)],
+            // 3 = Tritanopia (blue-blind)
+            [new Vector3(0.950f, 0.050f, 0.000f),
+             new Vector3(0.000f, 0.433f, 0.567f),
+             new Vector3(0.000f, 0.475f, 0.525f)],
+        ];
+
+        private void EnsureColorblindEffect(GraphicsDevice gd)
+        {
+            if (_colorblindMode == 0) return;
+            if (_colorblind != null) return;
+
+            try
+            {
+                _colorblind = new ColorblindEffect(gd);
+                EffectTechnique tech = _colorblind.Techniques?["T0"]
+                    ?? (_colorblind.Techniques?.Count > 0 ? _colorblind.Techniques[0] : null);
+                if (tech != null)
+                    _colorblind.CurrentTechnique = tech;
+                else
+                {
+                    _colorblind = null;
+                    _colorblindMode = 0;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.ErrorDebug("Failed to load colorblind shader: " + e);
+                _colorblind = null;
+                _colorblindMode = 0;
+            }
+        }
+
+        private void BindColorblindParams(GraphicsDevice gd, int vpW, int vpH)
+        {
+            if (_colorblind == null || _colorblindMode == 0 || _colorblindMode >= ColorblindMatrices.Length)
+                return;
+
+            var ortho = Matrix.CreateOrthographicOffCenter(0, vpW, vpH, 0, 0, 1);
+            _colorblind.MatrixTransform?.SetValue(ortho);
+
+            Vector3[] rows = ColorblindMatrices[_colorblindMode];
+            _colorblind.Row0?.SetValue(rows[0]);
+            _colorblind.Row1?.SetValue(rows[1]);
+            _colorblind.Row2?.SetValue(rows[2]);
+        }
+
+        private void EnsureColorblindTempTarget(GraphicsDevice gd, int w, int h)
+        {
+            if (_colorblindTempTarget != null && !_colorblindTempTarget.IsDisposed
+                && _colorblindTempTarget.Width == w && _colorblindTempTarget.Height == h)
+                return;
+
+            _colorblindTempTarget?.Dispose();
+            PresentationParameters pp = gd.PresentationParameters;
+            _colorblindTempTarget = new RenderTarget2D(gd, w, h, false,
+                pp.BackBufferFormat, DepthFormat.None);
         }
 
         private static readonly RenderedText _youAreDeadText = RenderedText.Create(

@@ -1097,6 +1097,22 @@ namespace ClassicUO.Game.UI.Gumps
                     Client.Game.GetScene<GameScene>()?.SetPostProcessingSettings();
                 } ), true, page);;
 
+            content.BlankLine();
+
+            content.AddToRight(
+                new ComboBoxWithLabel(
+                    World,
+                    "Colorblind mode",
+                    150,
+                    ThemeSettings.COMBO_BOX_WIDTH,
+                    ["Off", "Deuteranopia", "Protanopia", "Tritanopia"],
+                    profile.ColorblindMode,
+                    (s, n) =>
+                {
+                    profile.ColorblindMode = (byte)s;
+                    Client.Game.GetScene<GameScene>()?.SetPostProcessingSettings();
+                } ), true, page);
+
             #endregion
 
             #region Shadows
