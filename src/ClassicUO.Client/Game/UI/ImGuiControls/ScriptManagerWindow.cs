@@ -209,6 +209,11 @@ public class ScriptManagerWindow : SingletonImGuiWindow<ScriptManagerWindow>
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
         ImGui.InputTextWithHint("##SearchFilter", "Search...", ref _searchFilter, 100);
 
+        ClassicUO.LegionScripting.Runtime.ScriptTickMetrics runtimeMetrics = LegionScripting.LegionScripting.LastRuntimeMetrics;
+        string lifecycle = LegionScripting.LegionScripting.HostServices?.Lifecycle?.State.ToString() ?? "Unknown";
+        string network = LegionScripting.LegionScripting.HostServices?.Network?.State.ToString() ?? "Unknown";
+        ImGui.TextDisabled($"Runtime: contexts={LegionScripting.LegionScripting.RuntimeManager.Contexts.Count} tick={runtimeMetrics.Tick} steps={runtimeMetrics.ExecutedSteps} pending={runtimeMetrics.PendingActions} lifecycle={lifecycle} network={network}");
+
         if (ImGui.BeginPopup(MANAGER_MENU_ID))
         {
             if (ImGui.MenuItem("Refresh"))

@@ -609,11 +609,13 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_WINDOW_FOCUS_GAINED:
+                    LegionScripting.LegionScripting.NotifyLifecycleForeground();
                     if (_pluginsInitialized)
                         Plugin.OnFocusGained();
                     break;
 
                 case SDL_EventType.SDL_EVENT_WINDOW_FOCUS_LOST:
+                    LegionScripting.LegionScripting.NotifyLifecycleSuspended();
                     if (_pluginsInitialized)
                         Plugin.OnFocusLost();
                     break;
@@ -906,6 +908,15 @@ namespace ClassicUO
 
                         Mouse.ButtonRelease(buttonType);
                         Mouse.Update();
+
+                        if (buttonType == MouseButtonType.Left)
+                        {
+                            LegionScripting.LegionScripting.NotifyTouchInput(
+                                new LegionScripting.Runtime.Host.RuntimeInputEvent(
+                                    LegionScripting.Runtime.Host.RuntimeInputKind.Tap,
+                                    Mouse.Position.X,
+                                    Mouse.Position.Y));
+                        }
 
                         break;
                     }

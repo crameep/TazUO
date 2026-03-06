@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Managers;
+using ClassicUO.Network;
 using ClassicUO.Utility.Logging;
 using IronPython.Hosting;
 using Microsoft.Scripting.Hosting;
@@ -16,6 +17,8 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
+using ClassicUO.LegionScripting.Runtime;
+using ClassicUO.LegionScripting.Runtime.Host;
 using ClassicUO.LegionScripting.PyClasses;
 using ClassicUO.Utility;
 using Microsoft.Scripting;
@@ -37,12 +40,44 @@ namespace ClassicUO.LegionScripting
 
         private static bool _enabled, _loaded;
         private static World _world;
+        private static ScriptRuntimeManager _runtime = new();
+        private static LegacyScriptRuntimeAdapter _legacyAdapter = new(new ScriptRuntimeManager());
+        private static ScriptTickMetrics _lastRuntimeMetrics = new() { Tick = 0 };
+        private static RuntimeHostServices _host;
+        private static RuntimeAppLifecycleAdapter _lifecycleAdapter = new();
+        private static RuntimeNetworkSessionAdapter _networkAdapter = new();
+        private static RuntimeTouchInputAdapter _inputAdapter = new();
+        private static RuntimeStoragePaths _storagePaths;
+        private static RuntimeTelemetrySink _telemetrySink = new();
+        private static readonly Dictionary<string, int> _starterContexts = new(StringComparer.OrdinalIgnoreCase);
+
+        internal static ScriptRuntimeManager RuntimeManager => _runtime;
+        internal static ScriptTickMetrics LastRuntimeMetrics => _lastRuntimeMetrics;
+        internal static RuntimeHostServices HostServices => _host;
+
+        internal static void NotifyLifecycleSuspended() => _lifecycleAdapter.NotifySuspended();
+
+        internal static void NotifyLifecycleForeground() => _lifecycleAdapter.NotifyForeground();
+
+        internal static void NotifyNetworkDisconnected() => _networkAdapter.NotifyDisconnected();
+
+        internal static void NotifyNetworkConnected() => _networkAdapter.NotifyConnected();
+
+        internal static void NotifyNetworkReconnecting() => _networkAdapter.NotifyReconnecting();
+
+        internal static void NotifyTouchInput(RuntimeInputEvent inputEvent) => _inputAdapter.Enqueue(inputEvent);
 
         public static void Init(World world)
         {
             _world = world;
+            _storagePaths = new RuntimeStoragePaths(CUOEnviroment.ExecutablePath);
+            _telemetrySink = new RuntimeTelemetrySink();
+            _host = new RuntimeHostServices(_lifecycleAdapter, _networkAdapter, _inputAdapter, _storagePaths, _telemetrySink);
+            _runtime = new ScriptRuntimeManager(tick => ScriptWorldSnapshot.Create(_world, tick), _host);
+            _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
+            _lifecycleAdapter.NotifyForeground();
             Task.Factory.StartNew(Python.CreateEngine); //This is to preload engine stuff, helps with faster script startup later
-            ScriptPath = Path.GetFullPath(Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts"));
+            ScriptPath = _storagePaths.ScriptsPath;
 
             if (!_loaded)
             {
@@ -150,6 +185,79 @@ namespace ClassicUO.LegionScripting
                     GameActions.Print(world, $"Stopped {count} running script(s).");
                 }
             );
+
+            world.CommandManager.Register
+            (
+                "runstarter", a =>
+                {
+                    if (a.Length < 2)
+                    {
+                        GameActions.Print(world, "Usage: runstarter <healer|potion|combo> [potionSerialHex]");
+                        return;
+                    }
+
+                    string starter = a[1].Trim().ToLowerInvariant();
+
+                    if (_starterContexts.TryGetValue(starter, out int existingId))
+                    {
+                        GameActions.Print(world, $"Starter '{starter}' already running as context {existingId}.");
+                        return;
+                    }
+
+                    ScriptContext context = starter switch
+                    {
+                        "healer" => _runtime.StartScript("starter:healer", RuntimeStarterTemplates.CreateHealerTemplate(), ScriptPriority.High),
+                        "potion" => _runtime.StartScript("starter:potion", RuntimeStarterTemplates.CreatePotionTemplate(a.Length > 2 ? a[2] : "0x0"), ScriptPriority.High),
+                        "combo" => _runtime.StartScript("starter:combo", CreateStarterComboStep(a.Length > 2 ? a[2] : "0x0"), ScriptPriority.High),
+                        _ => null
+                    };
+
+                    if (context == null)
+                    {
+                        GameActions.Print(world, $"Unknown starter '{starter}'.");
+                        return;
+                    }
+
+                    _starterContexts[starter] = context.Id;
+                    GameActions.Print(world, $"Starter '{starter}' started (context {context.Id}).");
+                }
+            );
+
+            world.CommandManager.Register
+            (
+                "stopstarter", a =>
+                {
+                    if (a.Length < 2)
+                    {
+                        GameActions.Print(world, "Usage: stopstarter <healer|potion|combo>");
+                        return;
+                    }
+
+                    string starter = a[1].Trim().ToLowerInvariant();
+                    if (!_starterContexts.TryGetValue(starter, out int contextId))
+                    {
+                        GameActions.Print(world, $"Starter '{starter}' is not running.");
+                        return;
+                    }
+
+                    _runtime.CancelScript(contextId, "starter-stop");
+                    _starterContexts.Remove(starter);
+                    GameActions.Print(world, $"Starter '{starter}' stopped.");
+                }
+            );
+        }
+
+        private static Func<ScriptExecutionContext, ScriptDirective> CreateStarterComboStep(string potionSerialHex)
+        {
+            Func<ScriptExecutionContext, ScriptDirective> healer = RuntimeStarterTemplates.CreateHealerTemplate();
+            Func<ScriptExecutionContext, ScriptDirective> potion = RuntimeStarterTemplates.CreatePotionTemplate(potionSerialHex);
+
+            return execution =>
+            {
+                healer(execution);
+                potion(execution);
+                return RuntimeScriptApi.Wait(1);
+            };
         }
 
         private static void EventSink_JournalEntryAdded(object sender, JournalEntry e)
@@ -332,7 +440,7 @@ namespace ClassicUO.LegionScripting
 
         private static void LoadLScriptSettings()
         {
-            string path = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
+            string path = _storagePaths?.SettingsPath ?? Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
 
             try
             {
@@ -361,7 +469,7 @@ namespace ClassicUO.LegionScripting
 
         private static void SaveScriptSettings()
         {
-            string path = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
+            string path = _storagePaths?.SettingsPath ?? Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
 
             string json = JsonSerializer.Serialize(LScriptSettings, LScriptJsonContext.Default.LScriptSettings);
 
@@ -384,12 +492,28 @@ namespace ClassicUO.LegionScripting
 
             SaveScriptSettings();
 
+            string betaReportPath = _telemetrySink?.WriteBetaReport(_storagePaths?.LogsPath, _runtime.Faults);
+            if (!string.IsNullOrWhiteSpace(betaReportPath))
+                Log.Info($"Runtime beta report written: {betaReportPath}");
+
             _enabled = false;
+
+            _runtime = new ScriptRuntimeManager();
+            _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
+            _lastRuntimeMetrics = new ScriptTickMetrics { Tick = 0 };
+            _host = null;
+            _storagePaths = null;
         }
 
         public static void PlayScript(ScriptFile script)
         {
-            if (script == null) return;
+            _legacyAdapter.PlayScript(script, PlayScriptLegacy);
+        }
+
+        private static void PlayScriptLegacy(ScriptFile script)
+        {
+            if (script == null)
+                return;
 
             if (RunningScripts.Contains(script)) //Already playing
                 return;
@@ -402,7 +526,7 @@ namespace ClassicUO.LegionScripting
                     IsBackground = true
                 };
 
-                if(!PyThreads.TryAdd(script.PythonThread.ManagedThreadId, script))
+                if (!PyThreads.TryAdd(script.PythonThread.ManagedThreadId, script))
                     PyThreads[script.PythonThread.ManagedThreadId] = script;
 
                 script.PythonThread.Start();
@@ -521,6 +645,11 @@ namespace ClassicUO.LegionScripting
 
         public static void StopScript(ScriptFile script)
         {
+            _legacyAdapter.StopScript(script, StopScriptLegacy);
+        }
+
+        private static void StopScriptLegacy(ScriptFile script)
+        {
             if (script == null) return;
 
             RunningScripts.Remove(script);
@@ -545,6 +674,85 @@ namespace ClassicUO.LegionScripting
                     PyThreads.Remove(script.PythonThread.ManagedThreadId);
                 script.PythonScriptStopped();
                 script.PythonThread = null;
+            }
+        }
+
+        public static void TickRuntime(int maxStepsPerTick = 8, int maxActionsPerTick = 16)
+        {
+            if (!_enabled || _world == null || !_world.InGame)
+                return;
+
+            ScriptTickMetrics metrics = _runtime.Tick(maxStepsPerTick);
+            _lastRuntimeMetrics = metrics;
+            List<ScriptAction> actions = _runtime.DrainActions();
+
+            if (maxActionsPerTick < 1)
+                maxActionsPerTick = 1;
+
+            int executed = 0;
+            foreach (ScriptAction action in actions)
+            {
+                if (executed >= maxActionsPerTick)
+                    break;
+
+                ExecuteRuntimeAction(action);
+                executed++;
+            }
+
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Contexts", _runtime.Contexts.Count);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Tick", metrics.Tick);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Steps", metrics.ExecutedSteps);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Pending Actions", Math.Max(0, actions.Count - executed));
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Legacy Tracked", _legacyAdapter.TrackedScripts);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Lifecycle", _lifecycleAdapter.State.ToString());
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Network", _networkAdapter.State.ToString());
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Watchdog Faults", metrics.WatchdogFaults);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Dropped Actions", metrics.DroppedActions);
+        }
+
+        private static void ExecuteRuntimeAction(ScriptAction action)
+        {
+            if (action == null)
+                return;
+
+            switch (action.ActionType)
+            {
+                case RuntimeScriptApi.ActionCastSpell:
+                    if (action.Payload is RuntimeCastSpellAction castAction)
+                        GameActions.CastSpellByName(castAction.SpellName, partialMatch: true);
+                    break;
+
+                case RuntimeScriptApi.ActionTargetSerial:
+                    if (action.Payload is RuntimeTargetAction targetAction)
+                        AsyncNetClient.Socket.Send_TargetSelectedObject(targetAction.Serial, targetAction.Serial);
+                    break;
+
+                case RuntimeScriptApi.ActionUsePotion:
+                    if (action.Payload is RuntimeUsePotionAction potionAction)
+                        ExecutePotionAction(potionAction);
+                    break;
+            }
+        }
+
+        private static void ExecutePotionAction(RuntimeUsePotionAction potionAction)
+        {
+            if (potionAction == null || string.IsNullOrWhiteSpace(potionAction.PotionName) || _world?.Player == null)
+                return;
+
+            // Accept raw serial forms for deterministic use in migrated scripts.
+            string token = potionAction.PotionName.Trim();
+            if (token.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                token = token.Substring(2);
+
+            if (uint.TryParse(token, System.Globalization.NumberStyles.HexNumber, null, out uint serialHex))
+            {
+                GameActions.DoubleClickQueued(serialHex);
+                return;
+            }
+
+            if (uint.TryParse(potionAction.PotionName, out uint serialDec))
+            {
+                GameActions.DoubleClickQueued(serialDec);
             }
         }
 
