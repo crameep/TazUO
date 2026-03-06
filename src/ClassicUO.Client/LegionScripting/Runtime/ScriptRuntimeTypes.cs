@@ -71,16 +71,45 @@ internal sealed class ScriptTickMetrics
     public int ExecutedSteps { get; set; }
     public int RunnableScripts { get; set; }
     public int PendingActions { get; set; }
+    public int WatchdogFaults { get; set; }
+    public int DroppedActions { get; set; }
+}
+
+internal sealed class ScriptRuntimeOptions
+{
+    public int MaxActionsQueued { get; init; } = 512;
+    public int WatchdogMaxWaitingTicks { get; init; } = 120;
+}
+
+internal sealed class ScriptRuntimeFault
+{
+    public int ScriptId { get; init; }
+    public string Reason { get; init; }
+    public long Tick { get; init; }
 }
 
 internal sealed class ScriptActionQueue
 {
     private readonly Queue<ScriptAction> _queue = new();
+    private readonly int _maxActions;
+
+    public ScriptActionQueue(int maxActions = 512)
+    {
+        _maxActions = Math.Max(1, maxActions);
+    }
 
     public int Count => _queue.Count;
 
+    public int DroppedActions { get; private set; }
+
     public void Enqueue(ScriptAction action)
     {
+        if (_queue.Count >= _maxActions)
+        {
+            _queue.Dequeue();
+            DroppedActions++;
+        }
+
         _queue.Enqueue(action);
     }
 

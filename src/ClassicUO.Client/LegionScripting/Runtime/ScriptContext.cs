@@ -14,6 +14,7 @@ internal sealed class ScriptContext
     private long _resumeAtTick;
     private string _waitingForEventType;
     private long? _waitDeadlineTick;
+    private long _stateChangedAtTick;
 
     public ScriptContext(int id, string name, ScriptPriority priority, Func<ScriptExecutionContext, ScriptDirective> step)
     {
@@ -33,6 +34,10 @@ internal sealed class ScriptContext
     public ScriptState State { get; private set; }
 
     public string LastError { get; private set; }
+
+    public long StateChangedAtTick => _stateChangedAtTick;
+
+    public int MailboxDepth => _mailbox.Count;
 
     internal int Deficit => _deficit;
 
@@ -85,8 +90,7 @@ internal sealed class ScriptContext
         {
             if (_waitDeadlineTick.HasValue && currentTick >= _waitDeadlineTick.Value)
             {
-                State = ScriptState.Faulted;
-                LastError = "timeout";
+                SetFault("timeout", currentTick);
                 return false;
             }
 
@@ -97,6 +101,7 @@ internal sealed class ScriptContext
                     if (scriptEvent.EventType == _waitingForEventType)
                     {
                         State = ScriptState.Ready;
+                        _stateChangedAtTick = currentTick;
                         _waitingForEventType = null;
                         _waitDeadlineTick = null;
                         break;
@@ -106,6 +111,7 @@ internal sealed class ScriptContext
             else if (currentTick >= _resumeAtTick)
             {
                 State = ScriptState.Ready;
+                _stateChangedAtTick = currentTick;
                 _waitDeadlineTick = null;
             }
         }
@@ -119,12 +125,20 @@ internal sealed class ScriptContext
         LastError = reason;
     }
 
+    internal void SetFault(string reason, long currentTick)
+    {
+        State = ScriptState.Faulted;
+        LastError = reason;
+        _stateChangedAtTick = currentTick;
+    }
+
     internal void Execute(ScriptRuntimeManager runtime, long currentTick)
     {
         if (State is ScriptState.Cancelled or ScriptState.Faulted or ScriptState.Completed)
             return;
 
         State = ScriptState.Running;
+        _stateChangedAtTick = currentTick;
         _runSequence++;
 
         try
@@ -135,10 +149,12 @@ internal sealed class ScriptContext
             {
                 case ScriptDirectiveKind.Yield:
                     State = ScriptState.Ready;
+                    _stateChangedAtTick = currentTick;
                     break;
 
                 case ScriptDirectiveKind.WaitTicks:
                     State = ScriptState.Waiting;
+                    _stateChangedAtTick = currentTick;
                     _resumeAtTick = currentTick + Math.Max(0, directive.WaitTicks);
                     _waitingForEventType = null;
                     _waitDeadlineTick = directive.TimeoutTicks.HasValue
@@ -148,6 +164,7 @@ internal sealed class ScriptContext
 
                 case ScriptDirectiveKind.WaitForEvent:
                     State = ScriptState.Waiting;
+                    _stateChangedAtTick = currentTick;
                     _waitingForEventType = directive.EventType;
                     _waitDeadlineTick = directive.TimeoutTicks.HasValue
                         ? currentTick + Math.Max(0, directive.TimeoutTicks.Value)
@@ -156,13 +173,13 @@ internal sealed class ScriptContext
 
                 case ScriptDirectiveKind.Complete:
                     State = ScriptState.Completed;
+                    _stateChangedAtTick = currentTick;
                     break;
             }
         }
         catch (Exception ex)
         {
-            State = ScriptState.Faulted;
-            LastError = ex.Message;
+            SetFault(ex.Message, currentTick);
         }
     }
 }

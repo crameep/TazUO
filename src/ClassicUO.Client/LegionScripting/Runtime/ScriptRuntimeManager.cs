@@ -8,7 +8,9 @@ namespace ClassicUO.LegionScripting.Runtime;
 internal sealed class ScriptRuntimeManager
 {
     private readonly Dictionary<int, ScriptContext> _contexts = new();
-    private readonly ScriptActionQueue _actionQueue = new();
+    private readonly ScriptActionQueue _actionQueue;
+    private readonly ScriptRuntimeOptions _options;
+    private readonly List<ScriptRuntimeFault> _faults = new();
     private Func<long, ScriptWorldSnapshot> _snapshotProvider;
 
     private int _nextScriptId = 1;
@@ -18,10 +20,12 @@ internal sealed class ScriptRuntimeManager
     private RuntimeHostServices _host;
     private bool _isSuspended;
 
-    public ScriptRuntimeManager(Func<long, ScriptWorldSnapshot> snapshotProvider = null, RuntimeHostServices host = null)
+    public ScriptRuntimeManager(Func<long, ScriptWorldSnapshot> snapshotProvider = null, RuntimeHostServices host = null, ScriptRuntimeOptions options = null)
     {
         _snapshotProvider = snapshotProvider;
         _host = host;
+        _options = options ?? new ScriptRuntimeOptions();
+        _actionQueue = new ScriptActionQueue(_options.MaxActionsQueued);
         LatestSnapshot = ScriptWorldSnapshot.Empty;
         BindHostEvents(_host);
     }
@@ -31,6 +35,8 @@ internal sealed class ScriptRuntimeManager
     public IReadOnlyCollection<ScriptContext> Contexts => _contexts.Values;
 
     public ScriptWorldSnapshot LatestSnapshot { get; private set; }
+
+    public IReadOnlyList<ScriptRuntimeFault> Faults => _faults;
 
     public void SetSnapshotProvider(Func<long, ScriptWorldSnapshot> snapshotProvider)
     {
@@ -74,6 +80,19 @@ internal sealed class ScriptRuntimeManager
             return false;
 
         context.Cancel(reason);
+        _host?.Telemetry?.PublishMetric($"runtime.script.{scriptId}.cancelled", reason);
+        return true;
+    }
+
+    public bool InjectFault(int scriptId, string reason = "fault.injected")
+    {
+        if (!_contexts.TryGetValue(scriptId, out ScriptContext context))
+            return false;
+
+        context.SetFault(reason, _currentTick);
+        _faults.Add(new ScriptRuntimeFault { ScriptId = scriptId, Reason = reason, Tick = _currentTick });
+        PublishEvent("runtime.fault", new ScriptRuntimeFault { ScriptId = scriptId, Reason = reason, Tick = _currentTick });
+        _host?.Telemetry?.PublishMetric($"runtime.script.{scriptId}.fault", reason);
         return true;
     }
 
@@ -110,7 +129,7 @@ internal sealed class ScriptRuntimeManager
             _isSuspended = true;
 
         if (_isSuspended)
-            return new ScriptTickMetrics { Tick = _currentTick, ExecutedSteps = 0, RunnableScripts = 0, PendingActions = _actionQueue.Count };
+            return new ScriptTickMetrics { Tick = _currentTick, ExecutedSteps = 0, RunnableScripts = 0, PendingActions = _actionQueue.Count, DroppedActions = _actionQueue.DroppedActions };
 
         if (maxStepsPerTick < 1)
             maxStepsPerTick = 1;
@@ -141,11 +160,19 @@ internal sealed class ScriptRuntimeManager
             next.ConsumeDeficit(totalWeight);
             next.Execute(this, _currentTick);
             metrics.ExecutedSteps++;
+
+            EmitPerScriptTelemetry(next);
         }
 
+        metrics.WatchdogFaults = ApplyWatchdogFaults();
+
         metrics.PendingActions = _actionQueue.Count;
+        metrics.DroppedActions = _actionQueue.DroppedActions;
         _host?.Telemetry?.PublishMetric("runtime.tick.executed_steps", metrics.ExecutedSteps);
         _host?.Telemetry?.PublishMetric("runtime.tick.pending_actions", metrics.PendingActions);
+        _host?.Telemetry?.PublishMetric("runtime.tick.watchdog_faults", metrics.WatchdogFaults);
+        _host?.Telemetry?.PublishMetric("runtime.tick.dropped_actions", metrics.DroppedActions);
+        _host?.Telemetry?.PublishMetric("runtime.active_contexts", _contexts.Count);
         return metrics;
     }
 
@@ -228,5 +255,40 @@ internal sealed class ScriptRuntimeManager
     private void OnNetworkStateChanged(RuntimeNetworkState state)
     {
         PublishEvent("host.network", state);
+    }
+
+    private int ApplyWatchdogFaults()
+    {
+        if (_options.WatchdogMaxWaitingTicks < 1)
+            return 0;
+
+        int faulted = 0;
+
+        foreach (ScriptContext context in _contexts.Values)
+        {
+            if (context.State != ScriptState.Waiting)
+                continue;
+
+            long waitingTicks = _currentTick - context.StateChangedAtTick;
+            if (waitingTicks < _options.WatchdogMaxWaitingTicks)
+                continue;
+
+            string reason = "watchdog.wait-timeout";
+            context.SetFault(reason, _currentTick);
+            ScriptRuntimeFault fault = new() { ScriptId = context.Id, Reason = reason, Tick = _currentTick };
+            _faults.Add(fault);
+            PublishEvent("runtime.fault", fault);
+            _host?.Telemetry?.PublishMetric($"runtime.script.{context.Id}.fault", reason);
+            faulted++;
+        }
+
+        return faulted;
+    }
+
+    private void EmitPerScriptTelemetry(ScriptContext context)
+    {
+        _host?.Telemetry?.PublishMetric($"runtime.script.{context.Id}.state", context.State.ToString());
+        _host?.Telemetry?.PublishMetric($"runtime.script.{context.Id}.mailbox_depth", context.MailboxDepth);
+        _host?.Telemetry?.PublishMetric($"runtime.script.{context.Id}.last_error", context.LastError ?? string.Empty);
     }
 }

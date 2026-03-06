@@ -626,6 +626,8 @@ namespace ClassicUO.LegionScripting
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Legacy Tracked", _legacyAdapter.TrackedScripts);
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Lifecycle", _lifecycleAdapter.State.ToString());
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Network", _networkAdapter.State.ToString());
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Watchdog Faults", metrics.WatchdogFaults);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Dropped Actions", metrics.DroppedActions);
         }
 
         private static void ExecuteRuntimeAction(ScriptAction action)
