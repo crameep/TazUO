@@ -1,0 +1,40 @@
+name: iOS Host Lane
+
+on:
+  pull_request:
+    branches: [ dev ]
+    paths:
+      - "src/ClassicUO.Client/LegionScripting/**"
+      - "src/ClassicUO.Client/GameController.cs"
+      - "src/ClassicUO.Client/Game/Scenes/GameScene.cs"
+      - "tests/ClassicUO.UnitTests/Game/LegionScript/**"
+      - ".github/workflows/ios-host-lane.yml"
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  ios-host-contracts:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build host-boundary runtime
+        run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -p:DefineConstants="IOS_HOST"
+
+      - name: Run LegionScript runtime suites
+        run: dotnet test tests/ClassicUO.UnitTests/ClassicUO.UnitTests.csproj --filter "FullyQualifiedName~LegionScript"

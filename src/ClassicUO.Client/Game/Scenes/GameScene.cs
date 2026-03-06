@@ -225,6 +225,7 @@ namespace ClassicUO.Game.Scenes
 
             PersistentVars.Load();
             LegionScripting.LegionScripting.Init(_world);
+            LegionScripting.LegionScripting.NotifyNetworkConnected();
             BuySellAgent.Load();
             OrganizerAgent.Load();
             GraphicsReplacement.Load();
@@ -482,17 +483,20 @@ namespace ClassicUO.Game.Scenes
         {
             if (DisconnectionRequested)
             {
+                LegionScripting.LegionScripting.NotifyNetworkDisconnected();
                 Client.Game.SetScene(new LoginScene(_world));
 
                 return;
             }
             if (Settings.GlobalSettings.Reconnect)
             {
+                LegionScripting.LegionScripting.NotifyNetworkReconnecting();
                 LoginHandshake.Reconnect = true;
                 _forceStopScene = true;
             }
             else
             {
+                LegionScripting.LegionScripting.NotifyNetworkDisconnected();
                 UIManager.Add(
                     new MessageBoxGump(
                         _world,

@@ -18,6 +18,7 @@ using System.Text.RegularExpressions;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
 using ClassicUO.LegionScripting.Runtime;
+using ClassicUO.LegionScripting.Runtime.Host;
 using ClassicUO.LegionScripting.PyClasses;
 using ClassicUO.Utility;
 using Microsoft.Scripting;
@@ -42,17 +43,38 @@ namespace ClassicUO.LegionScripting
         private static ScriptRuntimeManager _runtime = new();
         private static LegacyScriptRuntimeAdapter _legacyAdapter = new(new ScriptRuntimeManager());
         private static ScriptTickMetrics _lastRuntimeMetrics = new() { Tick = 0 };
+        private static RuntimeHostServices _host;
+        private static RuntimeAppLifecycleAdapter _lifecycleAdapter = new();
+        private static RuntimeNetworkSessionAdapter _networkAdapter = new();
+        private static RuntimeTouchInputAdapter _inputAdapter = new();
+        private static RuntimeStoragePaths _storagePaths;
 
         internal static ScriptRuntimeManager RuntimeManager => _runtime;
         internal static ScriptTickMetrics LastRuntimeMetrics => _lastRuntimeMetrics;
+        internal static RuntimeHostServices HostServices => _host;
+
+        internal static void NotifyLifecycleSuspended() => _lifecycleAdapter.NotifySuspended();
+
+        internal static void NotifyLifecycleForeground() => _lifecycleAdapter.NotifyForeground();
+
+        internal static void NotifyNetworkDisconnected() => _networkAdapter.NotifyDisconnected();
+
+        internal static void NotifyNetworkConnected() => _networkAdapter.NotifyConnected();
+
+        internal static void NotifyNetworkReconnecting() => _networkAdapter.NotifyReconnecting();
+
+        internal static void NotifyTouchInput(RuntimeInputEvent inputEvent) => _inputAdapter.Enqueue(inputEvent);
 
         public static void Init(World world)
         {
             _world = world;
-            _runtime = new ScriptRuntimeManager(tick => ScriptWorldSnapshot.Create(_world, tick));
+            _storagePaths = new RuntimeStoragePaths(CUOEnviroment.ExecutablePath);
+            _host = new RuntimeHostServices(_lifecycleAdapter, _networkAdapter, _inputAdapter, _storagePaths, new RuntimeTelemetrySink());
+            _runtime = new ScriptRuntimeManager(tick => ScriptWorldSnapshot.Create(_world, tick), _host);
             _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
+            _lifecycleAdapter.NotifyForeground();
             Task.Factory.StartNew(Python.CreateEngine); //This is to preload engine stuff, helps with faster script startup later
-            ScriptPath = Path.GetFullPath(Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts"));
+            ScriptPath = _storagePaths.ScriptsPath;
 
             if (!_loaded)
             {
@@ -342,7 +364,7 @@ namespace ClassicUO.LegionScripting
 
         private static void LoadLScriptSettings()
         {
-            string path = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
+            string path = _storagePaths?.SettingsPath ?? Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
 
             try
             {
@@ -371,7 +393,7 @@ namespace ClassicUO.LegionScripting
 
         private static void SaveScriptSettings()
         {
-            string path = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
+            string path = _storagePaths?.SettingsPath ?? Path.Combine(CUOEnviroment.ExecutablePath, "Data", "lscript.json");
 
             string json = JsonSerializer.Serialize(LScriptSettings, LScriptJsonContext.Default.LScriptSettings);
 
@@ -399,6 +421,8 @@ namespace ClassicUO.LegionScripting
             _runtime = new ScriptRuntimeManager();
             _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
             _lastRuntimeMetrics = new ScriptTickMetrics { Tick = 0 };
+            _host = null;
+            _storagePaths = null;
         }
 
         public static void PlayScript(ScriptFile script)
@@ -600,6 +624,8 @@ namespace ClassicUO.LegionScripting
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Steps", metrics.ExecutedSteps);
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Pending Actions", Math.Max(0, actions.Count - executed));
             ScriptingInfoGump.AddOrUpdateInfo("Runtime Legacy Tracked", _legacyAdapter.TrackedScripts);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Lifecycle", _lifecycleAdapter.State.ToString());
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Network", _networkAdapter.State.ToString());
         }
 
         private static void ExecuteRuntimeAction(ScriptAction action)

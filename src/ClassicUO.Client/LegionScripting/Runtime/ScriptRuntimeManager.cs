@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ClassicUO.LegionScripting.Runtime.Host;
 
 namespace ClassicUO.LegionScripting.Runtime;
 
@@ -14,11 +15,15 @@ internal sealed class ScriptRuntimeManager
     private long _currentTick;
     private long _eventSequence;
     private long _actionSequence;
+    private RuntimeHostServices _host;
+    private bool _isSuspended;
 
-    public ScriptRuntimeManager(Func<long, ScriptWorldSnapshot> snapshotProvider = null)
+    public ScriptRuntimeManager(Func<long, ScriptWorldSnapshot> snapshotProvider = null, RuntimeHostServices host = null)
     {
         _snapshotProvider = snapshotProvider;
+        _host = host;
         LatestSnapshot = ScriptWorldSnapshot.Empty;
+        BindHostEvents(_host);
     }
 
     public long CurrentTick => _currentTick;
@@ -30,6 +35,25 @@ internal sealed class ScriptRuntimeManager
     public void SetSnapshotProvider(Func<long, ScriptWorldSnapshot> snapshotProvider)
     {
         _snapshotProvider = snapshotProvider;
+    }
+
+    public void SetHost(RuntimeHostServices host)
+    {
+        UnbindHostEvents(_host);
+        _host = host;
+        BindHostEvents(_host);
+    }
+
+    public void Suspend(string reason = "suspend")
+    {
+        _isSuspended = true;
+        PublishEvent("host.lifecycle.suspended", reason);
+    }
+
+    public void Resume(string reason = "resume")
+    {
+        _isSuspended = false;
+        PublishEvent("host.lifecycle.foreground", reason);
     }
 
     internal long NextActionSequence() => ++_actionSequence;
@@ -80,6 +104,14 @@ internal sealed class ScriptRuntimeManager
 
     public ScriptTickMetrics Tick(int maxStepsPerTick = 64)
     {
+        DrainHostInputEvents();
+
+        if (_host?.Lifecycle?.State == RuntimeLifecycleState.Suspended)
+            _isSuspended = true;
+
+        if (_isSuspended)
+            return new ScriptTickMetrics { Tick = _currentTick, ExecutedSteps = 0, RunnableScripts = 0, PendingActions = _actionQueue.Count };
+
         if (maxStepsPerTick < 1)
             maxStepsPerTick = 1;
 
@@ -112,6 +144,8 @@ internal sealed class ScriptRuntimeManager
         }
 
         metrics.PendingActions = _actionQueue.Count;
+        _host?.Telemetry?.PublishMetric("runtime.tick.executed_steps", metrics.ExecutedSteps);
+        _host?.Telemetry?.PublishMetric("runtime.tick.pending_actions", metrics.PendingActions);
         return metrics;
     }
 
@@ -143,5 +177,56 @@ internal sealed class ScriptRuntimeManager
         }
 
         return best;
+    }
+
+    private void DrainHostInputEvents()
+    {
+        IReadOnlyList<RuntimeInputEvent> inputEvents = _host?.Input?.DrainEvents();
+
+        if (inputEvents == null || inputEvents.Count == 0)
+            return;
+
+        foreach (RuntimeInputEvent inputEvent in inputEvents)
+            PublishEvent("host.input", inputEvent);
+    }
+
+    private void BindHostEvents(RuntimeHostServices host)
+    {
+        if (host == null)
+            return;
+
+        if (host.Lifecycle != null)
+            host.Lifecycle.StateChanged += OnLifecycleStateChanged;
+
+        if (host.Network != null)
+            host.Network.StateChanged += OnNetworkStateChanged;
+    }
+
+    private void UnbindHostEvents(RuntimeHostServices host)
+    {
+        if (host == null)
+            return;
+
+        if (host.Lifecycle != null)
+            host.Lifecycle.StateChanged -= OnLifecycleStateChanged;
+
+        if (host.Network != null)
+            host.Network.StateChanged -= OnNetworkStateChanged;
+    }
+
+    private void OnLifecycleStateChanged(RuntimeLifecycleState state)
+    {
+        if (state == RuntimeLifecycleState.Suspended)
+        {
+            Suspend("host-lifecycle");
+            return;
+        }
+
+        Resume("host-lifecycle");
+    }
+
+    private void OnNetworkStateChanged(RuntimeNetworkState state)
+    {
+        PublishEvent("host.network", state);
     }
 }
