@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Utility;
 using ImGuiNET;
 
 namespace ClassicUO.Game.UI.ImGuiControls
@@ -49,6 +50,13 @@ namespace ClassicUO.Game.UI.ImGuiControls
                 _selectedIndex = TomeManager.Instance.TomeDefinitions.Count - 1;
                 _selected = tome;
                 SyncInputsFromSelection();
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Export All"))
+            {
+                TomeManager.Instance.GetJsonExportAll()?.CopyToClipboard();
+                GameActions.Print("Exported all tomes to your clipboard!", Constants.HUE_SUCCESS);
             }
 
             ImGui.SeparatorText("Definitions");
@@ -180,6 +188,24 @@ namespace ClassicUO.Game.UI.ImGuiControls
             {
                 TomeManager.Instance.Save();
                 GameActions.Print("Saved tome definitions.", Constants.HUE_SUCCESS);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Import"))
+            {
+                string json = Clipboard.GetClipboardText();
+
+                if (json.NotNullNotEmpty() && TomeManager.Instance.ImportFromJson(json))
+                    GameActions.Print("Imported tome from clipboard!", Constants.HUE_SUCCESS);
+                else
+                    GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Export"))
+            {
+                TomeManager.Instance.GetJsonExport(_selected)?.CopyToClipboard();
+                GameActions.Print("Exported tome to your clipboard!", Constants.HUE_SUCCESS);
             }
 
             ImGui.SameLine();

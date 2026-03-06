@@ -52,6 +52,75 @@ namespace ClassicUO.Game.Managers
 
         public void Save() => JsonHelper.SaveAndBackup(TomeDefinitions, _savePath, TomeDefinitionContext.Default.ListTomeDefinition);
 
+        #nullable enable
+        public string? GetJsonExport(TomeDefinition definition)
+        {
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(definition, TomeDefinitionContext.Default.TomeDefinition);
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            return null;
+        }
+
+        public string? GetJsonExportAll()
+        {
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(TomeDefinitions, TomeDefinitionContext.Default.ListTomeDefinition);
+            }
+            catch (Exception)
+            {
+                // ignored
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromJson(string json)
+        {
+            try
+            {
+                TomeDefinition imported = System.Text.Json.JsonSerializer.Deserialize(json, TomeDefinitionContext.Default.TomeDefinition);
+                if (imported != null)
+                {
+                    imported.Name = GetUniqueName(imported.Name);
+                    TomeDefinitions.Add(imported);
+                    Save();
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // ignored – fall through to try list format
+            }
+
+            try
+            {
+                List<TomeDefinition> importedList = System.Text.Json.JsonSerializer.Deserialize(json, TomeDefinitionContext.Default.ListTomeDefinition);
+                if (importedList == null || importedList.Count == 0)
+                    return false;
+
+                foreach (TomeDefinition tome in importedList)
+                {
+                    tome.Name = GetUniqueName(tome.Name);
+                    TomeDefinitions.Add(tome);
+                }
+
+                Save();
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         private string GetUniqueName(string baseName)
         {
             string normalizedBaseName = string.IsNullOrWhiteSpace(baseName) ? "Migrated Tome" : baseName.Trim();
