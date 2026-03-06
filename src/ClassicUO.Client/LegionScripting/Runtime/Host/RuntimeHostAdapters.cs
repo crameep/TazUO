@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using ClassicUO.Utility.Logging;
+using ClassicUO.LegionScripting.Runtime;
 
 namespace ClassicUO.LegionScripting.Runtime.Host;
 
@@ -114,11 +117,45 @@ internal sealed class RuntimeStoragePaths : IRuntimeStoragePaths
 
 internal sealed class RuntimeTelemetrySink : IRuntimeTelemetrySink
 {
+    private readonly Dictionary<string, object> _lastValues = new();
+
     public void PublishMetric(string name, object value)
     {
         if (string.IsNullOrWhiteSpace(name))
             return;
 
+        _lastValues[name] = value;
+
         Log.Trace($"[RuntimeTelemetry] {name}={value}");
+    }
+
+    public IReadOnlyDictionary<string, object> Snapshot()
+    {
+        return new Dictionary<string, object>(_lastValues);
+    }
+
+    public string WriteBetaReport(string logsPath, IReadOnlyList<ScriptRuntimeFault> faults)
+    {
+        if (string.IsNullOrWhiteSpace(logsPath))
+            return string.Empty;
+
+        Directory.CreateDirectory(logsPath);
+
+        var groupedFaults = (faults ?? Array.Empty<ScriptRuntimeFault>())
+            .GroupBy(f => f.Reason ?? "unknown")
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var report = new
+        {
+            generated_at_utc = DateTime.UtcNow,
+            metrics = _lastValues,
+            fault_count = faults?.Count ?? 0,
+            fault_buckets = groupedFaults,
+            release_gate = (faults?.Count ?? 0) == 0 ? "GREEN" : "REVIEW_REQUIRED"
+        };
+
+        string path = Path.Combine(logsPath, $"runtime-beta-report-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        return path;
     }
 }

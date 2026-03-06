@@ -34,7 +34,7 @@ jobs:
         run: dotnet restore
 
       - name: Build host-boundary runtime
-        run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -p:DefineConstants="IOS_HOST"
+        run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release
 
       - name: Run LegionScript runtime suites
         run: dotnet test tests/ClassicUO.UnitTests/ClassicUO.UnitTests.csproj --filter "FullyQualifiedName~LegionScript"
