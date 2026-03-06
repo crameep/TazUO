@@ -156,4 +156,21 @@ public class ScriptRuntimeManagerTests
         actions[0].ActionType.Should().Be("cast");
         actions[1].ActionType.Should().Be("use-item");
     }
+
+    [Fact]
+    public void Tick_Metrics_Should_Report_Pending_Actions_For_Bounded_Work()
+    {
+        var runtime = new ScriptRuntimeManager();
+
+        runtime.StartScript("spammer", execution =>
+        {
+            execution.EnqueueAction("noop");
+            return ScriptDirective.Yield();
+        });
+
+        ScriptTickMetrics metrics = runtime.Tick(maxStepsPerTick: 1);
+
+        metrics.ExecutedSteps.Should().Be(1);
+        metrics.PendingActions.Should().Be(1);
+    }
 }

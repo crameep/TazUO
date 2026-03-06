@@ -70,11 +70,14 @@ internal sealed class ScriptTickMetrics
     public long Tick { get; init; }
     public int ExecutedSteps { get; set; }
     public int RunnableScripts { get; set; }
+    public int PendingActions { get; set; }
 }
 
 internal sealed class ScriptActionQueue
 {
     private readonly Queue<ScriptAction> _queue = new();
+
+    public int Count => _queue.Count;
 
     public void Enqueue(ScriptAction action)
     {
@@ -106,6 +109,8 @@ internal sealed class ScriptExecutionContext
 
     public long CurrentTick { get; }
 
+    public ScriptWorldSnapshot Snapshot => _runtime.LatestSnapshot;
+
     public bool TryDequeueEvent(out ScriptEvent scriptEvent) => _context.TryDequeueEvent(out scriptEvent);
 
     public void EnqueueAction(string actionType, object payload = null)
@@ -119,4 +124,3 @@ internal sealed class ScriptExecutionContext
         });
     }
 }
-

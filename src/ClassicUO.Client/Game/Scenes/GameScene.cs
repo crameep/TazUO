@@ -952,6 +952,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             _world.Update();
+            LegionScripting.LegionScripting.TickRuntime();
             _animatedStaticsManager.Process();
             _world.BoatMovingManager.Update();
             _world.Player.Pathfinder.ProcessAutoWalk();

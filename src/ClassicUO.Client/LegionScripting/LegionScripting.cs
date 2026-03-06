@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Managers;
+using ClassicUO.Network;
 using ClassicUO.Utility.Logging;
 using IronPython.Hosting;
 using Microsoft.Scripting.Hosting;
@@ -16,6 +17,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.ImGuiControls.Legion;
+using ClassicUO.LegionScripting.Runtime;
 using ClassicUO.LegionScripting.PyClasses;
 using ClassicUO.Utility;
 using Microsoft.Scripting;
@@ -37,10 +39,18 @@ namespace ClassicUO.LegionScripting
 
         private static bool _enabled, _loaded;
         private static World _world;
+        private static ScriptRuntimeManager _runtime = new();
+        private static LegacyScriptRuntimeAdapter _legacyAdapter = new(new ScriptRuntimeManager());
+        private static ScriptTickMetrics _lastRuntimeMetrics = new() { Tick = 0 };
+
+        internal static ScriptRuntimeManager RuntimeManager => _runtime;
+        internal static ScriptTickMetrics LastRuntimeMetrics => _lastRuntimeMetrics;
 
         public static void Init(World world)
         {
             _world = world;
+            _runtime = new ScriptRuntimeManager(tick => ScriptWorldSnapshot.Create(_world, tick));
+            _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
             Task.Factory.StartNew(Python.CreateEngine); //This is to preload engine stuff, helps with faster script startup later
             ScriptPath = Path.GetFullPath(Path.Combine(CUOEnviroment.ExecutablePath, "LegionScripts"));
 
@@ -385,11 +395,21 @@ namespace ClassicUO.LegionScripting
             SaveScriptSettings();
 
             _enabled = false;
+
+            _runtime = new ScriptRuntimeManager();
+            _legacyAdapter = new LegacyScriptRuntimeAdapter(_runtime);
+            _lastRuntimeMetrics = new ScriptTickMetrics { Tick = 0 };
         }
 
         public static void PlayScript(ScriptFile script)
         {
-            if (script == null) return;
+            _legacyAdapter.PlayScript(script, PlayScriptLegacy);
+        }
+
+        private static void PlayScriptLegacy(ScriptFile script)
+        {
+            if (script == null)
+                return;
 
             if (RunningScripts.Contains(script)) //Already playing
                 return;
@@ -402,7 +422,7 @@ namespace ClassicUO.LegionScripting
                     IsBackground = true
                 };
 
-                if(!PyThreads.TryAdd(script.PythonThread.ManagedThreadId, script))
+                if (!PyThreads.TryAdd(script.PythonThread.ManagedThreadId, script))
                     PyThreads[script.PythonThread.ManagedThreadId] = script;
 
                 script.PythonThread.Start();
@@ -521,6 +541,11 @@ namespace ClassicUO.LegionScripting
 
         public static void StopScript(ScriptFile script)
         {
+            _legacyAdapter.StopScript(script, StopScriptLegacy);
+        }
+
+        private static void StopScriptLegacy(ScriptFile script)
+        {
             if (script == null) return;
 
             RunningScripts.Remove(script);
@@ -545,6 +570,81 @@ namespace ClassicUO.LegionScripting
                     PyThreads.Remove(script.PythonThread.ManagedThreadId);
                 script.PythonScriptStopped();
                 script.PythonThread = null;
+            }
+        }
+
+        public static void TickRuntime(int maxStepsPerTick = 8, int maxActionsPerTick = 16)
+        {
+            if (!_enabled || _world == null || !_world.InGame)
+                return;
+
+            ScriptTickMetrics metrics = _runtime.Tick(maxStepsPerTick);
+            _lastRuntimeMetrics = metrics;
+            List<ScriptAction> actions = _runtime.DrainActions();
+
+            if (maxActionsPerTick < 1)
+                maxActionsPerTick = 1;
+
+            int executed = 0;
+            foreach (ScriptAction action in actions)
+            {
+                if (executed >= maxActionsPerTick)
+                    break;
+
+                ExecuteRuntimeAction(action);
+                executed++;
+            }
+
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Contexts", _runtime.Contexts.Count);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Tick", metrics.Tick);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Steps", metrics.ExecutedSteps);
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Pending Actions", Math.Max(0, actions.Count - executed));
+            ScriptingInfoGump.AddOrUpdateInfo("Runtime Legacy Tracked", _legacyAdapter.TrackedScripts);
+        }
+
+        private static void ExecuteRuntimeAction(ScriptAction action)
+        {
+            if (action == null)
+                return;
+
+            switch (action.ActionType)
+            {
+                case RuntimeScriptApi.ActionCastSpell:
+                    if (action.Payload is RuntimeCastSpellAction castAction)
+                        GameActions.CastSpellByName(castAction.SpellName, partialMatch: true);
+                    break;
+
+                case RuntimeScriptApi.ActionTargetSerial:
+                    if (action.Payload is RuntimeTargetAction targetAction)
+                        AsyncNetClient.Socket.Send_TargetSelectedObject(targetAction.Serial, targetAction.Serial);
+                    break;
+
+                case RuntimeScriptApi.ActionUsePotion:
+                    if (action.Payload is RuntimeUsePotionAction potionAction)
+                        ExecutePotionAction(potionAction);
+                    break;
+            }
+        }
+
+        private static void ExecutePotionAction(RuntimeUsePotionAction potionAction)
+        {
+            if (potionAction == null || string.IsNullOrWhiteSpace(potionAction.PotionName) || _world?.Player == null)
+                return;
+
+            // Accept raw serial forms for deterministic use in migrated scripts.
+            string token = potionAction.PotionName.Trim();
+            if (token.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                token = token.Substring(2);
+
+            if (uint.TryParse(token, System.Globalization.NumberStyles.HexNumber, null, out uint serialHex))
+            {
+                GameActions.DoubleClickQueued(serialHex);
+                return;
+            }
+
+            if (uint.TryParse(potionAction.PotionName, out uint serialDec))
+            {
+                GameActions.DoubleClickQueued(serialDec);
             }
         }
 

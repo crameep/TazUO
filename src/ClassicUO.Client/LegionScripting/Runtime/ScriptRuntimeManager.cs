@@ -8,15 +8,29 @@ internal sealed class ScriptRuntimeManager
 {
     private readonly Dictionary<int, ScriptContext> _contexts = new();
     private readonly ScriptActionQueue _actionQueue = new();
+    private Func<long, ScriptWorldSnapshot> _snapshotProvider;
 
     private int _nextScriptId = 1;
     private long _currentTick;
     private long _eventSequence;
     private long _actionSequence;
 
+    public ScriptRuntimeManager(Func<long, ScriptWorldSnapshot> snapshotProvider = null)
+    {
+        _snapshotProvider = snapshotProvider;
+        LatestSnapshot = ScriptWorldSnapshot.Empty;
+    }
+
     public long CurrentTick => _currentTick;
 
     public IReadOnlyCollection<ScriptContext> Contexts => _contexts.Values;
+
+    public ScriptWorldSnapshot LatestSnapshot { get; private set; }
+
+    public void SetSnapshotProvider(Func<long, ScriptWorldSnapshot> snapshotProvider)
+    {
+        _snapshotProvider = snapshotProvider;
+    }
 
     internal long NextActionSequence() => ++_actionSequence;
 
@@ -71,6 +85,9 @@ internal sealed class ScriptRuntimeManager
 
         _currentTick++;
 
+        if (_snapshotProvider != null)
+            LatestSnapshot = _snapshotProvider(_currentTick) ?? ScriptWorldSnapshot.Empty;
+
         var metrics = new ScriptTickMetrics { Tick = _currentTick };
 
         List<ScriptContext> runnable = _contexts.Values.Where(c => c.IsRunnable(_currentTick)).ToList();
@@ -94,6 +111,7 @@ internal sealed class ScriptRuntimeManager
             metrics.ExecutedSteps++;
         }
 
+        metrics.PendingActions = _actionQueue.Count;
         return metrics;
     }
 
@@ -127,4 +145,3 @@ internal sealed class ScriptRuntimeManager
         return best;
     }
 }
-
