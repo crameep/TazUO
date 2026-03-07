@@ -2,6 +2,23 @@
 
 This runbook defines the minimum commands to verify iOS-readiness for the LegionScript runtime work.
 
+## 0) One-Command macOS Trial
+
+Preferred command on a macOS signer host:
+
+```bash
+bash tools/ios/ios-macos-trial.sh
+```
+
+Device signing inputs come from `tools/ios/ios-signing.env`.
+Create it from `tools/ios/ios-signing.env.template`.
+
+To run simulator-only (no signing attempt):
+
+```bash
+bash tools/ios/ios-macos-trial.sh --no-device-signing
+```
+
 ## 1) Host Preflight
 
 Run:
@@ -63,4 +80,3 @@ Expected: compile/publish succeeds. Device install/deploy remains blocked until 
   - macOS/Xcode/signing prerequisites pass in preflight
 - `Blocked (device)`:
   - any required signing/macOS/Xcode prerequisite is missing, even if cross-target publish succeeds
-

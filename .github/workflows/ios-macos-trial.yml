@@ -1,0 +1,55 @@
+name: iOS macOS Trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      attempt_device_signing:
+        description: "Attempt device-signing dry-run"
+        required: true
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+env:
+  DOTNET_NOLOGO: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  macos-trial:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Prepare signing env
+        run: |
+          cp tools/ios/ios-signing.env.template tools/ios/ios-signing.env
+          {
+            echo "APPLE_TEAM_ID=${APPLE_TEAM_ID}"
+            echo "IOS_CODESIGN_IDENTITY=${IOS_CODESIGN_IDENTITY}"
+            echo "IOS_APP_BUNDLE_PATH=${IOS_APP_BUNDLE_PATH}"
+          } >> tools/ios/ios-signing.env
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_CODESIGN_IDENTITY: ${{ secrets.IOS_CODESIGN_IDENTITY }}
+          IOS_APP_BUNDLE_PATH: ${{ secrets.IOS_APP_BUNDLE_PATH }}
+
+      - name: Run simulator-only trial
+        if: ${{ github.event.inputs.attempt_device_signing == 'false' }}
+        run: bash tools/ios/ios-macos-trial.sh --no-device-signing
+
+      - name: Run full trial (with signing attempt)
+        if: ${{ github.event.inputs.attempt_device_signing == 'true' }}
+        run: bash tools/ios/ios-macos-trial.sh
+
