@@ -2,12 +2,14 @@ name: iOS Host Lane
 
 on:
   pull_request:
-    branches: [ dev ]
+    branches: [ main, dev ]
     paths:
       - "src/ClassicUO.Client/LegionScripting/**"
       - "src/ClassicUO.Client/GameController.cs"
       - "src/ClassicUO.Client/Game/Scenes/GameScene.cs"
       - "tests/ClassicUO.UnitTests/Game/LegionScript/**"
+      - "docs/ios/**"
+      - "tools/ios/**"
       - ".github/workflows/ios-host-lane.yml"
   workflow_dispatch:
 
@@ -33,8 +35,20 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: iOS preflight matrix
+        run: bash tools/ios/ios-preflight.sh
+
       - name: Build host-boundary runtime
         run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release
 
+      - name: Build iOS simulator target
+        run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -r iossimulator-arm64
+
+      - name: Build iOS device target
+        run: dotnet build src/ClassicUO.Client/ClassicUO.Client.csproj -c Release -r ios-arm64
+
       - name: Run LegionScript runtime suites
         run: dotnet test tests/ClassicUO.UnitTests/ClassicUO.UnitTests.csproj --filter "FullyQualifiedName~LegionScript"
+
+      - name: Run ScriptRuntime suites
+        run: dotnet test tests/ClassicUO.UnitTests/ClassicUO.UnitTests.csproj --filter "FullyQualifiedName~ScriptRuntime"
