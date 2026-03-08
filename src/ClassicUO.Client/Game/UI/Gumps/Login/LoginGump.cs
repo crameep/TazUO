@@ -9,6 +9,7 @@ using ClassicUO.Assets;
 using ClassicUO.Renderer;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
+using ClassicUO.Utility.Platforms;
 using Microsoft.Xna.Framework;
 using SDL3;
 using System.Collections.Generic;
@@ -520,6 +521,18 @@ namespace ClassicUO.Game.UI.Gumps.Login
                 Client.Game.Audio.UpdateCurrentMusicVolume(true);
             };
 
+            if (PlatformHelper.IsMobile)
+            {
+                Add
+                (
+                    new NiceButton(loginmusic_checkbox.X, loginmusic_checkbox.Y + 28, 170, 22, ButtonAction.Activate, "Server + Files")
+                    {
+                        IsSelectable = false,
+                        ButtonParameter = (int) Buttons.MobileSettings
+                    }
+                );
+            }
+
 
             if (!string.IsNullOrEmpty(_textboxAccount.Text))
             {
@@ -631,6 +644,11 @@ namespace ClassicUO.Game.UI.Gumps.Login
 
                 case Buttons.Credits:
                     UIManager.Add(new CreditsGump(World));
+
+                    break;
+
+                case Buttons.MobileSettings:
+                    UIManager.Add(new MobileConnectionSettingsGump(World));
 
                     break;
             }
@@ -788,7 +806,8 @@ namespace ClassicUO.Game.UI.Gumps.Login
         {
             NextArrow,
             Quit,
-            Credits
+            Credits,
+            MobileSettings
         }
     }
 }

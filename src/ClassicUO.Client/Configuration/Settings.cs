@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using ClassicUO.Configuration.Json;
 using ClassicUO.Game;
+using System;
 using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Configuration
@@ -36,6 +37,16 @@ namespace ClassicUO.Configuration
         [JsonPropertyName("ip")] public string IP { get; set; } = "";
 
         [JsonPropertyName("port"), JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public ushort Port { get; set; } = 2593;
+
+        [JsonPropertyName("server_name")] public string ServerName { get; set; } = "";
+
+        [JsonPropertyName("update_url")] public string UpdateUrl { get; set; } = "";
+
+        [JsonPropertyName("update_host")] public string UpdateHost { get; set; } = "";
+
+        [JsonPropertyName("update_port"), JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public ushort UpdatePort { get; set; }
+
+        [JsonPropertyName("update_public_key")] public string UpdatePublicKey { get; set; } = "";
 
         /**
          * Ignores the login servers relay packet, connects back with the settings IP
@@ -106,6 +117,8 @@ namespace ClassicUO.Configuration
 
         public void Save()
         {
+            NormalizeAndValidate();
+
             // Make a copy of the settings object that we will use in the saving process
             string json = JsonSerializer.Serialize(this, SettingsJsonContext.RealDefault.Settings);
             Settings settingsToSave = JsonSerializer.Deserialize(json, SettingsJsonContext.RealDefault.Settings);
@@ -123,6 +136,44 @@ namespace ClassicUO.Configuration
             // NOTE: We can do any other settings clean-ups here before we save them
 
             ConfigurationResolver.Save(settingsToSave, GetSettingsFilepath(), SettingsJsonContext.RealDefault.Settings);
+        }
+
+        public void NormalizeAndValidate()
+        {
+            Username = Username?.Trim() ?? string.Empty;
+            IP = IP?.Trim() ?? string.Empty;
+            ServerName = ServerName?.Trim() ?? string.Empty;
+            UpdateUrl = UpdateUrl?.Trim() ?? string.Empty;
+            UpdateHost = UpdateHost?.Trim() ?? string.Empty;
+            UpdatePublicKey = UpdatePublicKey?.Trim() ?? string.Empty;
+
+            if (Port == 0)
+            {
+                Port = 2593;
+            }
+
+            if (!string.IsNullOrEmpty(UpdateUrl) && Uri.TryCreate(UpdateUrl, UriKind.Absolute, out Uri updateUri))
+            {
+                if (string.IsNullOrEmpty(UpdateHost))
+                {
+                    UpdateHost = updateUri.Host;
+                }
+
+                if (UpdatePort == 0)
+                {
+                    UpdatePort = (ushort) updateUri.Port;
+                }
+            }
+
+            if (UpdatePort == 0)
+            {
+                UpdatePort = 443;
+            }
+
+            if (!string.IsNullOrEmpty(UpdateHost) && string.IsNullOrEmpty(UpdateUrl))
+            {
+                UpdateUrl = $"https://{UpdateHost}:{UpdatePort}/";
+            }
         }
     }
 }

@@ -14,6 +14,9 @@ namespace ClassicUO.Utility.Platforms
         public static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
         public static readonly bool IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
         public static readonly bool IsOSX = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+        public static readonly bool IsIOS = OperatingSystem.IsIOS();
+        public static readonly bool IsAndroid = OperatingSystem.IsAndroid();
+        public static readonly bool IsMobile = IsIOS || IsAndroid;
 
         public static void LaunchBrowser(string url, bool skipValidation = false, bool retry = false)
         {

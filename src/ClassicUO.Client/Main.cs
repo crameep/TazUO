@@ -135,6 +135,8 @@ namespace ClassicUO
                 Settings.GlobalSettings.Save();
             }
 
+            Settings.GlobalSettings.NormalizeAndValidate();
+
             if (string.IsNullOrWhiteSpace(Settings.GlobalSettings.Language))
             {
                 Log.Trace("language is not set. Trying to get the OS language.");
@@ -319,6 +321,31 @@ namespace ClassicUO
 
                     case "port":
                         Settings.GlobalSettings.Port = ushort.Parse(value);
+
+                        break;
+
+                    case "server_name":
+                        Settings.GlobalSettings.ServerName = value;
+
+                        break;
+
+                    case "update_url":
+                        Settings.GlobalSettings.UpdateUrl = value;
+
+                        break;
+
+                    case "update_host":
+                        Settings.GlobalSettings.UpdateHost = value;
+
+                        break;
+
+                    case "update_port":
+                        Settings.GlobalSettings.UpdatePort = ushort.Parse(value);
+
+                        break;
+
+                    case "update_public_key":
+                        Settings.GlobalSettings.UpdatePublicKey = value;
 
                         break;
 
@@ -547,6 +574,8 @@ namespace ClassicUO
                         break;
                 }
             }
+
+            Settings.GlobalSettings.NormalizeAndValidate();
         }
 
         private static void CopyRequiredLibs()

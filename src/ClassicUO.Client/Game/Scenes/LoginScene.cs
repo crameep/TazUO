@@ -338,6 +338,14 @@ namespace ClassicUO.Game.Scenes
 
         public void Connect(string account, string password)
         {
+            MobileContentBootstrapManager.BootstrapResult bootstrap = MobileContentBootstrapManager.EnsureContentReady();
+
+            if (!bootstrap.Success)
+            {
+                Client.ShowErrorMessage($"Unable to prepare mobile content: {bootstrap.ErrorMessage}");
+                return;
+            }
+
             Account = account;
             Password = password;
             LoginHandshake.Instance.Connect(account, password, Settings.GlobalSettings.IP, Settings.GlobalSettings.Port);
