@@ -15,13 +15,43 @@ description:  Internal class that extends NineSliceGump to provide callback supp
 *No enums found.*
 
 ## Methods
+### SetLegionTexture
+`(texture, borderSize)`
+ Set the modern gump texture and border size
+
+
+**Parameters:**
+
+| Name | Type | Optional | Description |
+| --- | --- | --- | --- |
+| `texture` | `string` | ❌ No |  |
+| `borderSize` | `int` | ❌ No |  |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
 ### SetResizeCallback
 `(callback)`
+ Registers a callback to be called when the gump is resized.
+ <remarks>
+ Note that only one callback may be registered at a time. Subsequent calls will replace the previous callback.
+ </remarks> 
+
 **Parameters:**
 
 | Name | Type | Optional | Description |
 | --- | --- | --- | --- |
 | `callback` | `object` | ❌ No |  |
+
+**Return Type:** `void` *(Does not return anything)*
+
+---
+
+### Dispose
+
+ Disposes the gump and releases its internal resources
+
 
 **Return Type:** `void` *(Does not return anything)*
 

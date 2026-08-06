@@ -4,6 +4,7 @@ using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Scenes;
+using ClassicUO.Game.UI.Controls;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -20,6 +21,15 @@ namespace ClassicUO.Game.GameObjects
         private int _characterFrameStartY;
         private int _startCharacterWaistY;
         private int _startCharacterKneesY;
+        private TextBox _nameText;
+
+        // Extra vertical space to reserve above the overhead name/title so speech and
+        // damage text drawn by other systems (Mobile.UpdateTextCoordsV, OverheadDamage)
+        // doesn't overlap it.
+        internal int NameOverheadTextExtraHeight =>
+            ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.ShowMobileNameOverhead && _nameText != null
+                ? _nameText.Height + 5
+                : 0;
 
         public override bool Draw(UltimaBatcher2D batcher, int posX, int posY, float depth)
         {
@@ -34,7 +44,7 @@ namespace ClassicUO.Game.GameObjects
                 return false;
             }
 
-            Profile profile = _profile;
+            Profile profile = _profile ?? Profile.DefaultPreviewProfile;
             Managers.AuraManager auraManager = World.AuraManager;
             int clientViewRange = World.ClientViewRange;
 
@@ -93,7 +103,7 @@ namespace ClassicUO.Game.GameObjects
                 overridenHue = Constants.OUT_RANGE_COLOR;
                 hueVec.Y = 1;
             }
-            else if (World.Player.IsDead && profile.EnableBlackWhiteEffect)
+            else if (World.Player != null && World.Player.IsDead && profile.EnableBlackWhiteEffect)
             {
                 overridenHue = Constants.DEAD_RANGE_COLOR;
                 hueVec.Y = 1;
@@ -169,9 +179,11 @@ namespace ClassicUO.Game.GameObjects
                     && mountGraphic < Client.Game.UO.Animations.MaxAnimationCount
                 )
                 {
+                    bool drawMountAsSingleLayer = false;
                     if (Mounts.TryGet(mount.Graphic, out MountInfo mountInfo))
                     {
                         mountOffsetY = mountInfo.OffsetY;
+                        drawMountAsSingleLayer = mountInfo.DrawAsSingleLayer;
                     }
 
                     // Calculate animation group once
@@ -246,7 +258,8 @@ namespace ClassicUO.Game.GameObjects
                         depth,
                         mountOffsetY,
                         overridenHue,
-                        charSitting
+                        charSitting,
+                        drawAsSingleLayer: drawMountAsSingleLayer
                     );
 
                     drawY += mountOffsetY;
@@ -340,16 +353,11 @@ namespace ClassicUO.Game.GameObjects
                 mountOffsetY,
                 overridenHue,
                 charSitting,
-                OutlineColor
+                outlineColor: OutlineColor
             );
 
-            Profiler.EnterContext("SECTION 5");
             if (!IsEmpty)
             {
-                // Cache profile properties for hot loop
-                bool hiddenLayersEnabled = profile.HiddenLayersEnabled;
-                bool hideLayersForSelf = profile.HideLayersForSelf;
-
                 for (int i = 0; i < Constants.USED_LAYER_COUNT; i++)
                 {
                     Layer layer = LayerOrder.UsedLayers[layerDir, i];
@@ -368,7 +376,9 @@ namespace ClassicUO.Game.GameObjects
 
                     if (isHuman)
                     {
-                        if (hiddenLayersEnabled && profile.HiddenLayers.Contains((int)layer) && ((hideLayersForSelf && IsPlayer) || !hideLayersForSelf))
+                        bool hideLayersForSelf = profile.HideLayersForSelf;
+
+                        if (profile.HiddenLayersEnabled && profile.HiddenLayers.Contains((int)layer) && ((hideLayersForSelf && IsPlayer) || !hideLayersForSelf))
                         {
                             continue;
                         }
@@ -427,8 +437,45 @@ namespace ClassicUO.Game.GameObjects
                                 mountOffsetY,
                                 overridenHue,
                                 charSitting,
-                                OutlineColor
+                                outlineColor: OutlineColor
                             );
+
+                            if (layer == Layer.Robe && Settings.GlobalSettings.CustomServer == Settings.CustomServers.Eventine)
+                            {
+                                // Search for item with graphic 0xA413
+                                Item aboveRobe = GetItemByGraphic(0xA413);
+
+                                if (aboveRobe != null)
+                                {
+                                    ushort specialGraphic = aboveRobe.ItemData.AnimID != 0 ? aboveRobe.ItemData.AnimID : aboveRobe.Graphic;
+                                    if (isGargoyle)
+                                        FixGargoyleEquipments(ref specialGraphic);
+                                    byte specialGroup = isGargoyle ? GetGroupForAnimation(this, specialGraphic, true) : animGroup;
+                                    DrawInternal(
+                                        batcher,
+                                        this,
+                                        aboveRobe,
+                                        drawX,
+                                        drawY,
+                                        hueVec,
+                                        IsFlipped,
+                                        animIndex,
+                                        false,
+                                        specialGraphic,
+                                        specialGroup,
+                                        dir,
+                                        isHuman,
+                                        true,
+                                        false,
+                                        isGargoyle,
+                                        depth,
+                                        mountOffsetY,
+                                        overridenHue,
+                                        charSitting,
+                                        outlineColor: OutlineColor
+                                    );
+                                }
+                            }
                         }
                         else
                         {
@@ -449,13 +496,96 @@ namespace ClassicUO.Game.GameObjects
                     }
                 }
             }
+            
+            // drawY + FrameInfo.Y is the top of the drawn sprite.
+            int spriteTopY = drawY + FrameInfo.Y;
+            
+            if (profile.ShowMobileHealthbar)
+            {
+                spriteTopY -= 5;
+                DrawHealthbar(batcher, drawX, spriteTopY, depth);
+            }
+
+            if (profile.ShowMobileNameOverhead)
+            {
+                if (_nameText == null)
+                {
+                    string name = Name;
+
+                    if (World.OPL.TryGetNameAndData(this, out string oplname, out string opldata))
+                        if (oplname.NotNullNotEmpty())
+                            name = oplname;
+
+                    if(name.NotNullNotEmpty())
+                        _nameText = TextBox.GetOne(
+                            name, 
+                            profile.OverheadChatFont, 
+                            profile.OverheadChatFontSize, 
+                            Notoriety.GetHue(NotorietyFlag), 
+                            TextBox.RTLOptions.DefaultCenterStroked(profile.OverheadChatWidth));
+                }
+                else
+                {
+                    _nameText.Draw(batcher, drawX - (_nameText.Width >> 1), spriteTopY - _nameText.Height, depth);
+                }
+            }
 
             FrameInfo.X = Math.Abs(FrameInfo.X);
             FrameInfo.Y = Math.Abs(FrameInfo.Y);
             FrameInfo.Width = FrameInfo.X + FrameInfo.Width;
             FrameInfo.Height = FrameInfo.Y + FrameInfo.Height;
-            Profiler.ExitContext("SECTION 5");
             return true;
+        }
+
+        private const int HEALTHBAR_WIDTH = 60;
+        private const int HEALTHBAR_HEIGHT = 5;
+
+        private void DrawHealthbar(UltimaBatcher2D batcher, int x, int y, float depth)
+        {
+            // Centered horizontally on the sprite, placed above the sprite.
+            int barX = x - (HEALTHBAR_WIDTH / 2);
+            int barY = y;
+
+            // Match the character's own draw depth so the bar sorts together with the mobile.
+            float barDepth = depth + 1f;
+
+            // Background
+            batcher.Draw(
+                SolidColorTextureCache.GetTexture(Color.Black),
+                new Rectangle(barX, barY, HEALTHBAR_WIDTH, HEALTHBAR_HEIGHT),
+                ShaderHueTranslator.GetHueVector(0, false, 1f),
+                barDepth
+            );
+
+            float hitPercentage = HitsMax > 0 ? (float)Hits / HitsMax : 1f;
+            hitPercentage = Math.Clamp(hitPercentage, 0f, 1f);
+
+            int fillWidth = (int)((HEALTHBAR_WIDTH - 2) * hitPercentage);
+
+            if (fillWidth > 0)
+            {
+                ushort barHue;
+
+                if (IsPoisoned)
+                {
+                    barHue = 63;
+                }
+                else if (IsYellowHits)
+                {
+                    barHue = 53;
+                }
+                else
+                {
+                    barHue = Notoriety.GetHue(NotorietyFlag);
+                }
+
+                batcher.Draw(
+                    SolidColorTextureCache.GetTexture(Color.White),
+                    new Rectangle(barX + 1, barY + 1, fillWidth, HEALTHBAR_HEIGHT - 2),
+                    ShaderHueTranslator.GetHueVector(barHue, false, 1f),
+                    barDepth + 0.01f
+                );
+            }
         }
 
         private ushort GetAnimationInfo(Item item, bool isGargoyle)
@@ -631,6 +761,7 @@ namespace ClassicUO.Game.GameObjects
             sbyte mountOffset,
             ushort overridedHue,
             bool charIsSitting,
+            bool drawAsSingleLayer = false,
             Color? outlineColor = null
         )
         {
@@ -639,7 +770,6 @@ namespace ClassicUO.Game.GameObjects
                 return;
             }
 
-            Profiler.EnterContext("Get Anim Frames");
             Span<SpriteInfo> frames = Client.Game.UO.Animations.GetAnimationFrames(
                 id,
                 animGroup,
@@ -649,7 +779,6 @@ namespace ClassicUO.Game.GameObjects
                 isEquip,
                 false
             );
-            Profiler.ExitContext("Get Anim Frames");
 
             if (hueFromFile == 0)
             {
@@ -658,6 +787,7 @@ namespace ClassicUO.Game.GameObjects
 
             if (frames.Length == 0)
             {
+                if (entity != null && entity.ItemData.IsLight) GameScene.Instance?.AddLight(owner, entity, x, y);
                 return;
             }
 
@@ -758,17 +888,7 @@ namespace ClassicUO.Game.GameObjects
                     }
                     else
                     {
-                        int diffY = (spriteInfo.UV.Height + spriteInfo.Center.Y) - mountOffset;
-
-                        int value = Math.Max(1, diffY);
-                        int count = Math.Max((spriteInfo.UV.Height / value) + 1, 2);
-
-                        rect.Height = Math.Min(value, rect.Height);
-                        int remains = spriteInfo.UV.Height - rect.Height;
-
-                        const int tiles = 2;
-
-                        for (int i = 0; i < count; ++i)
+                        if (isMount && drawAsSingleLayer)
                         {
                             batcher.Draw(
                                 spriteInfo.Texture,
@@ -779,13 +899,43 @@ namespace ClassicUO.Game.GameObjects
                                 Vector2.Zero,
                                 owner.Scale,
                                 mirror ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
-                                depth + 1f + (i * tiles)
+                                depth + 1f
                             );
+                        }
+                        else
+                        {
+                            int diffY = (spriteInfo.UV.Height + spriteInfo.Center.Y) - mountOffset;
 
-                            pos.Y += rect.Height * owner.Scale;
-                            rect.Y += rect.Height;
-                            rect.Height = remains;
-                            remains -= rect.Height;
+                            int value = Math.Max(1, diffY);
+                            int count = Math.Max((spriteInfo.UV.Height / value) + 1, 2);
+
+                            rect.Height = Math.Min(value, rect.Height);
+                            int remains = spriteInfo.UV.Height - rect.Height;
+
+                            // Depth step between vertical slices of the character. Lower values
+                            // reduce how far the feet are pushed forward in the depth buffer, so
+                            // they clip through fewer walls the mobile is standing behind.
+                            int tiles = ProfileManager.CurrentProfile?.MobileDepthSliceStep ?? 2;
+
+                            for (int i = 0; i < count; ++i)
+                            {
+                                batcher.Draw(
+                                    spriteInfo.Texture,
+                                    pos,
+                                    rect,
+                                    hueVec,
+                                    0f,
+                                    Vector2.Zero,
+                                    owner.Scale,
+                                    mirror ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
+                                    depth + 1f + (i * tiles)
+                                );
+
+                                pos.Y += rect.Height * owner.Scale;
+                                rect.Y += rect.Height;
+                                rect.Height = remains;
+                                remains -= rect.Height;
+                            }
                         }
 
                         if (outlineColor.HasValue)
@@ -1165,12 +1315,12 @@ namespace ClassicUO.Game.GameObjects
                     Item pants = mobile.FindItemByLayer(Layer.Pants);
                     Item robe;
 
-                    if (
-                        mobile.FindItemByLayer(Layer.Legs) != null
+                    //Eventine ignores pants layers
+                    if ((Settings.GlobalSettings.CustomServer != Settings.CustomServers.Eventine && mobile.FindItemByLayer(Layer.Legs) != null)
                         || pants != null
-                            && (
-                                pants.Graphic == 0x1411 /*|| pants.Graphic == 0x141A*/
-                            )
+                        && (
+                            pants.Graphic == 0x1411 /*|| pants.Graphic == 0x141A*/
+                        )
                     )
                     {
                         return true;
@@ -1195,8 +1345,8 @@ namespace ClassicUO.Game.GameObjects
                     robe = mobile.FindItemByLayer(Layer.Robe);
                     pants = mobile.FindItemByLayer(Layer.Pants);
 
-                    if (
-                        mobile.FindItemByLayer(Layer.Legs) != null
+                    //Eventine ignores pants layers
+                    if ((Settings.GlobalSettings.CustomServer != Settings.CustomServers.Eventine && mobile.FindItemByLayer(Layer.Legs) != null)
                         || robe != null && robe.Graphic == 0x0504
                     )
                     {

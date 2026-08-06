@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
@@ -126,41 +127,25 @@ namespace ClassicUO.Utility
             return inrect;
         }
 
-
-#if NETFRAMEWORK
-        public static void ExtractToDirectory(this ZipArchive archive, string destinationDirectoryName, bool overwrite)
+        /// <summary>
+        /// Try to read all file lines from a file path.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="lines"></param>
+        /// <returns>false, out null on any failure.</returns>
+        public static bool TryReadFileLines(this string filePath, out string[] lines)
         {
-            if (!overwrite)
+            try
             {
-                archive.ExtractToDirectory(destinationDirectoryName);
-
-                return;
+                lines = File.ReadAllText(filePath).Split("\n");
+                return true;
             }
-
-            DirectoryInfo di = Directory.CreateDirectory(destinationDirectoryName);
-            string destinationDirectoryFullPath = di.FullName;
-
-            foreach (ZipArchiveEntry file in archive.Entries)
+            catch
             {
-                string completeFileName = Path.GetFullPath(Path.Combine(destinationDirectoryFullPath, file.FullName));
-
-                if (!completeFileName.StartsWith(destinationDirectoryFullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new IOException("Trying to extract file outside of destination directory. See this link for more info: https://snyk.io/research/zip-slip-vulnerability");
-                }
-
-                // Assuming Empty for Directory
-                if (file.Name == "")
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(completeFileName));
-
-                    continue;
-                }
-
-                file.ExtractToFile(completeFileName, true);
+                lines = null;
+                return false;
             }
         }
-#endif
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string ToHex(this uint serial) => $"0x{serial:X8}";
@@ -175,10 +160,13 @@ namespace ClassicUO.Utility
         public static string ToHtmlHex(this Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Color FromHtmlHex(this string hex)
+        public static Color FromHtmlHex(this string hex) => hex.FromHtmlHex(Color.White);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Color FromHtmlHex(this string hex, Color fallback)
         {
             if (hex.StartsWith("#")) hex = hex.Substring(1);
-            if (hex.Length != 6) return Color.White;
+            if (hex.Length != 6) return fallback;
 
             int value = Convert.ToInt32(hex, 16);
             return new Color((value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF);
@@ -238,6 +226,7 @@ namespace ClassicUO.Utility
         }
 
         public static bool NotNullNotEmpty(this string text) => !string.IsNullOrEmpty(text);
+        public static bool IsNullOrEmpty(this string text) => string.IsNullOrEmpty(text);
 
         public static string Truncate(this string text, int maxLength, bool addEllipsis = true) => StringHelper.Truncate(text, maxLength, addEllipsis);
 
@@ -248,5 +237,9 @@ namespace ClassicUO.Utility
             /// </summary>
             public int NotZero => value == 0 ? 1 : value;
         }
+
+        public static int ToInt<T>(this T enumValue) where T : struct, Enum => Unsafe.As<T, int>(ref enumValue);
+
+        public static bool ContainsIgnoreCase(this string source, string searchString) => source != null && searchString != null && source.Contains(searchString, StringComparison.OrdinalIgnoreCase);
     }
 }

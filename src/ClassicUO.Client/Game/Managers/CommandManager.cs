@@ -12,8 +12,9 @@ using ClassicUO.Game.Data;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Configuration;
 using ClassicUO.Game.UI;
-using ClassicUO.Game.UI.ImGuiControls;
+using ClassicUO.Game.UI.MyraWindows.Options;
 using ClassicUO.LegionScripting;
+using Myra;
 
 namespace ClassicUO.Game.Managers
 {
@@ -85,7 +86,7 @@ namespace ClassicUO.Game.Managers
                 s =>
                 {
                     CUOEnviroment.Debug = !CUOEnviroment.Debug;
-
+                    MyraEnvironment.DrawWidgetsFrames = !MyraEnvironment.DrawWidgetsFrames;
                 }
             );
 
@@ -248,15 +249,17 @@ namespace ClassicUO.Game.Managers
                 Task.Run(() => SpellDefinition.SaveAllSpellsToJson(_world));
             });
 
+            Register("gumppositions", (s) => Game.UI.MyraWindows.GumpPositionManagerWindow.Show());
+
             Register("setinscreen", (s) =>
             {
-                for (LinkedListNode<Gump> last = UIManager.Gumps.Last; last != null; last = last.Previous)
+                for (LinkedListNode<IGui> last = UIManager.Gumps.Last; last != null; last = last.Previous)
                 {
-                    Gump c = last.Value;
+                    IGui c = last.Value;
 
-                    if (!c.IsDisposed)
+                    if (!c.IsDisposed && c is Gump g)
                     {
-                        c.SetInScreen();
+                        g.SetInScreen();
                     }
                 }
             });
@@ -265,8 +268,6 @@ namespace ClassicUO.Game.Managers
             {
                 UIManager.Add(new UI.Gumps.UpdateTimerViewer(_world));
             });
-
-            Register("artbrowser", (s) => { UIManager.Add(new ArtBrowserGump(_world)); });
 
             Register("animbrowser", (s) => { UIManager.Add(new AnimBrowser(_world)); });
 
@@ -278,19 +279,45 @@ namespace ClassicUO.Game.Managers
                 GameActions.Print($"FPS Limit updated to: {Settings.GlobalSettings.FPS}", Constants.HUE_SUCCESS);
             });
 
-            Register("dressagent", (s) => DressAgentManager.Instance?.DressAgentCommand(s));
-            Register("organize", (s) => OrganizerAgent.Instance?.OrganizerCommand(s));
-            Register("organizer", (s) => OrganizerAgent.Instance?.OrganizerCommand(s));
-            Register("organizerlist", (s) => OrganizerAgent.Instance?.ListOrganizers());
+            Register("dressagent", s => DressAgentManager.Instance?.DressAgentCommand(s));
+            Register("organize", s => OrganizerAgent.Instance?.OrganizerCommand(s));
+            Register("organizer", s => OrganizerAgent.Instance?.OrganizerCommand(s));
+            Register("organizerlist", s => OrganizerAgent.Instance?.ListOrganizers());
+            Register("old-options-window", s => GameActions.ShowLegacyOptionsGump(_world));
+            Register("myra-draw-widget-frames", args => MyraEnvironment.DrawWidgetsFrames = ParseBooleanCommandArgs(args));
+            Register("myra-draw-hovered-widget-frames", args => MyraEnvironment.DrawMouseHoveredWidgetFrame = ParseBooleanCommandArgs(args));
+            Register("myra-draw-hovered-widget-info", args => MyraEnvironment.DrawMouseHoveredWidgetInfo = ParseBooleanCommandArgs(args));
 
-#if DEBUG
+            // Reload the language strings, loading any changes that have been made without having to restart the game
+            Register("language-regenerate", _ => TazLang.Load(Settings.GlobalSettings.UILanguage));
+        }
 
-            Register("test", (s) =>
-            {
-                ImGuiManager.AddWindow(new TestWindow());
-            });
+        /// <summary>
+        ///     Parses a command and returns a boolean indicating whether the first argument is 'truthy'
+        ///     using lax semantics.
+        ///     <br />
+        ///     A truthy value is defined as one of the following:
+        ///     <list type="bullet">
+        ///         <item>true</item>
+        ///         <item>on</item>
+        ///         <item>yes</item>
+        ///         <item>1</item>
+        ///     </list>
+        /// </summary>
+        /// <param name="args">The command's arguments</param>
+        /// <returns><c>true</c> if the first argument is 'truthy', <c>false</c> otherwise</returns>
+        /// <remarks>
+        ///     // Like in process envs, the first argument is the command itself
+        /// </remarks>
+        private static bool ParseBooleanCommandArgs(string[] args) => args?.Length > 1 && ParseTruthyValue(args[1]);
 
-#endif
+        private static bool ParseTruthyValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            string loweredArg = value.ToLowerInvariant();
+            return new[] { "on", "true", "yes", "1" }.Contains(loweredArg);
         }
 
 
@@ -330,20 +357,20 @@ namespace ClassicUO.Game.Managers
             }
             else
             {
-                GameActions.Print(_world, string.Format(Language.Instance.ErrorsLanguage.CommandNotFound, name));
+                GameActions.Print(_world, TazLang.Get("errors_commandnotfound", new[] { name }));
                 Log.Warn($"Command: '{name}' not exists");
             }
         }
 
         public void OnHueTarget(Entity entity)
         {
+            Mouse.LastLeftButtonClickTime = 0;
+
             if (entity != null)
             {
                 _world.TargetManager.Target(entity);
+                GameActions.Print(_world, string.Format(ResGeneral.ItemID0Hue1, entity.Graphic, entity.Hue));
             }
-
-            Mouse.LastLeftButtonClickTime = 0;
-            GameActions.Print(_world, string.Format(ResGeneral.ItemID0Hue1, entity.Graphic, entity.Hue));
         }
     }
 }

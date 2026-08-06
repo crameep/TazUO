@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.LegionScripting;
@@ -53,7 +54,7 @@ internal static class GumpHelpers
         string[] lines
     )
     {
-        ScriptRecorder.Instance.RecordWaitForGump(gumpID.ToString());
+        ScriptRecorder.Instance.RecordWaitForGump(gumpID);
         ScriptingInfoGump.AddOrUpdateInfo("Last Gump Opened", $"0x{gumpID:X}");
 
         if (string.IsNullOrEmpty(layout))
@@ -270,7 +271,7 @@ internal static class GumpHelpers
                     if (string.IsNullOrEmpty(s))
                         s = "Unknown virtue";
 
-                    pic.SetTooltip(lvl + s, 100);
+                    pic.SetTooltip(lvl + s);
                 }
                 else
                     pic = new GumpPic(gparams);
@@ -475,7 +476,7 @@ internal static class GumpHelpers
                 else
                     text = Client.Game.UO.FileManager.Clilocs.GetString(int.Parse(gparams[1]));
 
-                Control last =
+                IGui last =
                     gump.Children.Count != 0 ? gump.Children[gump.Children.Count - 1] : null;
 
                 if (last != null)
@@ -566,11 +567,25 @@ internal static class GumpHelpers
 
         gump.PacketGumpText = gumpTextBuilder.ToString();
 
+        // Apply the single server gump scale option to every control on this server created gump.
+        double serverGumpScale = ProfileManager.CurrentProfile?.ServerGumpScale ?? 1.0;
+
+        if (serverGumpScale != 1.0)
+        {
+            for (int i = 0; i < gump.Children.Count; i++)
+            {
+                gump.Children[i].ApplyScale(serverGumpScale);
+            }
+        }
+
         if (mustBeAdded)
             UIManager.Add(gump);
 
         gump.Update();
         gump.SetInScreen();
+
+        // Persist this server gump's position immediately if the user opted to save all gumps.
+        UIManager.AutoSaveGumpPositionIfEnabled(gump);
 
         if (CUOEnviroment.Debug)
             GameActions.Print(world, $"GumpID: {gumpID}");
@@ -649,11 +664,22 @@ internal static class GumpHelpers
                             gump.AddUserMarker("SOS", (int)location.X, (int)location.Y, world.Map.Index);
                         }));
 
+                        menu.ContextMenu.Add(new ContextMenuItemEntry("Create arrow pointing to location", () =>
+                        {
+                            UIManager.Add(new QuestArrowGump(world, 0, (int)location.X, (int)location.Y) { CanCloseWithRightClick = true });
+                        }));
+
                         menu.ContextMenu.Add(new ContextMenuItemEntry("Close", () =>
                         {
                             gump.Dispose();
                         }));
                         gump.Add(menu);
+
+                        // The SOS menu is added after the scale pass above, so scale it here too.
+                        // Its X/Y are already derived from the scaled gump size, so don't scale the
+                        // menu's own position - only its size and the layout of its child controls.
+                        if (serverGumpScale != 1.0)
+                            ScaleControlTree(menu, serverGumpScale, scaleRootPosition: false);
                     }
 
         if (world.Player != null)
@@ -670,13 +696,28 @@ internal static class GumpHelpers
         return gump;
     }
 
+    /// <summary>
+    /// Recursively applies the server gump scale to a control and all of its descendants.
+    /// Used for composite controls (whose visuals live in child controls) that are not handled
+    /// by the single top-level scale pass in <see cref="CreateGump"/>.
+    /// </summary>
+    private static void ScaleControlTree(IGui control, double scale, bool scaleRootPosition)
+    {
+        control.ApplyScale(scale, scalePosition: scaleRootPosition);
+
+        for (int i = 0; i < control.Children.Count; i++)
+        {
+            ScaleControlTree(control.Children[i], scale, scaleRootPosition: true);
+        }
+    }
+
     public static void ApplyTrans(Gump gump, int current_page, int x, int y, int width, int height)
     {
         int x2 = x + width;
         int y2 = y + height;
         for (int i = 0; i < gump.Children.Count; i++)
         {
-            Control child = gump.Children[i];
+            IGui child = gump.Children[i];
             bool canDraw = child.Page == 0 || current_page == child.Page;
 
             bool overlap =

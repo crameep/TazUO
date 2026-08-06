@@ -36,10 +36,10 @@ namespace ClassicUO.Game.UI.Gumps
         {
             var pic = new GumpPic(0, 0, Graphic, 0);
             Add(pic);
-            pic.SetTooltip(Client.Game.UO.FileManager.Clilocs.GetString(1112198 + (Graphic - 0x5DD0)), 200);
+            pic.SetTooltip(Client.Game.UO.FileManager.Clilocs.GetString(1112198 + (Graphic - 0x5DD0)));
         }
 
-        protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+        public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
         {
             if (Graphic == 0x5DDA && World.Player.Race == RaceType.GARGOYLE)
             {

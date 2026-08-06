@@ -147,7 +147,7 @@ namespace ClassicUO.Game.UI.Gumps
             _slider.MaxValue = _container.MaxValue;
         }
 
-        protected override void CloseWithRightClick()
+        public override void CloseWithRightClick()
         {
             base.CloseWithRightClick();
 
@@ -161,7 +161,7 @@ namespace ClassicUO.Game.UI.Gumps
             private readonly bool _isPartial;
             private readonly int _index;
             private readonly string _name;
-            
+
             internal int Index => _index;
             internal string Name => _name;
             internal ushort Graphic => _graphic;
@@ -296,7 +296,7 @@ namespace ClassicUO.Game.UI.Gumps
             Height = l.Height;
         }
 
-        public new void SetHeight(int h)
+        public void SetHeight(int h)
         {
             _resizePic.Height = h;
             Width = _resizePic.Width;

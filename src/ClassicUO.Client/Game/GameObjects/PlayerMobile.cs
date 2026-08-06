@@ -11,7 +11,7 @@ using ClassicUO.Network;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Assets;
-using ClassicUO.Game.Managers.SpellVisualRange;
+using ClassicUO.Game.UI;
 
 namespace ClassicUO.Game.GameObjects
 {
@@ -32,7 +32,7 @@ namespace ClassicUO.Game.GameObjects
             Walker = new WalkerManager(this);
             Pathfinder = new Pathfinder(world);
 
-            Skill.SkillValueChangedEvent += (s, e) =>
+            EventSink.SkillValueChangedEvent += (s, e) =>
             {
                 if (ProfileManager.CurrentProfile.DisplaySkillBarOnChange)
                 {
@@ -40,14 +40,10 @@ namespace ClassicUO.Game.GameObjects
                 }
             };
 
-
-            if(ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
-                UIManager.Add(new CastTimerProgressBar(world));
-
             IsPlayer = true;
         }
 
-        public bool IsVisible { get; set; } = true;
+        public new bool IsVisible { get; set; } = true;
 
         public Skill[] Skills { get; }
         public override bool InWarMode { get; set; }
@@ -421,24 +417,32 @@ namespace ClassicUO.Game.GameObjects
 
         private void TryOpenDoors()
         {
-            if (World.Player.IsDead || !ProfileManager.CurrentProfile.AutoOpenDoors)
-                return;
-
-            int x = X, y = Y, z = Z;
-            Pathfinder.GetNewXY((byte)Direction, ref x, ref y);
-
-            GameObject tile = World.Map?.GetTile(x, y, false);
-            if (tile == null) return;
-
-            while (tile.TPrevious != null)
-                tile = tile.TPrevious;
-
-            for (GameObject obj = tile; obj != null; obj = obj.TNext)
+            if (!World.Player.IsDead && ProfileManager.CurrentProfile.AutoOpenDoors
+                && (ProfileManager.CurrentProfile.AutoOpenDoorsIfHidden || !IsHidden))
             {
-                if (obj is Item item && item.ItemData.IsDoor && item.Z - 15 <= z && item.Z + 15 >= z)
-                {
-                    GameActions.OpenDoor();
+                int x = X, y = Y, z = Z;
+                Pathfinder.GetNewXY((byte)Direction, ref x, ref y);
+
+                GameObject tile = World.Map?.GetTile(x, y, false);
+                if (tile == null)
                     return;
+
+                while (tile.TPrevious != null)
+                    tile = tile.TPrevious;
+
+                // Send_OpenDoor toggles the door server-side, so skip already-open doors to
+                // avoid closing one the player (or a script) deliberately left open.
+                for (GameObject obj = tile; obj != null; obj = obj.TNext)
+                {
+                    if (obj is Item item
+                        && item.ItemData.IsDoor
+                        && item.Z - 15 <= z
+                        && item.Z + 15 >= z
+                        && !DoorData.IsOpenDoor(item.Graphic))
+                    {
+                        GameActions.OpenDoor();
+                        return;
+                    }
                 }
             }
         }
@@ -492,7 +496,7 @@ namespace ClassicUO.Game.GameObjects
                 if (UIManager.Gumps.Count > i)
                     continue;
 
-                Gump gump = UIManager.Gumps.ElementAt(i);
+                IGui gump = UIManager.Gumps.ElementAt(i);
                 //}
                 //foreach (Gump gump in UIManager.Gumps)
                 //{
@@ -638,14 +642,13 @@ namespace ClassicUO.Game.GameObjects
         public bool Walk(Direction direction, bool run)
         {
             if (!ProfileManager.CurrentProfile.AutoAvoidObstacules
-                || Pathfinder.AutoWalking
-                || (World.Instance.Player.Pathfinder.UseLongDistancePathfinding && !WalkableManager.Instance.IsMapGenerationComplete(World.Instance?.MapIndex ?? 0)))
+                || Pathfinder.AutoWalking)
             {
                 return WalkNotAvoid(direction, run);
             }
             else
             {
-                if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed)
+                if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed || SpeedMode == CharacterSpeedType.CantWalkOrRun)
                 {
                     return false;
                 }
@@ -852,7 +855,7 @@ namespace ClassicUO.Game.GameObjects
 
         public bool WalkNotAvoid(Direction direction, bool run)
         {
-            if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed)
+            if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed || SpeedMode == CharacterSpeedType.CantWalkOrRun)
             {
                 return false;
             }

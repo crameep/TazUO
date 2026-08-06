@@ -4,9 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Input;
+using ClassicUO.LegionScripting;
+using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using SDL3;
 
@@ -24,15 +28,15 @@ public class SpellBarManager
     private const string SAVE_FILE = "SpellBar.json";
     private static SpellBarSettings spellBarSettings;
 
-    public static SpellDefinition GetSpell(int row, int col)
+    public static CounterBarSlot GetSlot(int row, int col)
     {
         if (!enabled)
-            return SpellDefinition.EmptySpell;
+            return CounterBarSlot.Empty();
 
-        if(SpellBarRows.Count <= row || row < 0) return SpellDefinition.EmptySpell;
-        if(SpellBarRows[row].SpellSlot.Length <= col || col < 0) return SpellDefinition.EmptySpell;
+        if(SpellBarRows.Count <= row || row < 0) return CounterBarSlot.Empty();
+        if(SpellBarRows[row].Slots.Length <= col || col < 0) return CounterBarSlot.Empty();
 
-        return SpellBarRows[row].SpellSlot[col];
+        return SpellBarRows[row].Slots[col] ?? CounterBarSlot.Empty();
     }
 
     public static string GetControllerButtonsName(int slot)
@@ -51,7 +55,7 @@ public class SpellBarManager
 
     public static void ControllerInput(SDL.SDL_GamepadButton button)
     {
-        if (!enabled || !spellBarSettings.Enabled || ProfileManager.CurrentProfile.DisableHotkeys)
+        if (!enabled || !spellBarSettings.Enabled || HotKeys.GloballyDisabled)
             return;
 
         for (int i = 0; i < 10; i++) //Currently 10 spells per row supported
@@ -66,12 +70,14 @@ public class SpellBarManager
 
     public static void KeyPress(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
     {
-        if (!enabled || !spellBarSettings.Enabled || ProfileManager.CurrentProfile.DisableHotkeys)
+        if (!enabled || !spellBarSettings.Enabled || HotKeys.GloballyDisabled)
             return;
 
-        // Remove NUM lock from modifier checks
+        // Remove lock keys from modifier checks (these shouldn't affect hotkey matching)
         mod &= ~SDL.SDL_Keymod.SDL_KMOD_NUM;
         mod &= ~SDL.SDL_Keymod.SDL_KMOD_CAPS;
+        mod &= ~SDL.SDL_Keymod.SDL_KMOD_SCROLL;
+        mod &= ~SDL.SDL_Keymod.SDL_KMOD_MODE;
 
         // Normalize left/right modifiers to generic modifiers
         if ((mod & (SDL.SDL_Keymod.SDL_KMOD_LCTRL | SDL.SDL_Keymod.SDL_KMOD_RCTRL)) != 0)
@@ -121,12 +127,12 @@ public class SpellBarManager
         if (!enabled || !spellBarSettings.Enabled)
             return;
 
-        SpellDefinition spell = GetSpell(row, col);
+        CounterBarSlot slot = GetSlot(row, col);
 
-        if (spell == null || spell == SpellDefinition.EmptySpell)
+        if (slot == null || slot.IsEmpty)
             return;
 
-        GameActions.CastSpell(spell.ID);
+        slot.Activate(Client.Game.UO.World);
     }
 
     public static SDL.SDL_GamepadButton[][] GetControllerButtons()
@@ -148,7 +154,30 @@ public class SpellBarManager
         spellBarSettings.KeyMod[slot] = (int)mod;
         spellBarSettings.HotKeys[slot] = (int)key;
         if( controllerButtons == null) return;
-        spellBarSettings.ControllerButtons[slot] = controllerButtons.Select(x => x == null ? -1 : (int)x).ToArray();
+        spellBarSettings.ControllerButtons[slot] = controllerButtons.Select(x => (int)x).ToArray();
+    }
+
+    /// <summary>Builds a <see cref="HotkeyBinding"/> describing the current binding for a slot,
+    /// so the shared hotkey capture window can be seeded with it.</summary>
+    public static HotkeyBinding GetSlotBinding(int slot)
+    {
+        if (spellBarSettings == null || slot < 0 || slot >= spellBarSettings.HotKeys.Length)
+            return new HotkeyBinding();
+
+        var key = (SDL.SDL_Keycode)spellBarSettings.HotKeys[slot];
+        var mod = (SDL.SDL_Keymod)spellBarSettings.KeyMod[slot];
+
+        SDL.SDL_GamepadButton[] controllers = null;
+        if (spellBarSettings.ControllerButtons != null
+            && slot < spellBarSettings.ControllerButtons.Length
+            && spellBarSettings.ControllerButtons[slot] is { Length: > 0 } cb)
+            controllers = cb.Select(x => (SDL.SDL_GamepadButton)x).ToArray();
+
+        HotkeyBinding binding = key != SDL.SDL_Keycode.SDLK_UNKNOWN
+            ? new HotkeyBinding(key, mod)
+            : new HotkeyBinding();
+        binding.ControllerButtons = controllers;
+        return binding;
     }
 
     public static bool IsEnabled()
@@ -182,13 +211,13 @@ public class SpellBarManager
             if (!Directory.Exists(presetPath))
                 Directory.CreateDirectory(presetPath);
 
-            File.WriteAllText(path, JsonSerializer.Serialize(SpellBarRows[CurrentRow], SpellBarRowsContext.Default.SpellBarRow));
-            GameActions.Print(Client.Game.UO.World, $"Saved the current row as {name}");
+            FileSystemHelper.WriteAllTextSafe(path, JsonSerializer.Serialize(SpellBarRows[CurrentRow], SpellBarRowsContext.Default.SpellBarRow));
+            GameActions.Print(Client.Game.UO.World, TazLang.Get("spellbar_savedrow", new[] { name }));
         }
         catch (Exception e)
         {
             Log.Error(e.ToString());
-            GameActions.Print(Client.Game.UO.World, $"Error saving the current row as {name}.json..", 32);
+            GameActions.Print(Client.Game.UO.World, TazLang.Get("spellbar_savedrow_error", new[] { name }), 32);
         }
     }
 
@@ -209,12 +238,12 @@ public class SpellBarManager
             SpellBarRow row = JsonSerializer.Deserialize(File.ReadAllText(path), SpellBarRowsContext.Default.SpellBarRow);
             SpellBarRows.Add(row);
             Unload(); //Save
-            GameActions.Print(Client.Game.UO.World, $"Imported {name} preset");
+            GameActions.Print(Client.Game.UO.World, TazLang.Get("spellbar_importedpreset", new[] { name }));
         }
         catch(Exception e)
         {
             Log.Error(e.ToString());
-            GameActions.Print(Client.Game.UO.World, $"Error importing {name}.json..", 32);
+            GameActions.Print(Client.Game.UO.World, TazLang.Get("spellbar_importpreset_error", new[] { name }), 32);
         }
 
     }
@@ -278,8 +307,8 @@ public class SpellBarManager
     {
         try
         {
-            File.WriteAllText(fullSavePath, JsonSerializer.Serialize(SpellBarRows, SpellBarRowsContext.Default.ListSpellBarRow));
-            File.WriteAllText(Path.Combine(charPath, "SpellBarSettings.json"), JsonSerializer.Serialize(spellBarSettings, SpellBarSettingsContext.Default.SpellBarSettings));
+            FileSystemHelper.WriteAllTextSafe(fullSavePath, JsonSerializer.Serialize(SpellBarRows, SpellBarRowsContext.Default.ListSpellBarRow));
+            FileSystemHelper.WriteAllTextSafe(Path.Combine(charPath, "SpellBarSettings.json"), JsonSerializer.Serialize(spellBarSettings, SpellBarSettingsContext.Default.SpellBarSettings));
         }
         catch(Exception e)
         {
@@ -287,43 +316,72 @@ public class SpellBarManager
         }
     }
 
-    private static void SetDefaults() => SpellBarRows = [new SpellBarRow().SetSpell(0, SpellDefinition.FullIndexGetSpell(29)).SetSpell(1, SpellDefinition.FullIndexGetSpell(11)).SetSpell(2, SpellDefinition.FullIndexGetSpell(22))];
+    private static void SetDefaults() => SpellBarRows = [new SpellBarRow()
+        .SetSlot(0, CounterBarSlot.FromSpell(SpellDefinition.FullIndexGetSpell(29)))
+        .SetSlot(1, CounterBarSlot.FromSpell(SpellDefinition.FullIndexGetSpell(11)))
+        .SetSlot(2, CounterBarSlot.FromSpell(SpellDefinition.FullIndexGetSpell(22)))];
 }
 
 public class SpellBarRow()
 {
-    [JsonIgnore]
-    public SpellDefinition[] SpellSlot = new SpellDefinition[10];
+    private CounterBarSlot[] _slots = CreateEmptySlots();
 
-    public int[] SpellSlotIds {
-        get
-        {
-            var ids = new List<int>();
-            foreach (SpellDefinition spell in SpellSlot)
-            {
-                if (spell == null)
-                    ids.Add(-2);
-                else
-                    ids.Add(spell.ID);
-            }
-            return ids.ToArray();
-        }
+    // Always a 10-element array with no null entries, even when deserialized from a
+    // malformed file (null, short, or containing nulls), since the array is indexed directly.
+    public CounterBarSlot[] Slots
+    {
+        get => _slots;
+        set => _slots = NormalizeSlots(value);
+    }
+
+    // Legacy migration: older SpellBar.json/preset files only stored spell ids here.
+    // Deserialize-only; never written to new files (getter returns null).
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int[] SpellSlotIds
+    {
+        get => null;
         set
         {
-            for (int i = 0; i < 10; i++)
-            {
-                SpellSlot[i] = SpellDefinition.FullIndexGetSpell(value[i]);
-            }
+            if (value == null)
+                return;
+
+            Slots = CreateEmptySlots();
+            for (int i = 0; i < _slots.Length && i < value.Length; i++)
+                _slots[i] = CounterBarSlot.FromSpell(SpellDefinition.FullIndexGetSpell(value[i]));
         }
     }
 
     public ushort RowHue { get; set; }
 
-    public SpellBarRow SetSpell(int slot, SpellDefinition spell)
+    public SpellBarRow SetSlot(int slot, CounterBarSlot value)
     {
-        SpellSlot[slot] = spell;
+        if ((uint)slot >= (uint)_slots.Length)
+            return this;
+
+        _slots[slot] = value ?? CounterBarSlot.Empty();
 
         return this;
+    }
+
+    private static CounterBarSlot[] NormalizeSlots(CounterBarSlot[] value)
+    {
+        CounterBarSlot[] slots = CreateEmptySlots();
+
+        if (value == null)
+            return slots;
+
+        for (int i = 0; i < slots.Length && i < value.Length; i++)
+            slots[i] = value[i] ?? CounterBarSlot.Empty();
+
+        return slots;
+    }
+
+    private static CounterBarSlot[] CreateEmptySlots()
+    {
+        var slots = new CounterBarSlot[10];
+        for (int i = 0; i < slots.Length; i++)
+            slots[i] = CounterBarSlot.Empty();
+        return slots;
     }
 }
 
@@ -343,6 +401,8 @@ public class SpellBarSettings
 
 [JsonSerializable(typeof(List<SpellBarRow>), GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(SpellBarRow), GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(CounterBarSlot), GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(CounterBarSlot[]), GenerationMode = JsonSourceGenerationMode.Metadata)]
 public partial class SpellBarRowsContext : JsonSerializerContext { }
 
 [JsonSerializable(typeof(SpellBarSettings))]

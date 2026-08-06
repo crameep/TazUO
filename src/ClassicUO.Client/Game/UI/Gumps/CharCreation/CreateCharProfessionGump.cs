@@ -149,7 +149,7 @@ namespace ClassicUO.Game.UI.Gumps.CharCreation
                 Height = 34
             };
 
-            background.SetTooltip(localization.GetString(info.Description), 250);
+            background.SetTooltip(localization.GetString(info.Description));
 
             Add(background);
 
@@ -167,7 +167,7 @@ namespace ClassicUO.Game.UI.Gumps.CharCreation
 
         public Action<ProfessionInfo> Selected;
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             base.OnMouseUp(x, y, button);
 

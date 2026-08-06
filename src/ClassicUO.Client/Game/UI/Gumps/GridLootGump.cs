@@ -20,7 +20,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int MAX_WIDTH = 300;
         private const int MAX_HEIGHT = 420;
 
-        private static int _lastX = ProfileManager.CurrentProfile.GridLootType == 2 ? 200 : 100;
+        private static int _lastX = ProfileManager.CurrentProfile.CorpseContainerStyle == CorpseContainerStyle.OldGridLootAndContainer ? 200 : 100;
         private static int _lastY = 100;
         private readonly AlphaBlendControl _background;
         private readonly NiceButton _buttonPrev,
@@ -135,7 +135,8 @@ namespace ClassicUO.Game.UI.Gumps
                     true,
                     0x0481,
                     align: TEXT_ALIGN_TYPE.TS_CENTER,
-                    maxwidth: 300
+                    maxwidth: 300,
+                    ishtml: true
                 )
                 {
                     Width = 300,

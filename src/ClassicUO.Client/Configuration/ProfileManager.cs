@@ -1,7 +1,8 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
+using System;
+using System.ComponentModel;
 using System.IO;
-using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
 using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
@@ -10,41 +11,63 @@ namespace ClassicUO.Configuration
 {
     internal static class ProfileManager
     {
-        static ProfileManager()
+        /// <summary>
+        /// Occurs when the current <see cref="Profile"/> has changed.
+        /// Currently, this happens only during world creation/destruction, i.e., once per login.
+        /// </summary>
+        public static event EventHandler CurrentProfileChanged;
+
+        /// <summary>
+        /// Occurs when a property of the current <see cref="Profile"/> has changed.
+        /// </summary>
+        public static event PropertyChangedEventHandler CurrentProfilePropertyChanged;
+
+        public static Profile CurrentProfile
         {
-            // Subscribe to player creation event to load Char-scoped settings
-            EventSink.OnPlayerCreated += OnPlayerCreated;
-        }
-
-        private static void OnPlayerCreated(object sender, System.EventArgs e) =>
-            // Load Char-scoped settings after player is created (when serial is available)
-            CurrentProfile?.LoadCharScopedSettings();
-
-        public static Profile CurrentProfile { get; private set; }
-        public static string ProfilePath { get; private set; }
-
-        private static string _rootPath;
-        private static string RootPath
-        {
-            get
+            get;
+            private set
             {
-                if (string.IsNullOrEmpty(_rootPath))
-                {
-                    if (string.IsNullOrWhiteSpace(Settings.GlobalSettings.ProfilesPath))
-                    {
-                        _rootPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles");
-                    }
-                    else
-                    {
-                        _rootPath = Settings.GlobalSettings.ProfilesPath;
-                    }
-                }
+                if (field == value)
+                    return;
 
-                return _rootPath;
+                // If we had a profile, unregister the event first
+                if (field != null)
+                    field.PropertyChanged -= OnCurrentProfilePropertyChanged;
+
+                field = value;
+
+                // Register the event on the new value
+                if (field != null)
+                    field.PropertyChanged += OnCurrentProfilePropertyChanged;
+
+                // Notify that the profile itself has changed (as opposed to a profile 'setting'
+                CurrentProfileChanged?.Invoke(null, EventArgs.Empty);
             }
         }
 
-        public static void Load(string servername, string username, string charactername)
+        public static string ProfilePath { get; private set; }
+
+        public static string RootPath
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(field))
+                {
+                    if (string.IsNullOrWhiteSpace(Settings.GlobalSettings.ProfilesPath))
+                    {
+                        field = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "Profiles");
+                    }
+                    else
+                    {
+                        field = Settings.GlobalSettings.ProfilesPath;
+                    }
+                }
+
+                return field;
+            }
+        }
+
+        public static void Load(string servername, string username, string charactername, uint serial)
         {
             string path = FileSystemHelper.CreateFolderIfNotExists(RootPath, username.Trim(), servername.Trim(), charactername.Trim());
             string fileToLoad = Path.Combine(path, "profile.json");
@@ -55,12 +78,26 @@ namespace ClassicUO.Configuration
             CurrentProfile.Username = username;
             CurrentProfile.ServerName = servername;
             CurrentProfile.CharacterName = charactername;
+            CurrentProfile.Serial = serial;
 
-            if (CurrentProfile.GridHighlightSetup.Count == 0)
+            // Load (or migrate from the in-profile GridHighlightSetup / legacy per-list storage) the grid highlights.
+            if (GridHighlightsConfig.LoadForProfile(ProfilePath, CurrentProfile))
             {
-                GridHighLightProfile.MigrateGridHighlightToSetup(CurrentProfile);
                 ConfigurationResolver.Save(CurrentProfile, Path.Combine(ProfilePath, "profile.json"), ProfileJsonContext.DefaultToUse.Profile);
             }
+
+            // Load (or migrate from the legacy per-list profile storage) the cooldown-bar rules.
+            if (CooldownBarsConfig.LoadForProfile(ProfilePath, CurrentProfile))
+            {
+                ConfigurationResolver.Save(CurrentProfile, Path.Combine(ProfilePath, "profile.json"), ProfileJsonContext.DefaultToUse.Profile);
+            }
+
+            // Load the grid-container band layout rules for this profile.
+            GridContainerBandsConfig.LoadForProfile(ProfilePath);
+
+            // Load the tooltip overrides for this profile (migration from the legacy profile lists is
+            // handled in Profile.HandleMigration).
+            TooltipOverridesConfig.Load(ProfilePath);
 
             ValidateFields(CurrentProfile);
 
@@ -106,6 +143,13 @@ namespace ClassicUO.Configuration
             }
         }
 
-        public static void UnLoadProfile() => CurrentProfile = null;
+        public static void UnLoadProfile()
+        {
+            CurrentProfile = null;
+            // Drop profile-scoped caches so edits can't be saved against the previous profile's path.
+            GridContainerBandsConfig.Reset();
+        }
+
+        private static void OnCurrentProfilePropertyChanged(object sender, PropertyChangedEventArgs e) => CurrentProfilePropertyChanged?.Invoke(sender, e);
     }
 }

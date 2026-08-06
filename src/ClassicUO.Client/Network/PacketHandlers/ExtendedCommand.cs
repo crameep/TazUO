@@ -5,6 +5,7 @@ using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
+using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.IO;
@@ -47,11 +48,11 @@ internal static class ExtendedCommand
                 uint ser = p.ReadUInt32BE();
                 int button = (int)p.ReadUInt32BE();
 
-                LinkedListNode<Gump> first = UIManager.Gumps.First;
+                LinkedListNode<IGui> first = UIManager.Gumps.First;
 
                 while (first != null)
                 {
-                    LinkedListNode<Gump> nextGump = first.Next;
+                    LinkedListNode<IGui> nextGump = first.Next;
 
                     if (first.Value.ServerSerial == ser && first.Value.IsFromServer)
                     {
@@ -215,27 +216,13 @@ internal static class ExtendedCommand
             //===========================================================================================
             //===========================================================================================
             case 0x14: // display popup/context menu
-                var popupPos = UIManager.ScreenToUI(new Microsoft.Xna.Framework.Point(
-                    world.DelayedObjectClickManager.LastMouseX,
-                    world.DelayedObjectClickManager.LastMouseY));
-                var popupGump = new PopupMenuGump(world, PopupMenuData.Parse(ref p))
-                {
-                    X = popupPos.X,
-                    Y = popupPos.Y
-                };
-
-                // Clamp to UI-space bounds so the popup stays on-screen at UIScale > 1.
-                int maxW = (int)(Client.Game.Window.ClientBounds.Width / Client.Game.UIScale);
-                int maxH = (int)(Client.Game.Window.ClientBounds.Height / Client.Game.UIScale);
-
-                if (popupGump.X + popupGump.Width > maxW)
-                    popupGump.X = maxW - popupGump.Width;
-                if (popupGump.Y + popupGump.Height > maxH)
-                    popupGump.Y = maxH - popupGump.Height;
-                if (popupGump.Y < 0)
-                    popupGump.Y = 0;
-
-                UIManager.ShowGamePopup(popupGump);
+                UIManager.ShowGamePopup(
+                    new PopupMenuGump(world, PopupMenuData.Parse(ref p))
+                    {
+                        X = world.DelayedObjectClickManager.LastMouseX,
+                        Y = world.DelayedObjectClickManager.LastMouseY
+                    }
+                );
 
                 break;
 
@@ -523,24 +510,22 @@ internal static class ExtendedCommand
                 ushort spell = p.ReadUInt16BE();
                 bool active = p.ReadBool();
 
-                for (LinkedListNode<Gump> last = UIManager.Gumps.Last; last != null; last = last.Previous)
+                // Update the source of truth unconditionally so consumers (spell bar, spellbook) reflect the toggle
+                // even when no floating spell button for this ability is on screen.
+                if (active)
+                    world.ActiveSpellIcons.Add(spell);
+                else
+                    world.ActiveSpellIcons.Remove(spell);
+
+                for (LinkedListNode<IGui> last = UIManager.Gumps.Last; last != null; last = last.Previous)
                 {
-                    Control c = last.Value;
+                    IGui c = last.Value;
 
                     if (c.IsDisposed || !c.IsVisible) continue;
 
                     if (c is not UseSpellButtonGump spellButton || spellButton.SpellID != spell) continue;
 
-                    if (active)
-                    {
-                        spellButton.Hue = 38;
-                        world.ActiveSpellIcons.Add(spell);
-                    }
-                    else
-                    {
-                        spellButton.Hue = 0;
-                        world.ActiveSpellIcons.Remove(spell);
-                    }
+                    spellButton.Hue = (ushort)(active ? 38 : 0);
 
                     break;
                 }

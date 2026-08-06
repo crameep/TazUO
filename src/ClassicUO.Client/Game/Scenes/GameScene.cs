@@ -6,6 +6,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
@@ -20,12 +21,12 @@ using SDL3;
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using ClassicUO.Common;
+using ClassicUO.Game.Managers.SpellVisualRange;
 using ClassicUO.Game.Map;
 using ClassicUO.Game.UI.Gumps.GridHighLight;
-using ClassicUO.Game.UI.ImGuiControls;
 using ClassicUO.LegionScripting;
 using ClassicUO.Network.PacketHandlers.Helpers;
-using ImGuiNET;
 
 namespace ClassicUO.Game.Scenes
 {
@@ -38,6 +39,7 @@ namespace ClassicUO.Game.Scenes
         private long _windowResizeStartTime = 0;
         private const int WINDOW_RESIZE_TIMEOUT_MS = 500;
         private const int TOLERANCE = 5;
+        private const float MAX_LAYER_DEPTH = GameObjects.RenderDepth.FarPlane;
 
         private static readonly Lazy<BlendState> _darknessBlend = new Lazy<BlendState>(() =>
         {
@@ -60,19 +62,25 @@ namespace ClassicUO.Game.Scenes
         });
 
         private static XBREffect _xbr;
+        private static FSREffect _fsr;
         private static ColorblindEffect _colorblind;
-        private static byte _colorblindMode;
         private RenderTarget2D _colorblindTempTarget;
         private bool _alphaChanged;
         private long _alphaTimer;
         private bool _forceStopScene;
         private HealthLinesManager _healthLinesManager;
 
-        private Point _lastSelectedMultiPositionInHouseCustomization;
+        private Point3D _lastSelectedMultiPositionInHouseCustomization;
         private int _lightCount;
         private readonly LightData[] _lights = new LightData[
             LightsLoader.MAX_LIGHTS_DATA_INDEX_COUNT
         ];
+
+        // Drawn opaque tiles that can occlude a light, bucketed by isometric column (X - Y); rebuilt each frame, queried by AddLight.
+        private readonly Dictionary<int, List<LightOccluder>> _lightOccluders =
+            new Dictionary<int, List<LightOccluder>>();
+        private readonly Stack<List<LightOccluder>> _lightOccluderPool =
+            new Stack<List<LightOccluder>>();
         private Item _multi;
         private Rectangle _rectangleObj = Rectangle.Empty,
             _rectanglePlayer;
@@ -80,6 +88,10 @@ namespace ClassicUO.Game.Scenes
 
         private uint _timeToPlaceMultiInHouseCustomization;
         private const int MAX_TEXTURE_SIZE = 8192;
+
+        // An occluder d tiles in front of a light must stand ~11*d z-units above it to cover it on screen; slop is the tile-thickness leniency.
+        private const int LIGHT_OCCLUSION_STEP = 11;
+        private const int LIGHT_OCCLUSION_SLOP = 6;
         private static PostProcessingType _filterMode = PostProcessingType.Point;
         private PostProcessingType _currentFilter;
         private Effect _postFx;
@@ -110,7 +122,7 @@ namespace ClassicUO.Game.Scenes
             {
                 Client.Game.SetWindowBorderless(true);
             }
-            else if (Settings.GlobalSettings.IsWindowMaximized)
+            else if (Settings.GlobalSettings.IsWindowMaximized && !ProfileManager.CurrentProfile.BorderlessWindow)
             {
                 _waitingForWindowResize = true;
                 _windowResizeStartTime = Time.Ticks;
@@ -143,6 +155,14 @@ namespace ClassicUO.Game.Scenes
                 Client.Game.SetWindowSize(w, h);
             }
 
+            // Borderless (windowed) removes the window border while keeping the normal
+            // windowed size. Skip it when fullscreen-borderless is active since that
+            // mode already strips the border and resizes the window to fill the display.
+            if (!ProfileManager.CurrentProfile.WindowBorderless && ProfileManager.CurrentProfile.BorderlessWindow)
+            {
+                Client.Game.SetWindowBordered(false);
+            }
+
             SetPostProcessingSettings();
 
             Instance = this;
@@ -156,13 +176,10 @@ namespace ClassicUO.Game.Scenes
             if (!ProfileManager.CurrentProfile.EnablePostProcessingEffects)
             {
                 _filterMode = PostProcessingType.Point;
-            }
-            else
-            {
-                _filterMode = (PostProcessingType)ProfileManager.CurrentProfile.PostProcessingType;
+                return;
             }
 
-            _colorblindMode = ProfileManager.CurrentProfile.ColorblindMode;
+            _filterMode = (PostProcessingType)ProfileManager.CurrentProfile.PostProcessingType;
         }
         private long _nextProfileSave = Time.Ticks + 1000*60*60;
 
@@ -185,8 +202,6 @@ namespace ClassicUO.Game.Scenes
         public override void Load()
         {
             base.Load();
-            ImGuiManager.Initialize(Client.Game);
-
             GridContainerSaveData.Instance.Load();
 
             Client.Game.UO.GameCursor.ItemHold.Clear();
@@ -201,17 +216,7 @@ namespace ClassicUO.Game.Scenes
             _healthLinesManager = new HealthLinesManager(_world);
 
             _world.CommandManager.Initialize();
-            WalkableManager.Instance.Initialize();
             ItemDatabaseManager.Instance.Initialize();
-
-            CombatTracker.Instance.Initialize();
-            CombatHudOverlay.GetInstance();
-            var combatProfile = ProfileManager.CurrentProfile;
-            if (combatProfile != null)
-            {
-                CombatTracker.Instance.SetMaxEvents(combatProfile.CombatMaxEvents);
-                CombatTracker.Instance.SetFightIdleThreshold(combatProfile.CombatFightIdleThreshold * 1000);
-            }
 
             var viewport = new WorldViewportGump(_world, this);
             UIManager.Add(viewport, false);
@@ -231,6 +236,12 @@ namespace ClassicUO.Game.Scenes
             SpellDefinition.LoadCustomSpells(_world);
             SpellVisualRangeManager.Instance.OnSceneLoad();
             AutoLootManager.Instance.OnSceneLoad();
+            Profile combatProfile = ProfileManager.CurrentProfile;
+            CombatTracker.Instance.SetMaxEvents(combatProfile.CombatMaxEvents);
+            CombatTracker.Instance.SetFightIdleThreshold(combatProfile.CombatFightIdleThreshold * 1000);
+            CombatTracker.Instance.Initialize();
+            Game.UI.MyraWindows.CombatHudWindow.Ensure();
+            AutoSkinningManager.Instance.OnSceneLoad();
             DressAgentManager.Instance.Load();
             FriendsListManager.Instance.OnSceneLoad();
 
@@ -244,9 +255,16 @@ namespace ClassicUO.Game.Scenes
             BuySellAgent.Load();
             OrganizerAgent.Load();
             GraphicsReplacement.Load();
+            HotKeys.Load();
+            HotKeyRegistrar.RegisterAll();
+            LegionScripting.ScriptHotkeysManager.RegisterAll();
             SpellBarManager.Load();
+            SelfHealManager.Load();
             if(ProfileManager.CurrentProfile.EnableCaveBorder)
                 StaticFilters.ApplyCaveTileBorder();
+
+            if (ProfileManager.CurrentProfile.VoiceRecognitionEnabled)
+                VoiceRecognitionManager.Instance.InitializeAsync(ProfileManager.CurrentProfile.VoiceModelPath, startListeningAfter: true);
         }
 
         private void ChatOnMessageReceived(object sender, MessageEventArgs e)
@@ -271,41 +289,18 @@ namespace ClassicUO.Game.Scenes
                 case MessageType.Limit3Spell:
 
                     if (e.Parent == null || !SerialHelper.IsValid(e.Parent.Serial))
-                    {
-                        if (ProfileManager.CurrentProfile.HideJournalSystemPrefix)
-                        {
-                            name = null;
-                        }
-                        else
-                        {
-                            name = ResGeneral.System;
-                        }
-                    }
+                        name = ProfileManager.CurrentProfile?.HideJournalSystemPrefix == true ? null : ResGeneral.System;
                     else
-                    {
                         name = e.Name;
-                    }
 
                     text = e.Text;
-
                     break;
 
                 case MessageType.System:
                     if (string.IsNullOrEmpty(e.Name) || string.Equals(e.Name, "system", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        if (ProfileManager.CurrentProfile.HideJournalSystemPrefix)
-                        {
-                            name = null;
-                        }
-                        else
-                        {
-                            name = ResGeneral.System;
-                        }
-                    }
+                        name = ProfileManager.CurrentProfile?.HideJournalSystemPrefix == true ? null : ResGeneral.System;
                     else
-                    {
                         name = e.Name;
-                    }
 
                     text = e.Text;
 
@@ -396,14 +391,12 @@ namespace ClassicUO.Game.Scenes
 
             Instance = null;
 
-            LongDistancePathfinder.Dispose();
-            WalkableManager.Instance.Shutdown();
-
             GridContainerSaveData.Instance.Save();
             GridContainerSaveData.Reset();
             JournalFilterManager.Instance.Save();
 
             SpellBarManager.Unload();
+            SelfHealManager.Unload();
             _autoUnequipActionManager?.Dispose();
             ObjectActionQueue.Instance.Clear();
 
@@ -449,19 +442,21 @@ namespace ClassicUO.Game.Scenes
             UIManager.GetGump<WorldMapGump>()?.SaveSettings();
 
             ProfileManager.CurrentProfile?.Save(_world, ProfileManager.ProfilePath);
-            ImGuiManager.Dispose();
             MapWebServerManager.Instance.Stop();
             TileMarkerManager.Instance.Save();
             SpellVisualRangeManager.Instance.Save();
             SpellVisualRangeManager.Instance.OnSceneUnload();
             AutoLootManager.Instance.OnSceneUnload();
             CombatTracker.Reset();
+            GridHighlightData.Unload();
+            AutoSkinningManager.Instance.OnSceneUnload();
             FriendsListManager.Instance.OnSceneUnload();
 
             NameOverHeadManager.Save();
 
             _world.Macros.Save();
             _world.Macros.Clear();
+            HotKeys.Save();
             _world.InfoBars.Save();
             ProfileManager.UnLoadProfile();
 
@@ -473,10 +468,12 @@ namespace ClassicUO.Game.Scenes
             _worldRenderTarget?.Dispose();
             _xbr?.Dispose();
             _xbr = null;
-            _colorblindTempTarget?.Dispose();
-            _colorblindTempTarget = null;
+            _fsr?.Dispose();
+            _fsr = null;
             _colorblind?.Dispose();
             _colorblind = null;
+            _colorblindTempTarget?.Dispose();
+            _colorblindTempTarget = null;
 
             _world.CommandManager.UnRegisterAll();
             _world.Weather.Reset();
@@ -495,50 +492,64 @@ namespace ClassicUO.Game.Scenes
 
             Settings.GlobalSettings.IsWindowMaximized = Client.Game.IsWindowMaximized();
             Client.Game.SetWindowBorderless(false);
+            Client.Game.SetWindowBordered(true);
 
             base.Unload();
         }
 
         private void SocketOnDisconnected(object sender, SocketError e)
         {
-            if (DisconnectionRequested)
+            // Disconnected is raised from the background network/receive tasks (see AsyncNetClient),
+            // but this handler tears down the scene and adds gumps, which mutates UIManager state
+            // (_gumpTypeList, the Gumps list, etc.). Touching that off the main thread races the
+            // game loop and corrupts those collections. Marshal onto the main thread so all the UI
+            // work runs there; InvokeOnMainThread runs inline when already on the main thread.
+            MainThreadQueue.InvokeOnMainThread(() =>
             {
-                Client.Game.SetScene(new LoginScene(_world));
+                // The callback can be drained a frame later, by which point this scene may already
+                // have been unloaded/replaced; skip the stale teardown then.
+                if (IsDestroyed || Instance != this)
+                    return;
 
-                return;
-            }
-            if (Settings.GlobalSettings.Reconnect)
-            {
-                LoginHandshake.Reconnect = true;
-                _forceStopScene = true;
-            }
-            else
-            {
-                UIManager.Add(
-                    new MessageBoxGump(
-                        _world,
-                        200,
-                        200,
-                        string.Format(
-                            ResGeneral.ConnectionLost0,
-                            StringHelper.AddSpaceBeforeCapital(e.ToString())
-                        ),
-                        s =>
-                        {
-                            if (s)
+                if (DisconnectionRequested)
+                {
+                    Client.Game.SetScene(new LoginScene(_world));
+
+                    return;
+                }
+                if (Settings.GlobalSettings.Reconnect)
+                {
+                    LoginHandshake.Reconnect = true;
+                    _forceStopScene = true;
+                }
+                else
+                {
+                    UIManager.Add(
+                        new MessageBoxGump(
+                            _world,
+                            200,
+                            200,
+                            string.Format(
+                                ResGeneral.ConnectionLost0,
+                                StringHelper.AddSpaceBeforeCapital(e.ToString())
+                            ),
+                            s =>
                             {
-                                Client.Game.SetScene(new LoginScene(_world));
+                                if (s)
+                                {
+                                    Client.Game.SetScene(new LoginScene(_world));
+                                }
                             }
-                        }
-                    )
-                );
-            }
+                        )
+                    );
+                }
+            });
         }
 
         public void RequestQuitGame() => UIManager.Add(
                 new QuestionGump(
                     _world,
-                    ResGeneral.QuitPrompt,
+                    Client.Game.UO.FileManager.Clilocs.GetString(3000000),
                     s =>
                     {
                         if (s)
@@ -562,27 +573,24 @@ namespace ClassicUO.Game.Scenes
 
             bool canBeAdded = true;
 
-            int testX = obj.X + 1;
-            int testY = obj.Y + 1;
-
-            GameObject tile = _world.Map.GetTile(testX, testY);
-
-            if (tile != null)
+            // Occluded if a tall enough tile in the light's own column (X - Y) sits in front of it toward the camera.
+            if (_lightOccluders.TryGetValue(obj.X - obj.Y, out List<LightOccluder> occluders))
             {
-                sbyte z5 = (sbyte)(obj.Z + 5);
+                int lightX = obj.X;
+                int lightZ = obj.Z;
 
-                for (GameObject o = tile; o != null; o = o.TNext)
+                for (int i = 0; i < occluders.Count; i++)
                 {
-                    if (
-                        (!(o is Static s) || s.ItemData.IsTransparent)
-                            && (!(o is Multi m) || m.ItemData.IsTransparent)
-                        || !o.AllowedToDraw
-                    )
+                    LightOccluder o = occluders[i];
+                    int d = o.X - lightX;
+
+                    // Only tiles in front of the light (nearer the camera) can hide it.
+                    if (d <= 0)
                     {
                         continue;
                     }
 
-                    if (o.Z < _maxZ && o.Z >= z5)
+                    if (o.Z < _maxZ && o.Z - lightZ >= LIGHT_OCCLUSION_STEP * d - LIGHT_OCCLUSION_SLOP)
                     {
                         canBeAdded = false;
 
@@ -704,6 +712,15 @@ namespace ClassicUO.Game.Scenes
             _renderListEffects.Clear();
             _renderListTransparentObjects.Clear();
 
+            // Recycle this frame's column buckets to the pool so the map rebuilds without allocating.
+            foreach (List<LightOccluder> bucket in _lightOccluders.Values)
+            {
+                bucket.Clear();
+                _lightOccluderPool.Push(bucket);
+            }
+
+            _lightOccluders.Clear();
+
             _foliageCount = 0;
 
             if (!_world.InGame)
@@ -769,7 +786,6 @@ namespace ClassicUO.Game.Scenes
             (int minChunkX, int minChunkY) = (minX >> 3, minY >> 3);
             (int maxChunkX, int maxChunkY) = (maxX >> 3, maxY >> 3);
 
-            Profiler.EnterContext("MapChunkLoop");
             int totalChunksX = maxChunkX - minChunkX + 1;
             int totalChunksY = maxChunkY - minChunkY + 1;
 
@@ -807,7 +823,6 @@ namespace ClassicUO.Game.Scenes
                 }
             }
 
-            Profiler.ExitContext("MapChunkLoop");
 
 
             //for (var x = minX; x <= maxX; x++)
@@ -863,18 +878,19 @@ namespace ClassicUO.Game.Scenes
 
         public override void Update()
         {
+            Profiler.EnterContext("GameSceneUpdate");
+
             Profile currentProfile = ProfileManager.CurrentProfile;
 
             SelectedObject.TranslatedMousePositionByViewport = Camera.MouseToWorldPosition();
 
             base.Update();
+            SelfHealManager.Update();
 
-            // Check if we're waiting for window resize to complete
             if (_waitingForWindowResize)
             {
                 if (_expectedWindowSize.HasValue)
                 {
-                    // We're waiting for a specific window size
                     Point expected = _expectedWindowSize.Value;
                     int actualWidth = Client.Game.Window.ClientBounds.Width;
                     int actualHeight = Client.Game.Window.ClientBounds.Height;
@@ -884,20 +900,14 @@ namespace ClassicUO.Game.Scenes
 
                     if (widthMatch && heightMatch)
                     {
-                        // Resize succeeded — sync PreferredBackBuffer with actual size.
-                        // On macOS, programmatic resizes don't fire SDL_EVENT_WINDOW_RESIZED
-                        // so WindowOnClientSizeChanged never runs to sync these values.
                         _waitingForWindowResize = false;
                         _expectedWindowSize = null;
-                        Client.Game.SetWindowSize(actualWidth, actualHeight, true);
                     }
                     else if (Time.Ticks - _windowResizeStartTime > WINDOW_RESIZE_TIMEOUT_MS)
                     {
-                        // Timeout reached, retry resize once
                         Log.Trace($"Window resize timeout, retrying. Expected: {expected.X}x{expected.Y}, Actual: {actualWidth}x{actualHeight}");
                         Client.Game.SetWindowSize(expected.X, expected.Y);
 
-                        // Reset timer for one more attempt
                         _windowResizeStartTime = Time.Ticks;
                         _waitingForWindowResize = false;
                         _expectedWindowSize = null;
@@ -905,41 +915,19 @@ namespace ClassicUO.Game.Scenes
                 }
                 else
                 {
-                    // We're waiting for maximize operation to complete
                     if (Client.Game.IsWindowMaximized())
                     {
-                        // Maximize succeeded — sync PreferredBackBuffer with actual size.
                         _waitingForWindowResize = false;
-                        int mw = Client.Game.Window.ClientBounds.Width;
-                        int mh = Client.Game.Window.ClientBounds.Height;
-                        Client.Game.SetWindowSize(mw, mh, true);
                     }
                     else if (Time.Ticks - _windowResizeStartTime > WINDOW_RESIZE_TIMEOUT_MS)
                     {
-                        // Timeout reached, retry maximize once
                         Log.Trace("Window maximize timeout, retrying.");
                         Client.Game.MaximizeWindow();
 
-                        // Reset timer for one more attempt
                         _windowResizeStartTime = Time.Ticks;
                         _waitingForWindowResize = false;
                     }
                 }
-            }
-
-            // Temporary to see if memory usage get's too high or not. This will keep map chunks loaded
-            // for better performance at the cost of more ram.
-            // if (_time_cleanup < Time.Ticks)
-            // {
-            //     _world.Map?.ClearUnusedBlocks();
-            //     _time_cleanup = Time.Ticks + 500;
-            // }
-
-            // Only update pathfinding systems when long-distance pathfinding is enabled/active
-            if (_world.Player?.Pathfinder?.UseLongDistancePathfinding == true)
-            {
-                WalkableManager.Instance.Update();
-                LongDistancePathfinder.Update();
             }
 
             SharedStore.SendMegaCliLocRequests(_world);
@@ -950,11 +938,13 @@ namespace ClassicUO.Game.Scenes
                 Client.Game.SetScene(loginScene);
                 loginScene.Reconnect = true;
 
+                Profiler.ExitContext("GameSceneUpdate");
                 return;
             }
 
             if (!_world.InGame)
             {
+                Profiler.ExitContext("GameSceneUpdate");
                 return;
             }
 
@@ -966,19 +956,21 @@ namespace ClassicUO.Game.Scenes
 
             if (currentProfile.ForceResyncOnHang && Time.Ticks - AsyncNetClient.Socket.Statistics.LastPingReceived > 5000 && Time.Ticks - _lastResync > 5000)
             {
-                //Last ping > ~5 seconds
                 AsyncNetClient.Socket.Send_Resync();
                 _lastResync = Time.Ticks;
                 GameActions.Print(_world, "Possible connection hang, resync attempted", 32, MessageType.System);
             }
 
+            Profiler.EnterContext("WorldUpdate");
             _world.Update();
+            _world.Weather.UpdateAudio();
             _animatedStaticsManager.Process();
             _world.BoatMovingManager.Update();
             _world.Player.Pathfinder.ProcessAutoWalk();
             _world.DelayedObjectClickManager.Update();
+            Profiler.ExitContext("WorldUpdate");
 
-
+            Profiler.EnterContext("Actions");
             if (
                 (currentProfile.CorpseOpenOptions == 1 || currentProfile.CorpseOpenOptions == 3)
                     && _world.TargetManager.IsTargeting
@@ -986,15 +978,16 @@ namespace ClassicUO.Game.Scenes
                     && _world.Player.IsHidden
             )
             {
-                CorpseOpenQueue.Clear();
+                ObjectActionQueue.Instance.ClearByPriority(ActionPriority.OpenCorpse);
             }
 
-            CorpseOpenQueue.Update();
             ObjectActionQueue.Instance.Update();
-            OrganizerAgent.Instance?.Update();
             AutoLootManager.Instance.Update();
+            BandageManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);
+            Profiler.ExitContext("Actions");
 
+            Profiler.EnterContext("Movement");
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn && !MoveCharByController())
             {
                 Direction dir = DirectionHelper.DirectionFromKeyboardArrows(
@@ -1026,7 +1019,7 @@ namespace ClassicUO.Game.Scenes
                     {
                         if (!_world.Player.Pathfinder.WalkTo(follow.X, follow.Y, follow.Z, currentProfile.AutoFollowDistance) && !_world.Player.IsParalyzed)
                         {
-                            StopFollowing(); //Can't get there
+                            StopFollowing();
                         }
                     }
                 }
@@ -1035,13 +1028,14 @@ namespace ClassicUO.Game.Scenes
                     StopFollowing();
                 }
             }
+            Profiler.ExitContext("Movement");
 
             _world.Macros.Update();
 
             if (Time.Ticks > _nextProfileSave)
             {
                 ProfileManager.CurrentProfile.Save(_world, ProfileManager.ProfilePath);
-                _nextProfileSave = Time.Ticks + 1000*60*60; //1 Hour
+                _nextProfileSave = Time.Ticks + 1000*60*60;
             }
 
             if (!UIManager.IsMouseOverWorld)
@@ -1121,47 +1115,80 @@ namespace ClassicUO.Game.Scenes
             }
 
             if (_isMouseLeftDown && !Client.Game.UO.GameCursor.ItemHold.Enabled)
+                UpdateWhenLeftClickHeld();
+
+            Profiler.ExitContext("GameSceneUpdate");
+        }
+
+        /// <summary>
+        /// Handles updates performed when the left mouse button is held.
+        /// This method manages interactions with game objects while the left mouse button is being held down,
+        /// including custom house modifications and item pickup behaviors.
+        /// </summary>
+        /// <remarks>
+        /// - In the context of custom house building, it processes object selection and placement in real-time.
+        /// - Prevents repeated interactions on the same object or position to avoid duplicate actions.
+        /// - Implements a delay mechanism for placing objects in house customization for better user experience.
+        /// - Handles item pickup if an item is selected under specific conditions.
+        /// </remarks>
+        private void UpdateWhenLeftClickHeld()
+        {
+            if (
+                _world.CustomHouseManager != null
+                && _world.CustomHouseManager.SelectedGraphic != 0
+                && !_world.CustomHouseManager.SeekTile
+                && !_world.CustomHouseManager.Erasing
+                && Time.Ticks > _timeToPlaceMultiInHouseCustomization
+            )
             {
-                if (
-                    _world.CustomHouseManager != null
-                    && _world.CustomHouseManager.SelectedGraphic != 0
-                    && !_world.CustomHouseManager.SeekTile
-                    && !_world.CustomHouseManager.Erasing
-                    && Time.Ticks > _timeToPlaceMultiInHouseCustomization
-                )
-                {
-                    if (
-                        SelectedObject.Object is GameObject obj
-                        && (
-                            obj.X != _lastSelectedMultiPositionInHouseCustomization.X
-                            || obj.Y != _lastSelectedMultiPositionInHouseCustomization.Y
-                        )
-                    )
-                    {
-                        _world.CustomHouseManager.OnTargetWorld(obj);
-                        _timeToPlaceMultiInHouseCustomization = Time.Ticks + 50;
-                        _lastSelectedMultiPositionInHouseCustomization.X = obj.X;
-                        _lastSelectedMultiPositionInHouseCustomization.Y = obj.Y;
-                    }
-                }
-                else if (Time.Ticks - _holdMouse2secOverItemTime >= 1000)
-                {
-                    if (SelectedObject.Object is Item it && GameActions.PickUp(_world, it.Serial, 0, 0))
-                    {
-                        _isMouseLeftDown = false;
-                        _holdMouse2secOverItemTime = 0;
-                    }
-                }
+                // Null/Type guard
+                if (SelectedObject.Object is not GameObject obj)
+                    return;
+
+                // Guard against multiple clicks to on the exact same entity
+                if (obj.X == _lastSelectedMultiPositionInHouseCustomization.X &&
+                    obj.Y == _lastSelectedMultiPositionInHouseCustomization.Y &&
+                    obj.Z == _lastSelectedMultiPositionInHouseCustomization.Z
+                   )
+                    return;
+
+                _world.CustomHouseManager.OnTargetWorld(obj);
+                _timeToPlaceMultiInHouseCustomization = Time.Ticks + 50;
+                _lastSelectedMultiPositionInHouseCustomization.X = obj.X;
+                _lastSelectedMultiPositionInHouseCustomization.Y = obj.Y;
+                return;
+            }
+
+            if (Time.Ticks - _holdMouse2secOverItemTime < 1000)
+                return;
+
+            if (SelectedObject.Object is Item it && GameActions.PickUp(_world, it.Serial, 0, 0))
+            {
+                _isMouseLeftDown = false;
+                _holdMouse2secOverItemTime = 0;
             }
         }
 
         private float GetActiveScale() => Math.Max(0.0001f, Camera.Zoom);
 
+        public override bool DrawsOwnBackground => true;
+
         public override bool Draw(UltimaBatcher2D batcher)
         {
-            if (!_world.InGame) return false;
+            if (!_world.InGame)
+            {
+                // No world/light targets are rendered on this path, so nothing discards the screen
+                // target - draw the background directly (GameController skips it for this scene).
+                Client.Game.DrawWindowBackground(batcher);
+                return false;
+            }
 
-            if (CheckDeathScreen(batcher)) return true;
+            if (CheckDeathScreen(batcher))
+            {
+                return true;
+            }
+
+            Profiler.EnterContext("GameSceneDraw");
 
             GraphicsDevice gd = batcher.GraphicsDevice;
 
@@ -1170,16 +1197,18 @@ namespace ClassicUO.Game.Scenes
 
             var hue = new Vector3(0, 0, 1);
 
+            Profiler.EnterContext("EnsureRenderTargets");
             EnsureRenderTargets(gd);
+            Profiler.ExitContext("EnsureRenderTargets");
 
-            // Always use render target for consistent scaling
-            Profiler.EnterContext("DrawWorldRenderTarget");
+            Profiler.EnterContext("DrawWorld");
             bool canDrawLights = DrawWorldRenderTarget(batcher, gd, cameraViewport);
-            Profiler.ExitContext("DrawWorldRenderTarget");
+            Profiler.ExitContext("DrawWorld");
 
-            // draw lights
             if (canDrawLights)
             {
+                Profiler.EnterContext("DrawLights");
+
                 batcher.Begin();
 
                 if (UseAltLights)
@@ -1202,18 +1231,35 @@ namespace ClassicUO.Game.Scenes
                 batcher.End();
 
                 hue.Z = 1f;
+
+                Profiler.ExitContext("DrawLights");
             }
 
-            // Draw overheads and selection after lighting, on the backbuffer
-            batcher.Begin(null, Camera.ViewTransformMatrix);
+            Profiler.EnterContext("DrawOverlays");
+
+            // Overheads (names, health bars, overhead text) can optionally be drawn in screen
+            // space (identity transform) so they keep a constant on-screen size regardless of the
+            // camera zoom. Their world anchors are converted to screen space per-object so they
+            // still follow the zoomed world. When scaling is enabled they are drawn under the
+            // camera transform exactly as before. This only affects the camera zoom scale, not any
+            // other (global) game scaling.
+            bool overheadsScaleWithZoom = ProfileManager.CurrentProfile?.OverheadsScaleWithZoom ?? true;
+
+            batcher.Begin(null, overheadsScaleWithZoom ? Camera.ViewTransformMatrix : Matrix.Identity);
             DrawOverheads(batcher);
+            batcher.End();
+
+            // The selection rectangle always tracks the world, so keep it under the camera transform.
+            batcher.Begin(null, Camera.ViewTransformMatrix);
             DrawSelection(batcher);
             batcher.End();
 
             gd.Viewport = rViewport;
 
-            // Always clear stencil buffer to prevent dirty state affecting UI rendering
             gd.Clear(ClearOptions.Stencil, Color.Transparent, 0f, 0);
+            Profiler.ExitContext("DrawOverlays");
+
+            Profiler.ExitContext("GameSceneDraw");
 
             return base.Draw(batcher);
         }
@@ -1227,13 +1273,26 @@ namespace ClassicUO.Game.Scenes
             int vpW = Camera.Bounds.Width;
             int vpH = Camera.Bounds.Height;
 
+            Profiler.EnterContext("EnsureWorldMatrix");
             EnsureWorldMatrix(rtW, rtH, vpW, vpH);
+            Profiler.ExitContext("EnsureWorldMatrix");
 
+            Profiler.EnterContext("RenderWorld");
             DrawWorld(batcher, ref _worldRtMatrix);
+            Profiler.ExitContext("RenderWorld");
 
+            Profiler.EnterContext("PrepareLights");
             bool canDrawLights = PrepareLightsRendering(batcher, ref _worldRtMatrix);
+            Profiler.ExitContext("PrepareLights");
+
+            // The world/light render-target swaps above rebind (and discard) the screen target,
+            // wiping any background drawn before the scene. Redraw it now - behind the world
+            // composite below and all gumps drawn afterwards.
+            Client.Game.DrawWindowBackground(batcher);
+
             gd.Viewport = cameraViewport;
 
+            Profiler.EnterContext("PostProcess");
             int srcW = (int)Math.Floor(vpW * scale);
             int srcH = (int)Math.Floor(vpH * scale);
             int srcX = (rtW - srcW) / 2;
@@ -1242,58 +1301,61 @@ namespace ClassicUO.Game.Scenes
             var destRect = new Rectangle(0, 0, vpW, vpH);
 
             UpdatePostProcessState(gd);
-            EnsureColorblindEffect(gd);
 
-            bool hasColorblind = _colorblindMode != 0 && _colorblind != null;
-            bool hasPostFx = _postFx != null;
+            byte colorblindMode = ProfileManager.CurrentProfile?.ColorblindMode ?? 0;
+            EnsureColorblindEffect(gd, colorblindMode);
 
-            if (hasColorblind && hasPostFx)
+            if (_postFx == _xbr && _xbr != null)
             {
-                // Two-pass: post-fx → temp RT, then colorblind → backbuffer
+                BindXbrParams(gd);
+            }
+            else if (_postFx == _fsr && _fsr != null)
+            {
+                BindFsrParams(gd);
+            }
+
+            if (colorblindMode != 0 && _colorblind != null && _postFx != null)
+            {
                 EnsureColorblindTempTarget(gd, vpW, vpH);
+                RenderTargetBinding[] previousTargets = gd.GetRenderTargets();
                 gd.SetRenderTarget(_colorblindTempTarget);
                 gd.Clear(Color.Black);
 
-                if (_postFx == _xbr && _xbr != null)
-                    BindXbrParams(gd);
-
                 batcher.Begin(_postFx, Matrix.Identity);
-                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); } catch { batcher.SetSampler(SamplerState.PointClamp); }
+                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); }
+                catch { batcher.SetSampler(SamplerState.PointClamp); }
                 batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
                 batcher.End();
 
-                gd.SetRenderTarget(null);
+                if (previousTargets.Length > 0)
+                    gd.SetRenderTargets(previousTargets);
+                else
+                    gd.SetRenderTarget(null);
                 gd.Viewport = cameraViewport;
 
-                BindColorblindParams(gd, vpW, vpH);
+                // Restoring the screen target may discard it on some backends.
+                Client.Game.DrawWindowBackground(batcher);
+                BindColorblindParams(colorblindMode, vpW, vpH);
                 batcher.Begin(_colorblind, Matrix.Identity);
                 batcher.SetSampler(SamplerState.PointClamp);
                 batcher.Draw(_colorblindTempTarget, destRect, destRect, new Vector3(0, 0, 1));
                 batcher.End();
             }
-            else if (hasColorblind)
-            {
-                // Single pass: colorblind shader replaces the post-fx
-                BindColorblindParams(gd, vpW, vpH);
-                batcher.Begin(_colorblind, Matrix.Identity);
-                batcher.SetSampler(_postSampler ?? SamplerState.PointClamp);
-                batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
-                batcher.End();
-            }
             else
             {
-                // Original path: post-fx or plain sampler
-                if (_postFx == _xbr && _xbr != null)
-                    BindXbrParams(gd);
+                Effect effect = colorblindMode != 0 && _colorblind != null ? _colorblind : _postFx;
+                if (effect == _colorblind)
+                    BindColorblindParams(colorblindMode, vpW, vpH);
 
-                batcher.Begin(_postFx, Matrix.Identity);
-                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); } catch { batcher.SetSampler(SamplerState.PointClamp); }
+                batcher.Begin(effect, Matrix.Identity);
+                try { batcher.SetSampler(_postSampler ?? SamplerState.PointClamp); }
+                catch { batcher.SetSampler(SamplerState.PointClamp); }
                 batcher.Draw(_worldRenderTarget, destRect, srcRect, new Vector3(0, 0, 1));
                 batcher.End();
             }
-
             batcher.SetSampler(null);
             batcher.SetBlendState(null);
+            Profiler.ExitContext("PostProcess");
 
             return canDrawLights;
         }
@@ -1301,9 +1363,7 @@ namespace ClassicUO.Game.Scenes
         private void DrawWorld(UltimaBatcher2D batcher, ref Matrix matrix)
         {
             SelectedObject.Object = null;
-            Profiler.EnterContext("FillObjectList");
             FillGameObjectList();
-            Profiler.ExitContext("FillObjectList");
 
             // Always use render target for consistent scaling
             RenderTargetBinding[] previousRenderTargets = batcher.GraphicsDevice.GetRenderTargets();
@@ -1316,38 +1376,26 @@ namespace ClassicUO.Game.Scenes
             batcher.SetBrightlight(ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f);
             batcher.SetStencil(DepthStencilState.Default);
 
-            Profiler.EnterContext("DrawObjects");
+            // Map world depth [0, FarPlane] across the entire depth buffer so tile depth values use
+            // the full 24-bit precision instead of only a fraction of it. Higher depth = nearer.
+            batcher.SetProjectionDepthRange(-GameObjects.RenderDepth.FarPlane, 0f);
+
             RenderedObjectsCount = 0;
             Profiler.EnterContext("Statics");
-            RenderedObjectsCount += DrawRenderList(
-                batcher,
-                _renderListStatics
-            );
+            RenderedObjectsCount += DrawRenderList(batcher, _renderListStatics);
             Profiler.ExitContext("Statics");
-            Profiler.EnterContext("Animations");
-            RenderedObjectsCount += DrawRenderList(
-                batcher,
-                _renderListAnimations
-            );
-            Profiler.ExitContext("Animations");
+            Profiler.EnterContext("Animation");
+            RenderedObjectsCount += DrawRenderList(batcher, _renderListAnimations);
+            Profiler.ExitContext("Animation");
             Profiler.EnterContext("Effects");
-            RenderedObjectsCount += DrawRenderList(
-                batcher,
-                _renderListEffects
-            );
+            RenderedObjectsCount += DrawRenderList(batcher, _renderListEffects);
             Profiler.ExitContext("Effects");
 
             if (_renderListTransparentObjects.Count > 0)
             {
-                Profiler.EnterContext("Transparency");
                 batcher.SetStencil(DepthStencilState.DepthRead);
-                RenderedObjectsCount += DrawRenderList(
-                    batcher,
-                    _renderListTransparentObjects
-                );
-                Profiler.ExitContext("Transparency");
+                RenderedObjectsCount += DrawRenderList(batcher, _renderListTransparentObjects);
             }
-            Profiler.ExitContext("DrawObjects");
 
             batcher.SetStencil(null);
 
@@ -1357,26 +1405,29 @@ namespace ClassicUO.Game.Scenes
                 && _world.TargetManager.TargetingState == CursorTarget.MultiPlacement
             )
             {
-                Profiler.EnterContext("DrawMulti");
                 _multi.Draw(
                     batcher,
                     _multi.RealScreenPosition.X,
                     _multi.RealScreenPosition.Y,
                     _multi.CalculateDepthZ()
                 );
-                Profiler.ExitContext("DrawMulti");
             }
 
             batcher.SetSampler(null);
             batcher.SetStencil(null);
 
-            // draw weather
-            if (!ProfileManager.CurrentProfile.DisableWeather)
+            // draw weather (DisableWeather also checked inside Weather.Draw)
+            if (ProfileManager.CurrentProfile?.DisableWeather != true)
             {
-                _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
+                Profiler.EnterContext("Weather");
+                _world.Weather.Draw(batcher, 0, 0, MAX_LAYER_DEPTH - 1);
+                Profiler.ExitContext("Weather");
             }
 
             //GameController.DrawFlushCounts(batcher, 200, 200);
+
+            // Restore the default projection depth range for all other (non-world) batcher passes.
+            batcher.ResetProjectionDepthRange();
 
             batcher.End();
 
@@ -1399,18 +1450,11 @@ namespace ClassicUO.Game.Scenes
             {
                 if (obj.Z <= _maxGroundZ)
                 {
-                    Profiler.EnterContext("Calculate depth");
                     float depth = obj.CalculateDepthZ();
-                    Profiler.ExitContext("Calculate depth");
-
-                    Profiler.EnterContext("Draw");
-                    if (
-                        obj.Draw(batcher, obj.RealScreenPosition.X, obj.RealScreenPosition.Y, depth)
-                    )
+                    if (obj.Draw(batcher, obj.RealScreenPosition.X, obj.RealScreenPosition.Y, depth))
                     {
                         ++done;
                     }
-                    Profiler.ExitContext("Draw");
                 }
             }
 
@@ -1452,6 +1496,10 @@ namespace ClassicUO.Game.Scenes
 
             hue.Z = 1f;
 
+            bool candleFlicker = ProfileManager.CurrentProfile.CandleFlickerLights;
+            // Time in seconds, used as the phase base for the flicker oscillation.
+            float flickerTime = Time.Ticks / 1000f;
+
             for (int i = 0; i < _lightCount; i++)
             {
                 ref LightData l = ref _lights[i];
@@ -1460,6 +1508,23 @@ namespace ClassicUO.Game.Scenes
                 if (lightInfo.Texture == null)
                 {
                     continue;
+                }
+
+                // Gently modulate each light's intensity so it ebbs and flows like a
+                // candle. A per-light phase seed derived from its position keeps nearby
+                // lights out of sync, and blending two frequencies avoids an obvious
+                // pulse. The amplitude is intentionally small for a subtle effect.
+                if (candleFlicker)
+                {
+                    float seed = l.DrawX * 0.73f + l.DrawY * 1.31f;
+
+                    hue.Z = 1f
+                        + 0.06f * (float)Math.Sin(flickerTime * 3.1f + seed)
+                        + 0.03f * (float)Math.Sin(flickerTime * 7.7f + seed * 1.7f);
+                }
+                else
+                {
+                    hue.Z = 1f;
                 }
 
                 hue.X = l.Color;
@@ -1516,28 +1581,18 @@ namespace ClassicUO.Game.Scenes
         {
             if (!_isSelectionActive) return;
 
-            if (ImGuiManager.IsInitialized && ImGui.GetIO().WantCaptureMouse)
-            {
-                _isSelectionActive = false;
-                return;
-            }
-
             var selectionHue = new Vector3 { Z = 0.7f };
 
-            var selStart = new Point(
-                Math.Min(_selectionStart.X, Mouse.Position.X),
-                Math.Min(_selectionStart.Y, Mouse.Position.Y)
-            );
-            var selEnd = new Point(
-                Math.Max(_selectionStart.X, Mouse.Position.X),
-                Math.Max(_selectionStart.Y, Mouse.Position.Y)
-            );
-
-            // Convert to viewport-relative coordinates
-            selStart.X -= Camera.Bounds.X;
-            selStart.Y -= Camera.Bounds.Y;
-            selEnd.X -= Camera.Bounds.X;
-            selEnd.Y -= Camera.Bounds.Y;
+            // Convert to viewport-relative then to game space so the rectangle
+            // renders at the correct position after Camera.ViewTransformMatrix is applied.
+            Point selStart = Camera.ScreenToWorld(new Point(
+                Math.Min(_selectionStart.X, Mouse.Position.X) - Camera.Bounds.X,
+                Math.Min(_selectionStart.Y, Mouse.Position.Y) - Camera.Bounds.Y
+            ));
+            Point selEnd = Camera.ScreenToWorld(new Point(
+                Math.Max(_selectionStart.X, Mouse.Position.X) - Camera.Bounds.X,
+                Math.Max(_selectionStart.Y, Mouse.Position.Y) - Camera.Bounds.Y
+            ));
 
             var selectionRect = new Rectangle(
                 selStart.X,
@@ -1618,9 +1673,21 @@ namespace ClassicUO.Game.Scenes
 
         private void UpdatePostProcessState(GraphicsDevice gd)
         {
-            if (_currentFilter == _filterMode &&
-                ((_postFx == null && _filterMode != PostProcessingType.Xbr) || (_postFx != null && (_filterMode != PostProcessingType.Xbr || ReferenceEquals(_postFx, _xbr)))))
-                return;
+            if (_currentFilter == _filterMode)
+            {
+                switch (_filterMode)
+                {
+                    case PostProcessingType.Xbr:
+                        if (ReferenceEquals(_postFx, _xbr) && _xbr != null) return;
+                        break;
+                    case PostProcessingType.Fsr:
+                        if (ReferenceEquals(_postFx, _fsr) && _fsr != null) return;
+                        break;
+                    default:
+                        if (_postFx == null) return;
+                        break;
+                }
+            }
 
             _currentFilter = _filterMode;
 
@@ -1636,6 +1703,19 @@ namespace ClassicUO.Game.Scenes
                         else { _xbr = null; _postFx = null; _postSampler = SamplerState.PointClamp; break; }
                     }
                     _postFx = _xbr;
+                    _postSampler = SamplerState.PointClamp;
+                    break;
+
+                case PostProcessingType.Fsr:
+                    if (_fsr == null)
+                    {
+                        _fsr = new FSREffect(gd);
+                        EffectTechnique tech = _fsr.Techniques?["T0"] ??
+                                   (_fsr.Techniques?.Count > 0 ? _fsr.Techniques[0] : null);
+                        if (tech != null) _fsr.CurrentTechnique = tech;
+                        else { _fsr = null; _postFx = null; _postSampler = SamplerState.PointClamp; break; }
+                    }
+                    _postFx = _fsr;
                     _postSampler = SamplerState.PointClamp;
                     break;
 
@@ -1682,76 +1762,112 @@ namespace ClassicUO.Game.Scenes
             _xbr.Parameters?["decal"]?.SetValue(_worldRenderTarget);
         }
 
-        // Machado et al. simulation matrices for colorblind rendering.
-        // Each row set transforms RGB to simulate the given deficiency.
+        private void BindFsrParams(GraphicsDevice gd)
+        {
+            if (_fsr == null || _worldRenderTarget == null) return;
+
+            try
+            {
+                if (_fsr.Techniques?["T0"] != null)
+                    _fsr.CurrentTechnique = _fsr.Techniques["T0"];
+            }
+            catch (Exception e)
+            {
+                Log.ErrorDebug(e.ToString());
+            }
+
+            float w = _worldRenderTarget.Width;
+            float h = _worldRenderTarget.Height;
+
+            Viewport vp = gd.Viewport;
+            var ortho = Matrix.CreateOrthographicOffCenter(0, vp.Width, vp.Height, 0, 0, 1);
+            _fsr.MatrixTransform?.SetValue(ortho);
+            _fsr.TextureSize?.SetValue(new Vector2(w, h));
+            _fsr.Parameters?["decal"]?.SetValue(_worldRenderTarget);
+        }
+
+        // Machado et al. simulation matrices for the three common color-vision deficiencies.
         private static readonly Vector3[][] ColorblindMatrices =
         [
-            // 0 = unused (Off)
             null,
-            // 1 = Deuteranopia (green-blind, most common)
-            [new Vector3(0.625f, 0.375f, 0.000f),
-             new Vector3(0.700f, 0.300f, 0.000f),
-             new Vector3(0.000f, 0.300f, 0.700f)],
-            // 2 = Protanopia (red-blind)
-            [new Vector3(0.567f, 0.433f, 0.000f),
-             new Vector3(0.558f, 0.442f, 0.000f),
-             new Vector3(0.000f, 0.242f, 0.758f)],
-            // 3 = Tritanopia (blue-blind)
-            [new Vector3(0.950f, 0.050f, 0.000f),
-             new Vector3(0.000f, 0.433f, 0.567f),
-             new Vector3(0.000f, 0.475f, 0.525f)],
+            [
+                new Vector3(0.625f, 0.375f, 0.000f),
+                new Vector3(0.700f, 0.300f, 0.000f),
+                new Vector3(0.000f, 0.300f, 0.700f)
+            ],
+            [
+                new Vector3(0.567f, 0.433f, 0.000f),
+                new Vector3(0.558f, 0.442f, 0.000f),
+                new Vector3(0.000f, 0.242f, 0.758f)
+            ],
+            [
+                new Vector3(0.950f, 0.050f, 0.000f),
+                new Vector3(0.000f, 0.433f, 0.567f),
+                new Vector3(0.000f, 0.475f, 0.525f)
+            ]
         ];
 
-        private void EnsureColorblindEffect(GraphicsDevice gd)
+        private static void EnsureColorblindEffect(GraphicsDevice gd, byte mode)
         {
-            if (_colorblindMode == 0) return;
-            if (_colorblind != null) return;
+            if (mode == 0 || _colorblind != null) return;
 
             try
             {
                 _colorblind = new ColorblindEffect(gd);
-                EffectTechnique tech = _colorblind.Techniques?["T0"]
+                EffectTechnique technique = _colorblind.Techniques?["T0"]
                     ?? (_colorblind.Techniques?.Count > 0 ? _colorblind.Techniques[0] : null);
-                if (tech != null)
-                    _colorblind.CurrentTechnique = tech;
+
+                if (technique != null)
+                    _colorblind.CurrentTechnique = technique;
                 else
-                {
                     _colorblind = null;
-                    _colorblindMode = 0;
-                }
             }
-            catch (Exception e)
+            catch (Exception exception)
             {
-                Log.ErrorDebug("Failed to load colorblind shader: " + e);
+                Log.ErrorDebug($"Failed to load colorblind shader: {exception}");
                 _colorblind = null;
-                _colorblindMode = 0;
             }
         }
 
-        private void BindColorblindParams(GraphicsDevice gd, int vpW, int vpH)
+        private static void BindColorblindParams(byte mode, int viewportWidth, int viewportHeight)
         {
-            if (_colorblind == null || _colorblindMode == 0 || _colorblindMode >= ColorblindMatrices.Length)
-                return;
+            if (_colorblind == null || mode == 0 || mode >= ColorblindMatrices.Length) return;
 
-            var ortho = Matrix.CreateOrthographicOffCenter(0, vpW, vpH, 0, 0, 1);
+            var ortho = Matrix.CreateOrthographicOffCenter(
+                0,
+                viewportWidth,
+                viewportHeight,
+                0,
+                0,
+                1
+            );
             _colorblind.MatrixTransform?.SetValue(ortho);
 
-            Vector3[] rows = ColorblindMatrices[_colorblindMode];
+            Vector3[] rows = ColorblindMatrices[mode];
             _colorblind.Row0?.SetValue(rows[0]);
             _colorblind.Row1?.SetValue(rows[1]);
             _colorblind.Row2?.SetValue(rows[2]);
         }
 
-        private void EnsureColorblindTempTarget(GraphicsDevice gd, int w, int h)
+        private void EnsureColorblindTempTarget(GraphicsDevice gd, int width, int height)
         {
-            if (_colorblindTempTarget != null && !_colorblindTempTarget.IsDisposed
-                && _colorblindTempTarget.Width == w && _colorblindTempTarget.Height == h)
+            if (_colorblindTempTarget is { IsDisposed: false }
+                && _colorblindTempTarget.Width == width
+                && _colorblindTempTarget.Height == height)
+            {
                 return;
+            }
 
             _colorblindTempTarget?.Dispose();
-            PresentationParameters pp = gd.PresentationParameters;
-            _colorblindTempTarget = new RenderTarget2D(gd, w, h, false,
-                pp.BackBufferFormat, DepthFormat.None);
+            PresentationParameters parameters = gd.PresentationParameters;
+            _colorblindTempTarget = new RenderTarget2D(
+                gd,
+                width,
+                height,
+                false,
+                parameters.BackBufferFormat,
+                DepthFormat.None
+            );
         }
 
         private static readonly RenderedText _youAreDeadText = RenderedText.Create(
@@ -1773,6 +1889,10 @@ namespace ClassicUO.Game.Scenes
             {
                 return false;
             }
+
+            // Death-splash path returns early without rendering the world, so nothing discards the
+            // screen target here - draw the background so the splash sits on it like every other path.
+            Client.Game.DrawWindowBackground(batcher);
 
             batcher.Begin();
             _youAreDeadText.Draw(
@@ -1814,6 +1934,12 @@ namespace ClassicUO.Game.Scenes
             public int DrawX,
                 DrawY;
         }
+
+        private struct LightOccluder
+        {
+            public int X;
+            public int Z;
+        }
     }
 
     public enum PostProcessingType
@@ -1822,6 +1948,7 @@ namespace ClassicUO.Game.Scenes
         Linear,
         Anisotropic,
         Xbr,
+        Fsr,
         Invalid
     }
 }

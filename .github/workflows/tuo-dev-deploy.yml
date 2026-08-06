@@ -43,7 +43,7 @@ jobs:
       release_notes: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
       version: ${{ steps.version.outputs.VERSION }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: 'dev'
 
@@ -69,6 +69,15 @@ jobs:
 
       - name: Build executable
         run: dotnet publish ${{ env.CUO_PROJECT_PATH }} -c Release -o ${{ env.CUO_OUTPUT_PATH }} -r ${{ matrix.rid }}
+
+      - name: Bundle Fiddle-Me-This assets
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/PlayTazUO/Fiddle-Me-This.git /tmp/fiddle-me-this
+          cp -r "/tmp/fiddle-me-this/[Custom]/Data" "${{ env.CUO_OUTPUT_PATH }}/"
+          cp -r "/tmp/fiddle-me-this/[Custom]/ExternalImages" "${{ env.CUO_OUTPUT_PATH }}/"
+          cp -rn "/tmp/fiddle-me-this/[Original]/ExternalImages/." "${{ env.CUO_OUTPUT_PATH }}/ExternalImages/"
+          rm -rf /tmp/fiddle-me-this
 
       - name: Zip all builds
         shell: bash
@@ -238,12 +247,12 @@ jobs:
     needs: build
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: 'dev'
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-zips
 
@@ -261,6 +270,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete ${{ env.TAG_NAME }} --yes --cleanup-tag || true
+          echo "Waiting for GitHub API to propagate deletion..."
+          sleep 15
 
       - name: Upload all zips to release
         uses: ncipollo/release-action@v1.20.0
@@ -275,6 +286,7 @@ jobs:
           makeLatest: ${{ env.UPLOAD_MAKELATEST }}
           allowUpdates: true
           prerelease: ${{ env.UPLOAD_PRERELEASE }}
+          draft: false
           tag: ${{ env.TAG_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
 

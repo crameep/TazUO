@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 
 namespace ClassicUO.Game.Managers
@@ -109,8 +110,8 @@ namespace ClassicUO.Game.Managers
             EventSink.OnEntityDamage += OnEntityDamage;
         }
 
-        public void SetMaxEvents(int max) => _maxEvents = max;
-        public void SetFightIdleThreshold(int ms) => _fightIdleThresholdMs = ms;
+        public void SetMaxEvents(int max) => _maxEvents = Math.Clamp(max, 100, 100000);
+        public void SetFightIdleThreshold(int ms) => _fightIdleThresholdMs = Math.Clamp(ms, 1000, 120000);
 
         public static void Reset()
         {
@@ -130,7 +131,7 @@ namespace ClassicUO.Game.Managers
 
         public void RecordDamage(uint targetSerial, ushort amount, CombatCategory category, string targetName)
         {
-            if (amount == 0) return;
+            if (amount == 0 || ProfileManager.CurrentProfile?.CombatMeterEnabled != true) return;
 
             var evt = new CombatEvent(Time.Ticks, targetSerial, amount, category, false, targetName);
             AddEvent(evt);
@@ -138,7 +139,7 @@ namespace ClassicUO.Game.Managers
 
         public void RecordHeal(uint targetSerial, ushort amount, string targetName)
         {
-            if (amount == 0) return;
+            if (amount == 0 || ProfileManager.CurrentProfile?.CombatMeterEnabled != true) return;
 
             var category = CombatCategory.Other;
             if (targetSerial == World.Instance?.Player?.Serial)
@@ -193,7 +194,7 @@ namespace ClassicUO.Game.Managers
 
             // Prune if over cap
             if (_events.Count > _maxEvents)
-                _events.RemoveRange(0, 2000);
+                _events.RemoveRange(0, _events.Count - _maxEvents);
         }
 
         private void EndCurrentFight(uint endTime)

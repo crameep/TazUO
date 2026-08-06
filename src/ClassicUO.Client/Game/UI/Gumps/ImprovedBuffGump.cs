@@ -28,6 +28,11 @@ namespace ClassicUO.Game.UI.Gumps
             CanMove = true;
             CanCloseWithRightClick = true;
             AcceptMouseInput = false;
+            // This gump manages its own Width/Height in UpdateSize(). Leaving the base
+            // auto-size on would let the child graphics (toggle button/background) grow the
+            // empty-bar height past PADDING_HANDLE, which shifts the saved bottom anchor and
+            // makes the bar creep up/down a few pixels each logout.
+            WantUpdateSize = false;
 
             BuildGump();
         }
@@ -36,7 +41,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             if (icon != null)
             {
-                var coolDownBar = new CoolDownBar(World, TimeSpan.FromMilliseconds(icon.Timer - Time.Ticks), icon.Title.Replace("<br>", " "), ProfileManager.CurrentProfile.ImprovedBuffBarHue, 0, 0, icon.Graphic, icon.Type, true);
+                var coolDownBar = new CoolDownBar(World, TimeSpan.FromMilliseconds(icon.Timer - Time.Ticks), (icon.Title ?? string.Empty).Replace("<br>", " "), ProfileManager.CurrentProfile.ImprovedBuffBarHue, 0, 0, icon.Graphic, icon.Type, true);
                 coolDownBar.SetTooltip(icon.Text);
                 BuffBarManager.AddCoolDownBar(coolDownBar, _direction, _box);
                 _box.Add(coolDownBar);
@@ -165,12 +170,18 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override void Save(XmlTextWriter writer)
         {
-            base.Save(writer);
+            //Need to override base here, don't call it.
+
+            writer.WriteAttributeString("type", ((int)GumpType).ToString());
+            writer.WriteAttributeString("x", X.ToString());
+            writer.WriteAttributeString("y", (_direction ? Y : Bounds.Bottom - PADDING_HANDLE).ToString());
+            writer.WriteAttributeString("serial", LocalSerial.ToString());
+            writer.WriteAttributeString("serverSerial", ServerSerial.ToString());
+            writer.WriteAttributeString("isLocked", IsLocked.ToString());
+            writer.WriteAttributeString("alphaOffset", AlphaOffset.ToString());
+
             writer.WriteAttributeString("graphic", _graphic.ToString());
             writer.WriteAttributeString("updown", _direction.ToString());
-            writer.WriteAttributeString("lastX", X.ToString());
-            writer.WriteAttributeString("lastY", Y.ToString());
-            writer.WriteAttributeString("anchorY", (Y + _background.Y).ToString());
         }
 
         public override void Restore(XmlElement xml)
@@ -179,25 +190,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             _graphic = ushort.Parse(xml.GetAttribute("graphic"));
             _direction = bool.Parse(xml.GetAttribute("updown"));
-            int.TryParse(xml.GetAttribute("lastX"), out X);
-
-            string anchorYStr = xml.GetAttribute("anchorY");
-            if (!string.IsNullOrEmpty(anchorYStr) && int.TryParse(anchorYStr, out int anchorY))
-            {
-                if (_direction)
-                {
-                    Y = anchorY;
-                }
-                else
-                {
-                    int dynamicHeight = CalculateDynamicHeight();
-                    Y = anchorY - (dynamicHeight - 11);
-                }
-            }
-            else
-            {
-                int.TryParse(xml.GetAttribute("lastY"), out Y);
-            }
 
             RequestUpdateContents();
         }

@@ -45,7 +45,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             Add(_button);
 
-            SetTooltip(Client.Game.UO.FileManager.Clilocs.GetString(1028838 + (Index - 1)), 80);
+            SetTooltip(Client.Game.UO.FileManager.Clilocs.GetString(1028838 + (Index - 1)));
 
             WantUpdateSize = true;
             AcceptMouseInput = true;
@@ -57,7 +57,7 @@ namespace ClassicUO.Game.UI.Gumps
 
         protected override void UpdateContents() => BuildGump();
 
-        protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+        public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
         {
             if (button == MouseButtonType.Left)
             {

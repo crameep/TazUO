@@ -7,10 +7,12 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClassicUO.Common.Enums;
 using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using ClassicUO.Network;
+using ClassicUO.Utility;
 
 namespace ClassicUO.Game.Managers
 {
@@ -199,7 +201,7 @@ namespace ClassicUO.Game.Managers
 
                 string json = JsonSerializer.Serialize(CurrentPlayerConfigs, DressAgentJsonContext.Default.ListDressConfig);
                 string savePath = Path.Combine(ProfileManager.ProfilePath, _saveFileName);
-                File.WriteAllText(savePath, json);
+                FileSystemHelper.WriteAllTextSafe(savePath, json);
             }
             catch (Exception ex)
             {
@@ -408,7 +410,7 @@ namespace ClassicUO.Game.Managers
 
                 Item currentlyEquipped = World.Instance.Player?.FindItemByLayer((Layer)layer);
                 if (currentlyEquipped != null && !config.Contains(currentlyEquipped.Serial))
-                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).ToObjectActionQueueItem(), ActionPriority.MoveItem);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).ToObjectActionQueueItem(), ActionPriority.UnequipItem);
             }
         }
 
@@ -419,7 +421,7 @@ namespace ClassicUO.Game.Managers
             if (item != null && item.Container == World.Instance.Player?.Serial)
             {
                 uint undressBag = GetUndressBag(config);
-                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item, undressBag).ToObjectActionQueueItem(), ActionPriority.MoveItem);
+                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item, undressBag).ToObjectActionQueueItem(), ActionPriority.UnequipItem);
             }
         }
 
@@ -436,7 +438,7 @@ namespace ClassicUO.Game.Managers
                 if (currentlyEquipped == null) continue;
 
                 if(!kr)
-                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).ToObjectActionQueueItem(), ActionPriority.MoveItem);
+                    ObjectActionQueue.Instance.Enqueue(new MoveRequest(currentlyEquipped, undressBag).ToObjectActionQueueItem(), ActionPriority.UnequipItem);
                 else
                     toUnequip.Add((Layer)layer);
             }

@@ -104,6 +104,15 @@ namespace ClassicUO
 
         private void LoadUOFiles()
         {
+            Task<bool> skipServerSelectTask = Client.Settings.GetAsync(SettingsScope.Global, Constants.SqlSettings.SKIP_SERVER_SELECTION, false);
+
+            TazLang.Load(Settings.GlobalSettings.UILanguage);
+
+            // This provides Myra searchable combobox localization context.
+            // Basically, it allows for better developer ergonomics by negating the need to manually
+            // set localize string like tooltips, hints, etc. for every usage.
+            Game.UI.MyraWindows.Widgets.Search.SearchableComboBoxLocalization.Install();
+
             string clientPath = Settings.GlobalSettings.UltimaOnlineDirectory;
             Log.Trace($"Ultima Online installation folder: {clientPath}");
 
@@ -181,12 +190,35 @@ namespace ClassicUO
                 Protocol |= ClientFlags.CF_SA;
             }
 
+            skipServerSelectTask.Wait();
+            Settings.GlobalSettings.SkipServerSelect = skipServerSelectTask.Result || CUOEnviroment.SkipServerSelect;
+
             Log.Trace($"Client path: '{clientPath}'");
             Log.Trace($"Client version: {clientVersion}");
             Log.Trace($"Protocol: {Protocol}");
 
             FileManager = new UOFileManager(clientVersion, clientPath);
-            FileManager.Load(Settings.GlobalSettings.UseVerdata, Settings.GlobalSettings.Language, Settings.GlobalSettings.MapsLayouts);
+
+            try
+            {
+                FileManager.Load(Settings.GlobalSettings.UseVerdata, Settings.GlobalSettings.Language, Client.Game.GraphicsDevice, Settings.GlobalSettings.MapsLayouts);
+            }
+            catch (FileNotFoundException ex)
+            {
+                string missing = !string.IsNullOrEmpty(ex.FileName) ? ex.FileName : ex.Message;
+
+                Log.Error($"Missing required UO data file while loading: {ex}");
+
+                Client.ShowErrorMessage(
+                    "A required Ultima Online data file could not be found:\n\n" +
+                    $"{missing}\n\n" +
+                    "Please verify your UO data files are present in:\n" +
+                    $"{clientPath}");
+
+                // Exit cleanly so the global unhandled-exception handler does not
+                // generate a crash log/report for what is a missing-files setup issue.
+                Environment.Exit(0);
+            }
 
             StaticFilters.Load(FileManager.TileData);
             BuffTable.Load();
@@ -219,24 +251,7 @@ namespace ClassicUO
                 // https://github.com/FNA-XNA/FNA/wiki/7:-FNA-Environment-Variables#fna_graphics_enable_highdpi
                 CUOEnviroment.IsHighDPI = Environment.GetEnvironmentVariable("FNA_GRAPHICS_ENABLE_HIGHDPI") == "1";
 
-                // Load UI scale with migration from old "game_scale" key
-                _ = Task.Run(async () =>
-                {
-                    float scale = await Settings.GetAsync<float>(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, 1f);
-
-                    // If we got the default, check for the legacy key
-                    if (scale == 1f)
-                    {
-                        float legacy = await Settings.GetAsync<float>(SettingsScope.Global, "game_scale", 1f);
-                        if (legacy != 1f)
-                        {
-                            scale = Math.Clamp(legacy, Constants.MIN_UI_SCALE, Constants.MAX_UI_SCALE);
-                            _ = Settings.SetAsync(SettingsScope.Global, Constants.SqlSettings.UI_SCALE, scale);
-                        }
-                    }
-
-                    MainThreadQueue.EnqueueAction(() => Game.SetScale(scale));
-                });
+                _ = Settings.GetAsyncOnMainThread(SettingsScope.Global, Constants.SqlSettings.GAME_SCALE, 1f, f => Game.SetScale(f));
 
                 Game.Run();
             }
@@ -256,5 +271,41 @@ namespace ClassicUO
         }
 
         public static void ShowErrorMessage(string msg) => SDL.SDL_ShowSimpleMessageBox(SDL.SDL_MessageBoxFlags.SDL_MESSAGEBOX_ERROR, "ERROR", msg, IntPtr.Zero);
+
+        /// <summary>
+        /// Guidance shown when the graphics shaders fail to compile. This almost always indicates an
+        /// environment problem (outdated/unavailable OpenGL) rather than a bug in the shader itself.
+        /// </summary>
+        public const string GraphicsShaderHelpMessage =
+            "TazUO could not compile its graphics shaders. This almost always means your system's OpenGL " +
+            "support is too old or unavailable - common causes are running over Remote Desktop, running in a " +
+            "virtual machine without 3D acceleration, or missing/outdated GPU drivers.\n\n" +
+            "Try: update your GPU drivers, run on the local console (not Remote Desktop), or change the renderer " +
+            "in settings (e.g. Vulkan).\n\n" +
+            "You can also try launching TazUO with a different graphics driver by adding one of the following " +
+            "command-line arguments:\n" +
+            "     -force_driver 1   (OpenGL)\n" +
+            "     -force_driver 2   (Vulkan)\n" +
+            "     -force_driver 3   (SDL/FNA auto-select)\n" +
+            "   Try each one in turn until the client starts successfully.";
+
+        /// <summary>
+        /// Returns true when the exception was raised while compiling an effect/shader (e.g. the
+        /// MOJOSHADER_compileEffect failures produced by FNA3D when the host's OpenGL is unsupported).
+        /// </summary>
+        public static bool IsShaderCompileFailure(Exception ex)
+        {
+            for (Exception e = ex; e != null; e = e.InnerException)
+            {
+                if (e.Message != null &&
+                    (e.Message.Contains("MOJOSHADER", StringComparison.OrdinalIgnoreCase) ||
+                     e.Message.Contains("compileEffect", StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

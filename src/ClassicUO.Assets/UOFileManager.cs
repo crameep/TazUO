@@ -4,6 +4,7 @@ using ClassicUO.IO;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Utility.Platforms;
+using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -135,7 +136,7 @@ namespace ClassicUO.Assets
             return uoFilePath;
         }
 
-        public void Load(bool useVerdata, string lang, string mapsLayouts = "")
+        public void Load(bool useVerdata, string lang, GraphicsDevice graphicsDevice, string mapsLayouts = "")
         {
             var stopwatch = Stopwatch.StartNew();
 
@@ -144,6 +145,8 @@ namespace ClassicUO.Assets
             IsUOPInstallation = Version >= ClientVersion.CV_7000 && File.Exists(GetUOFilePath("MainMisc.uop"));
 
             Maps.MapsLayouts = mapsLayouts;
+
+            Task[] asyncedLoading = [Task.Factory.StartNew(TrueTypeLoader.Instance.Load)];
 
             Animations.Load();
             AnimData.Load();
@@ -165,18 +168,15 @@ namespace ClassicUO.Assets
             TileArt.Load();
             StringDictionary.Load();
 
-            PNGLoader.Instance.Load();
-            TrueTypeLoader.Instance.Load();
+            ExternalImageLoader.Instance.Load(BasePath);
+            //TrueTypeLoader.Instance.Load();
 
             ReadArtDefFile();
 
             UOFileMul verdata = Verdata.File;
             bool forceVerdata = Version < ClientVersion.CV_500A || verdata != null && verdata.Length != 0 && Verdata.Patches.Length != 0;
 
-            if (!useVerdata && forceVerdata)
-            {
-                useVerdata = true;
-            }
+            if (!useVerdata && forceVerdata) useVerdata = true;
 
             Log.Trace($"Use verdata.mul: {(useVerdata ? "Yes" : "No")}");
 
@@ -358,9 +358,11 @@ namespace ClassicUO.Assets
                 }
             }
 
+            Task.WaitAll(asyncedLoading);
+            TrueTypeLoader.Instance.SetImageResolver(Arts, graphicsDevice);
 
-            Log.Trace($"Files loaded in: {stopwatch.ElapsedMilliseconds} ms!");
             stopwatch.Stop();
+            Log.Trace($"Files loaded in: {stopwatch.ElapsedMilliseconds} ms!");
         }
 
         private void ReadArtDefFile()

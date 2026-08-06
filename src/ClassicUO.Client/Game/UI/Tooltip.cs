@@ -19,6 +19,7 @@ namespace ClassicUO.Game.UI
         private TextBox _textBox;
         private string _textHTML;
         private readonly World _world;
+        private Item _item;
 
         public Tooltip(World world)
         {
@@ -26,6 +27,9 @@ namespace ClassicUO.Game.UI
         }
 
         private bool _dirty = false;
+
+        // Border hue requested by a matched tooltip override (-1 = default border).
+        private int _borderHueOverride = -1;
 
         public static bool IsEnabled = false;
 
@@ -36,7 +40,19 @@ namespace ClassicUO.Game.UI
 
         public bool IsEmpty => Text == null;
 
-        public uint Serial { get; private set; }
+        public uint Serial
+        {
+            get => field;
+            private set
+            {
+                field = value;
+
+                _item = null;
+
+                if(SerialHelper.IsItem(field))
+                    _item = _world.Items.Get(field);
+            }
+        }
 
         public bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
@@ -85,15 +101,10 @@ namespace ClassicUO.Game.UI
                         align = FontStashSharp.RichText.TextHorizontalAlignment.Center;
                 }
 
-                string finalString = _textHTML;
-                if (SerialHelper.IsItem(Serial))
-                {
-                    finalString = Managers.ToolTipOverrideData.ProcessTooltipText(_world, Serial);
-                    finalString ??= _textHTML;
-                }
+                string finalString = Managers.ToolTipOverrideData.ResolveTooltipText(_world, Serial, _textHTML, out _borderHueOverride);
 
-                if (string.IsNullOrEmpty(finalString) && !string.IsNullOrEmpty(_textHTML)) //Fix for vendor search
-                    finalString = Managers.ToolTipOverrideData.ProcessTooltipText(_textHTML);
+                if (_item?.CustomName.NotNullNotEmpty() == true) //Add custom item name
+                    finalString = $"[{_item.CustomName}]\n" + finalString;
 
                 if (_textBox == null || _textBox.IsDisposed)
                 {
@@ -131,6 +142,10 @@ namespace ClassicUO.Game.UI
                 return false;
             }
 
+            // Tooltip dimensions stay in logical UI space: the whole UI is drawn to a render
+            // target that the global RenderScale maps onto the screen at blit time, so multiplying
+            // here would double-count the scale (background scales with RenderScale^2 while the
+            // text scales with RenderScale once). See ScaleHelper's "never multiply by RenderScale".
             int z_width = _textBox.Width + 8;
             int z_height = _textBox.Height + 8;
 
@@ -138,18 +153,18 @@ namespace ClassicUO.Game.UI
             {
                 x = 0;
             }
-            else if (x > Client.Game.Window.ClientBounds.Width - z_width)
+            else if (x > ScaleHelper.LogicalWindowWidth - z_width)
             {
-                x = Client.Game.Window.ClientBounds.Width - z_width;
+                x = ScaleHelper.LogicalWindowWidth - z_width;
             }
 
             if (y < 0)
             {
                 y = 0;
             }
-            else if (y > Client.Game.Window.ClientBounds.Height - z_height)
+            else if (y > ScaleHelper.LogicalWindowHeight - z_height)
             {
-                y = Client.Game.Window.ClientBounds.Height - z_height;
+                y = ScaleHelper.LogicalWindowHeight - z_height;
             }
 
             X = x - 4;
@@ -175,17 +190,33 @@ namespace ClassicUO.Game.UI
                 hue_vec
             );
 
-            hue_vec = ShaderHueTranslator.GetHueVector(0, false, alpha);
+            var borderTexture = SolidColorTextureCache.GetTexture(Color.Gray);
 
-            batcher.DrawRectangle
-            (
-                SolidColorTextureCache.GetTexture(Color.Gray),
-                x - 4,
-                y - 2,
-                (int)(z_width * zoom),
-                (int)(z_height * zoom),
-                hue_vec
-            );
+            int bgX = x - 4;
+            int bgY = y - 2;
+            int bgWidth = (int)(z_width * zoom);
+            int bgHeight = (int)(z_height * zoom);
+
+            // A matched tooltip override draws a colored accent border on the left and top edges only.
+            if (_borderHueOverride >= 0)
+            {
+                hue_vec = ShaderHueTranslator.GetHueVector(_borderHueOverride, false, alpha);
+                borderTexture = SolidColorTextureCache.GetTexture(Color.White);
+
+                const int leftWidth = 2;
+                int topHeight = Managers.ToolTipOverrideData.BorderWidth;
+
+                // Both edges sit just outside the background so they don't cover the tooltip text.
+                // Top edge spans the width plus the top-left corner.
+                batcher.Draw(borderTexture, new Rectangle(bgX - leftWidth, bgY - topHeight, bgWidth + leftWidth, topHeight), hue_vec);
+                // Left edge.
+                batcher.Draw(borderTexture, new Rectangle(bgX - leftWidth, bgY, leftWidth, bgHeight), hue_vec);
+            }
+            else
+            {
+                hue_vec = ShaderHueTranslator.GetHueVector(0, false, alpha);
+                batcher.DrawRectangle(borderTexture, bgX, bgY, bgWidth, bgHeight, hue_vec);
+            }
 
             _textBox.Draw(batcher, x, y);
 
@@ -199,6 +230,7 @@ namespace ClassicUO.Game.UI
             _textHTML = Text = null;
             _textBox?.Dispose();
             _textBox = null;
+            _borderHueOverride = -1;
             IsEnabled = false;
         }
 
@@ -279,7 +311,7 @@ namespace ClassicUO.Game.UI
             return string.IsNullOrEmpty(result) ? null : result;
         }
 
-        public void SetText(string text, int maxWidth = 0)
+        public void SetText(string text)
         {
             if (ProfileManager.CurrentProfile != null && !ProfileManager.CurrentProfile.UseTooltip)
             {

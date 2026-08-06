@@ -80,7 +80,6 @@ namespace ClassicUO.Game.GameObjects
 
         public abstract bool CheckMouseSelection();
 
-        // FIXME: remove it
         public sbyte FoliageIndex = -1;
         public ushort OriginalGraphic => originalGraphic == 0 ? Graphic : originalGraphic;
         public void ResetOriginalGraphic() => originalGraphic = 0;
@@ -123,6 +122,14 @@ namespace ClassicUO.Game.GameObjects
             }
         }
         public Vector3 Offset;
+
+        /// <summary>
+        /// Tracks whether this object is currently treated as within the tree-to-stumps radius.
+        /// Used to apply hysteresis so trees near the radius boundary don't flash when the
+        /// player's screen position bobs slightly during walk/run animations.
+        /// </summary>
+        public bool WithinStumpRadius;
+
         public short PriorityZ;
         public GameObject TNext;
         public GameObject TPrevious;
@@ -148,12 +155,7 @@ namespace ClassicUO.Game.GameObjects
                 RealScreenPosition.Y + (Offset.Y - Offset.Z)
             );
 
-        public int DistanceFrom(Vector2 pos)
-        {
-            if (pos == null) { return int.MaxValue; }
-
-            return Math.Max(Math.Abs(X - (int)pos.X), Math.Abs(Y - (int)pos.Y));
-        }
+        public int DistanceFrom(Vector2 pos) => Math.Max(Math.Abs(X - (int)pos.X), Math.Abs(Y - (int)pos.Y));
 
         public void AddToTile() => AddToTile(X, Y);
 
@@ -283,7 +285,7 @@ namespace ClassicUO.Game.GameObjects
             int offsetY = 0;
 
             int minX = 6;
-            int maxX = minX + Client.Game.Scene.Camera.Bounds.Width - 6;
+            int maxX = Client.Game.Scene.Camera.Bounds.Width - 6;
             int minY = 0;
             //int maxY = minY + ProfileManager.CurrentProfile.GameWindowSize.Y - 6;
 
@@ -298,15 +300,15 @@ namespace ClassicUO.Game.GameObjects
                     continue;
                 }
 
-                int startX = item.RealScreenPosition.X;
-                int endX = startX + item.TextBox.Width;
+                int textWidth = item.TextBox.MeasuredSize.X;
+                int startX = item.RealScreenPosition.X + ((item.TextBox.Width - textWidth) >> 1);
+                int endX = startX + textWidth;
 
                 if (startX < minX)
                 {
                     item.RealScreenPosition.X += minX - startX;
                 }
-
-                if (endX > maxX)
+                else if (endX > maxX)
                 {
                     item.RealScreenPosition.X -= endX - maxX;
                 }

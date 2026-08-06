@@ -6,6 +6,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using ClassicUO.Network;
@@ -15,9 +16,9 @@ using Microsoft.Xna.Framework;
 using SDL3;
 using MathHelper = ClassicUO.Utility.MathHelper;
 using ClassicUO.Assets;
-using ClassicUO.Game.UI;
-using ClassicUO.Utility.Logging;
-using ImGuiNET;
+using ClassicUO.Common;
+using ClassicUO.Common.Enums;
+using ClassicUO.Game.UI.Controls;
 
 namespace ClassicUO.Game.Scenes
 {
@@ -37,6 +38,12 @@ namespace ClassicUO.Game.Scenes
             _selectionEnd;
         private int AnchorOffset => ProfileManager.CurrentProfile.DragSelectAsAnchor ? 0 : 2;
 
+        /// <summary>
+        /// Toggle auto walk on/off
+        /// </summary>
+        /// <param name="on">Use null to toggle on/off, or set explicitely</param>
+        internal void ToggleAutoWalk(bool? on = true) => _continueRunning = on.HasValue ? on.Value : !_continueRunning;
+
         private bool MoveCharacterByMouseInput()
         {
             if ((_rightMousePressed || _continueRunning) && _world.InGame) // && !Pathfinder.AutoWalking)
@@ -45,9 +52,6 @@ namespace ClassicUO.Game.Scenes
                 {
                     _world.Player.Pathfinder.StopAutoWalk();
                 }
-
-                if (LongDistancePathfinder.IsPathfinding())
-                    LongDistancePathfinder.StopPathfinding();
 
                 int x = Camera.Bounds.X + (Camera.Bounds.Width >> 1) + ((ProfileManager.CurrentProfile.PlayerOffset.X - ProfileManager.CurrentProfile.PlayerOffset.Y) * 22);
                 int y = Camera.Bounds.Y + (Camera.Bounds.Height >> 1) + ((ProfileManager.CurrentProfile.PlayerOffset.X + ProfileManager.CurrentProfile.PlayerOffset.Y) * 22);
@@ -213,10 +217,14 @@ namespace ClassicUO.Game.Scenes
                 _selectionEnd.Y = Mouse.Position.Y;
             }
 
-            _rectangleObj.X = _selectionStart.X - Camera.Bounds.X;
-            _rectangleObj.Y = _selectionStart.Y - Camera.Bounds.Y;
-            _rectangleObj.Width = _selectionEnd.X - Camera.Bounds.X - _rectangleObj.X;
-            _rectangleObj.Height = _selectionEnd.Y - Camera.Bounds.Y - _rectangleObj.Y;
+            // Convert viewport-local mouse positions to game space so the intersection
+            // check matches RealScreenPosition (which is also in game space, pre-zoom).
+            Point selMin = Camera.ScreenToWorld(new Point(_selectionStart.X - Camera.Bounds.X, _selectionStart.Y - Camera.Bounds.Y));
+            Point selMax = Camera.ScreenToWorld(new Point(_selectionEnd.X - Camera.Bounds.X, _selectionEnd.Y - Camera.Bounds.Y));
+            _rectangleObj.X = selMin.X;
+            _rectangleObj.Y = selMin.Y;
+            _rectangleObj.Width = selMax.X - selMin.X;
+            _rectangleObj.Height = selMax.Y - selMin.Y;
 
             int finalX = ProfileManager.CurrentProfile.DragSelectStartX;
             int finalY = ProfileManager.CurrentProfile.DragSelectStartY;
@@ -284,11 +292,9 @@ namespace ClassicUO.Game.Scenes
 
                 var size = new Point(p.X + mobile.FrameInfo.Width, p.Y + mobile.FrameInfo.Height);
 
-                p = Camera.WorldToScreen(p);
+                // Keep in game space (RealScreenPosition space) to match _rectangleObj
                 _rectanglePlayer.X = p.X;
                 _rectanglePlayer.Y = p.Y;
-
-                size = Camera.WorldToScreen(size);
                 _rectanglePlayer.Width = size.X - p.X;
                 _rectanglePlayer.Height = size.Y - p.Y;
 
@@ -419,13 +425,12 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnLeftMouseDown()
         {
-            if (UIManager.PopupMenu != null)
+            if (
+                UIManager.PopupMenu != null
+                && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
+            )
             {
-                Point uiMouse = UIManager.ScreenToUI(Mouse.Position);
-                if (!UIManager.PopupMenu.Bounds.Contains(uiMouse.X, uiMouse.Y))
-                {
-                    UIManager.ShowGamePopup(null);
-                }
+                UIManager.ShowGamePopup(null);
             }
 
             if (!UIManager.IsMouseOverWorld)
@@ -433,57 +438,86 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
+            // Drop focus from other inputs the instant the world is pressed, not just on release,
+            // so a press-and-hold (e.g. hold-to-walk) also releases the previously focused field.
+            UIManager.RestoreSystemChatFocus();
+
             if (_world.CustomHouseManager != null)
             {
-                _isMouseLeftDown = true;
+                HandleHouseManagerMouseDown();
+                return true;
+            }
 
-                if (
-                    _world.TargetManager.IsTargeting
-                    && _world.TargetManager.TargetingState == CursorTarget.MultiPlacement
-                    && (
-                        _world.CustomHouseManager.SelectedGraphic != 0
-                        || _world.CustomHouseManager.Erasing
-                        || _world.CustomHouseManager.SeekTile
-                    )
-                    && SelectedObject.Object is GameObject obj
-                )
+            SelectedObject.LastLeftDownObject = SelectedObject.Object;
+
+            if (ProfileManager.CurrentProfile.EnableDragSelect && DragSelectModifierActive())
+            {
+                if (CanDragSelectOnObject(SelectedObject.Object as GameObject))
                 {
-                    _world.CustomHouseManager.OnTargetWorld(obj);
-                    _lastSelectedMultiPositionInHouseCustomization.X = obj.X;
-                    _lastSelectedMultiPositionInHouseCustomization.Y = obj.Y;
+                    _selectionStart = Mouse.Position;
+                    _isSelectionActive = true;
                 }
             }
             else
             {
-                SelectedObject.LastLeftDownObject = SelectedObject.Object;
-
-                if (ProfileManager.CurrentProfile.EnableDragSelect && DragSelectModifierActive() && !(ImGuiManager.IsInitialized && ImGui.GetIO().WantCaptureMouse))
-                {
-                    if (CanDragSelectOnObject(SelectedObject.Object as GameObject))
-                    {
-                        _selectionStart = Mouse.Position;
-                        _isSelectionActive = true;
-                    }
-                }
-                else
-                {
-                    _isMouseLeftDown = true;
-                    _holdMouse2secOverItemTime = Time.Ticks;
-                }
+                _isMouseLeftDown = true;
+                _holdMouse2secOverItemTime = Time.Ticks;
             }
+
+            if (UIManager.TopMostControl is MyraControl)
+                UIManager.TopMostControl = null;
+
+            if (ProfileManager.CurrentProfile.SingleClickMobileSetsLastTarget && SelectedObject.Object is Mobile m)
+                World.Instance.TargetManager.LastTargetInfo.SetEntity(m);
 
             return true;
         }
 
+        /// <summary>
+        /// Handles the mouse down event when the house customization manager is open
+        /// </summary>
+        private void HandleHouseManagerMouseDown()
+        {
+            _isMouseLeftDown = true;
+
+            // Check if this is indeed a house customization operation
+            if (!_world.TargetManager.IsTargeting || _world.TargetManager.TargetingState != CursorTarget.MultiPlacement)
+                return;
+
+            // Check if this is an operation that actually needs to be forwarded to the manager
+            if (_world.CustomHouseManager.SelectedGraphic == 0 && !_world.CustomHouseManager.Erasing &&
+                !_world.CustomHouseManager.SeekTile)
+                return;
+
+            // Null/Type guard
+            if (SelectedObject.Object is not GameObject obj)
+                return;
+
+            // Guard against multiple clicks to on the exact same entity
+            if (obj.X == _lastSelectedMultiPositionInHouseCustomization.X &&
+                obj.Y == _lastSelectedMultiPositionInHouseCustomization.Y &&
+                obj.Z == _lastSelectedMultiPositionInHouseCustomization.Z
+               )
+                return;
+
+            // Record the last position
+            _lastSelectedMultiPositionInHouseCustomization = new Point3D(obj.X, obj.Y, obj.Z);
+
+            // Dispatch the event
+            _world.CustomHouseManager.OnTargetWorld(obj);
+
+            // Add a delay to normalize placement behavior
+            _timeToPlaceMultiInHouseCustomization = Time.Ticks + 50;
+        }
+
         private bool OnLeftMouseUp()
         {
-            if (UIManager.PopupMenu != null)
+            if (
+                UIManager.PopupMenu != null
+                && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
+            )
             {
-                Point uiMouse = UIManager.ScreenToUI(Mouse.Position);
-                if (!UIManager.PopupMenu.Bounds.Contains(uiMouse.X, uiMouse.Y))
-                {
-                    UIManager.ShowGamePopup(null);
-                }
+                UIManager.ShowGamePopup(null);
             }
 
             if (_isMouseLeftDown)
@@ -510,15 +544,11 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            if (UIManager.SystemChat != null && !UIManager.SystemChat.IsFocused)
-            {
-                UIManager.KeyboardFocusControl = null;
-                UIManager.SystemChat.SetFocus();
-            }
+            UIManager.RestoreSystemChatFocus();
 
             if (!ProfileManager.CurrentProfile.DisableAutoMove && _rightMousePressed)
             {
-                _continueRunning = true;
+                ToggleAutoWalk();
             }
 
             BaseGameObject lastObj = SelectedObject.Object;
@@ -868,20 +898,9 @@ namespace ClassicUO.Game.Scenes
 
                     case Entity ent:
 
-                        if (Keyboard.Alt && !ProfileManager.CurrentProfile.DisableAutoFollowAlt && ent is Mobile)
+                        if (HotKeys.IsPressed(HotKeyRegistrar.FollowMobileId) && !ProfileManager.CurrentProfile.DisableAutoFollowAlt && ent is Mobile followMobile)
                         {
-                            _world.MessageManager.HandleMessage(
-                                _world.Player,
-                                ResGeneral.NowFollowing,
-                                string.Empty,
-                                0,
-                                MessageType.Regular,
-                                3,
-                                TextType.CLIENT
-                            );
-
-                            ProfileManager.CurrentProfile.FollowingMode = true;
-                            ProfileManager.CurrentProfile.FollowingTarget = ent;
+                            followMobile.Follow();
                         }
                         else if (!_world.DelayedObjectClickManager.IsEnabled)
                         {
@@ -971,13 +990,12 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnRightMouseDown()
         {
-            if (UIManager.PopupMenu != null)
+            if (
+                UIManager.PopupMenu != null
+                && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
+            )
             {
-                Point uiMouse = UIManager.ScreenToUI(Mouse.Position);
-                if (!UIManager.PopupMenu.Bounds.Contains(uiMouse.X, uiMouse.Y))
-                {
-                    UIManager.ShowGamePopup(null);
-                }
+                UIManager.ShowGamePopup(null);
             }
 
             if (!UIManager.IsMouseOverWorld)
@@ -994,13 +1012,12 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnRightMouseUp()
         {
-            if (UIManager.PopupMenu != null)
+            if (
+                UIManager.PopupMenu != null
+                && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
+            )
             {
-                Point uiMouse = UIManager.ScreenToUI(Mouse.Position);
-                if (!UIManager.PopupMenu.Bounds.Contains(uiMouse.X, uiMouse.Y))
-                {
-                    UIManager.ShowGamePopup(null);
-                }
+                UIManager.ShowGamePopup(null);
             }
 
             _rightMousePressed = false;
@@ -1013,7 +1030,7 @@ namespace ClassicUO.Game.Scenes
 
             if (ProfileManager.CurrentProfile.EnablePathfind && ProfileManager.CurrentProfile.PathfindSingleClick)
             {
-                if (ProfileManager.CurrentProfile.UseShiftToPathfind && !Keyboard.Shift)
+                if (ProfileManager.CurrentProfile.UseShiftToPathfind && !HotKeys.IsPressed(HotKeyRegistrar.PathfindId))
                 {
                     return false;
                 }
@@ -1064,9 +1081,13 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
+            _rightMousePressed = true;
+            _continueRunning = false;
+            StopFollowing();
+
             if (ProfileManager.CurrentProfile.EnablePathfind && !_world.Player.Pathfinder.AutoWalking)
             {
-                if ((ProfileManager.CurrentProfile.UseShiftToPathfind && !Keyboard.Shift) || ProfileManager.CurrentProfile.PathfindSingleClick)
+                if ((ProfileManager.CurrentProfile.UseShiftToPathfind && !HotKeys.IsPressed(HotKeyRegistrar.PathfindId)) || ProfileManager.CurrentProfile.PathfindSingleClick)
                 {
                     return false;
                 }
@@ -1175,7 +1196,7 @@ namespace ClassicUO.Game.Scenes
 
         internal override bool OnMouseWheel(bool up)
         {
-            if (Keyboard.Ctrl && Client.Game.UO.GameCursor.ItemHold.Enabled)
+            if (HotKeys.IsPressed(HotKeyRegistrar.ItemDragLockId) && Client.Game.UO.GameCursor.ItemHold.Enabled)
             {
                 if (!up && !Client.Game.UO.GameCursor.ItemHold.IsFixedPosition)
                 {
@@ -1191,7 +1212,11 @@ namespace ClassicUO.Game.Scenes
                 }
             }
 
-            if (CanExecuteMacro())
+            // There's a bit of an edge case here - if the control is 'scrollable',
+            // we may want to direct the input to it, rather than execute a macro.
+            // Since it's basically impossible to know, from this vantage point, what gump we're looking at,
+            // this check specifically targets the Shop Gump. This is the least invasive, if imperfect solution right now.
+            if (CanExecuteMacro() && UIManager.TopMostControl is not ShopGump)
             {
                 Macro macro = _world.Macros.FindMacro(up, Keyboard.Alt, Keyboard.Ctrl, Keyboard.Shift);
 
@@ -1199,7 +1224,7 @@ namespace ClassicUO.Game.Scenes
                 {
                     if (macro.Items is MacroObject mac)
                     {
-                        if (ProfileManager.CurrentProfile.DisableHotkeys && mac.Code != MacroType.ToggleHotkeys)
+                        if (HotKeys.GloballyDisabled && mac.Code != MacroType.ToggleHotkeys)
                         {
                             return false;
                         }
@@ -1216,7 +1241,7 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            if (Keyboard.Ctrl && ProfileManager.CurrentProfile.EnableMousewheelScaleZoom)
+            if (HotKeys.IsPressed(HotKeyRegistrar.ZoomScrollId) && ProfileManager.CurrentProfile.EnableMousewheelScaleZoom)
             {
                 if (up)
                 {
@@ -1354,8 +1379,6 @@ namespace ClassicUO.Game.Scenes
                     {
                         _world.Player.Pathfinder.StopAutoWalk();
                     }
-                    if (LongDistancePathfinder.IsPathfinding())
-                        LongDistancePathfinder.StopPathfinding();
 
                     break;
 
@@ -1460,6 +1483,8 @@ namespace ClassicUO.Game.Scenes
             if (CanExecuteMacro())
             {
                 SpellBarManager.KeyPress(key, e.mod);
+                SelfHealManager.HandleKeyDown(key, e.mod, e.repeat);
+                ClassicUO.Game.Managers.Hotkeys.HotKeys.HandleKeyDown(key, e.mod, e.repeat);
 
                 Macro macro = _world.Macros.FindMacro(
                     key,
@@ -1472,7 +1497,7 @@ namespace ClassicUO.Game.Scenes
                 {
                     if (macro.Items is MacroObject mac)
                     {
-                        if (ProfileManager.CurrentProfile.DisableHotkeys && mac.Code != MacroType.ToggleHotkeys)
+                        if (HotKeys.GloballyDisabled && mac.Code != MacroType.ToggleHotkeys)
                         { //Disable hotkeys for all macros unless it's the toggle hotkey macro
                         }
                         else if (mac.Code == MacroType.LookAtMouse)
@@ -1580,7 +1605,7 @@ namespace ClassicUO.Game.Scenes
             var key = (SDL.SDL_Keycode)e.key;
 
             if (
-                !Keyboard.Ctrl &&
+                !HotKeys.IsPressed(HotKeyRegistrar.ZoomScrollId) &&
                 ProfileManager.CurrentProfile.EnableMousewheelScaleZoom
                 && ProfileManager.CurrentProfile.RestoreScaleAfterUnpressCtrl
             )
@@ -1731,7 +1756,7 @@ namespace ClassicUO.Game.Scenes
                 Macro macro = _world.Macros.FindMacro((SDL.SDL_GamepadButton)e.button);
                 if (macro != null && macro.Items is MacroObject mac)
                 {
-                    if (ProfileManager.CurrentProfile.DisableHotkeys && mac.Code != MacroType.ToggleHotkeys)
+                    if (HotKeys.GloballyDisabled && mac.Code != MacroType.ToggleHotkeys)
                     {
                     }
                     else

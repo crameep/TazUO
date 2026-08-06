@@ -3,7 +3,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using ClassicUO.Game.Data;
-using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.SpellVisualRange;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
@@ -27,6 +27,13 @@ namespace ClassicUO.Game.GameObjects
         {
             if (StaticFilters.IsTree(graphic, out _) && _profile?.TreeToStumps == true)
             {
+                if (_profile.TreeToStumpsWithinRadius
+                    && World.Player != null
+                    && !StaticFilters.IsWithinStumpRadius(GetScreenPosition(), World.Player.GetScreenPosition(), ref WithinStumpRadius))
+                {
+                    return graphic;
+                }
+
                 return Constants.TREE_REPLACE_GRAPHIC;
             }
             return graphic;

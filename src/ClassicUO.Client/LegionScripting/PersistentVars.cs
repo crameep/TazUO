@@ -1,34 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
 using ClassicUO.Configuration;
-using Microsoft.Data.Sqlite;
+using ClassicUO.Game.Managers;
+using ClassicUO.Utility.Logging;
+using Dapper;
+using Dapper.Contrib.Extensions;
 
 namespace ClassicUO.LegionScripting
 {
     public static class PersistentVars
     {
         private const string DB_FILE = "legionvars.db";
-        private const string OLD_DATA_FILE = "legionvars.dat";
         private const string GlobalScopeKey = "GLOBAL";
-        private const char SEPARATOR = '\t';
 
         private static string _charScopeKey = "";
         private static string _accountScopeKey = "";
         private static string _serverScopeKey = "";
 
-        private static readonly SemaphoreSlim _dbLock = new SemaphoreSlim(1, 1);
-        private static string DataPath => Path.Combine(CUOEnviroment.ExecutablePath, "Data", DB_FILE);
-        private static string OldDataPath => Path.Combine(CUOEnviroment.ExecutablePath, "Data", OLD_DATA_FILE);
-
-        private static string ConnectionString => new SqliteConnectionStringBuilder
+        private static PersistentVarsDb Db
         {
-            DataSource = DataPath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
-        }.ToString();
+            get
+            {
+                field ??= new PersistentVarsDb();
+                return field;
+            }
+        }
 
         public static void Load()
         {
@@ -36,313 +34,189 @@ namespace ClassicUO.LegionScripting
             _accountScopeKey = ProfileManager.CurrentProfile.ServerName + ProfileManager.CurrentProfile.Username;
             _serverScopeKey = ProfileManager.CurrentProfile.ServerName;
 
-            InitializeDatabaseAsync().Wait();
+            _ = Db; // Ensure the database and table exist before any reads/writes happen.
         }
 
-        private static async Task InitializeDatabaseAsync()
+        public static void Unload()
         {
-            await _dbLock.WaitAsync();
-            try
-            {
-                // Ensure the Data directory exists
-                string dataDir = Path.GetDirectoryName(DataPath);
-                if (!Directory.Exists(dataDir))
-                {
-                    Directory.CreateDirectory(dataDir);
-                }
-
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    SqliteCommand createTableCmd = connection.CreateCommand();
-                    createTableCmd.CommandText = @"
-                        CREATE TABLE IF NOT EXISTS persistent_vars (
-                            scope TEXT NOT NULL,
-                            scope_key TEXT NOT NULL,
-                            key TEXT NOT NULL,
-                            value TEXT NOT NULL,
-                            PRIMARY KEY (scope, scope_key, key)
-                        )";
-                    await createTableCmd.ExecuteNonQueryAsync();
-
-                    // Create index for faster lookups
-                    SqliteCommand createIndexCmd = connection.CreateCommand();
-                    createIndexCmd.CommandText = @"
-                        CREATE INDEX IF NOT EXISTS idx_scope_scopekey
-                        ON persistent_vars(scope, scope_key)";
-                    await createIndexCmd.ExecuteNonQueryAsync();
-                }
-
-                // Migrate old data if exists
-                if (File.Exists(OldDataPath))
-                {
-                    await MigrateOldDataAsync();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to initialize persistent vars database: {ex.Message}");
-            }
-            finally
-            {
-                _dbLock.Release();
-            }
+            // SQLite handles flushing automatically - nothing to do here.
         }
 
-        private static async Task MigrateOldDataAsync()
-        {
-            try
-            {
-                string[] lines = await File.ReadAllLinesAsync(OldDataPath);
-                int migratedCount = 0;
-
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    using (SqliteTransaction transaction = connection.BeginTransaction())
-                    {
-                        SqliteCommand insertCmd = connection.CreateCommand();
-                        insertCmd.Transaction = transaction;
-                        insertCmd.CommandText = @"
-                            INSERT OR REPLACE INTO persistent_vars (scope, scope_key, key, value)
-                            VALUES ($scope, $scope_key, $key, $value)";
-
-                        SqliteParameter scopeParam = insertCmd.Parameters.Add("$scope", SqliteType.Text);
-                        SqliteParameter scopeKeyParam = insertCmd.Parameters.Add("$scope_key", SqliteType.Text);
-                        SqliteParameter keyParam = insertCmd.Parameters.Add("$key", SqliteType.Text);
-                        SqliteParameter valueParam = insertCmd.Parameters.Add("$value", SqliteType.Text);
-
-                        foreach (string line in lines)
-                        {
-                            if (string.IsNullOrEmpty(line)) continue;
-
-                            string[] parts = line.Split(SEPARATOR);
-                            if (parts.Length >= 4)
-                            {
-                                scopeParam.Value = parts[0];
-                                scopeKeyParam.Value = parts[1];
-                                keyParam.Value = parts[2];
-                                string value = parts.Length > 4 ? string.Join(SEPARATOR.ToString(), parts, 3, parts.Length - 3) : parts[3];
-                                valueParam.Value = UnescapeValue(value);
-
-                                await insertCmd.ExecuteNonQueryAsync();
-                                migratedCount++;
-                            }
-                        }
-
-                        transaction.Commit();
-                    }
-                }
-
-                // Backup old file and delete
-                string backupPath = OldDataPath + ".bak";
-                if (File.Exists(backupPath))
-                {
-                    File.Delete(backupPath);
-                }
-                File.Move(OldDataPath, backupPath);
-
-                Console.WriteLine($"Migrated {migratedCount} persistent vars from old format to SQLite");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to migrate old persistent vars data: {ex.Message}");
-            }
-        }
-
-        private static string UnescapeValue(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return value;
-
-            return value.Replace("\\r", "\r")
-                       .Replace("\\n", "\n")
-                       .Replace("\\t", "\t")
-                       .Replace("\\\\", "\\");
-        }
-
-        private static (API.PersistentVar scope, string scopeKey) GetScopeKeyPair(API.PersistentVar scope)
+        private static (string scope, string scopeKey) GetScopeKeyPair(LegionAPI.PersistentVar scope)
         {
             switch (scope)
             {
-                case API.PersistentVar.Char:
-                    return (scope, _charScopeKey);
-                case API.PersistentVar.Account:
-                    return (scope, _accountScopeKey);
-                case API.PersistentVar.Server:
-                    return (scope, _serverScopeKey);
-                case API.PersistentVar.Global:
-                    return (scope, GlobalScopeKey);
+                case LegionAPI.PersistentVar.Char:
+                    return (scope.ToString(), _charScopeKey);
+                case LegionAPI.PersistentVar.Account:
+                    return (scope.ToString(), _accountScopeKey);
+                case LegionAPI.PersistentVar.Server:
+                    return (scope.ToString(), _serverScopeKey);
+                case LegionAPI.PersistentVar.Global:
+                    return (scope.ToString(), GlobalScopeKey);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(scope), scope, null);
             }
         }
 
-        public static string GetVar(API.PersistentVar scope, string key, string defaultValue = "") => GetVarAsync(scope, key, defaultValue).Result;
+        public static string GetVar(LegionAPI.PersistentVar scope, string key, string defaultValue = "") => GetVarAsync(scope, key, defaultValue).Result;
 
-        public static async Task<string> GetVarAsync(API.PersistentVar scope, string key, string defaultValue = "")
+        public static async Task<string> GetVarAsync(LegionAPI.PersistentVar scope, string key, string defaultValue = "")
         {
-            (API.PersistentVar s, string scopeKey) = GetScopeKeyPair(scope);
-            string scopeStr = s.ToString();
+            (string scopeStr, string scopeKey) = GetScopeKeyPair(scope);
 
-            await _dbLock.WaitAsync();
             try
             {
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    SqliteCommand cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        SELECT value FROM persistent_vars
-                        WHERE scope = $scope AND scope_key = $scope_key AND key = $key";
-                    cmd.Parameters.AddWithValue("$scope", scopeStr);
-                    cmd.Parameters.AddWithValue("$scope_key", scopeKey);
-                    cmd.Parameters.AddWithValue("$key", key);
-
-                    object result = await cmd.ExecuteScalarAsync();
-                    return result?.ToString() ?? defaultValue;
-                }
+                string value = await Db.GetValueAsync(scopeStr, scopeKey, key).ConfigureAwait(false);
+                return value ?? defaultValue;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting var '{key}': {ex.Message}");
+                Log.Error($"Error getting var '{key}': {ex.Message}");
                 return defaultValue;
             }
-            finally
-            {
-                _dbLock.Release();
-            }
         }
 
-        public static void SaveVar(API.PersistentVar scope, string key, string value) => SaveVarAsync(scope, key, value, null).ConfigureAwait(false);
+        public static void SaveVar(LegionAPI.PersistentVar scope, string key, string value) => SaveVarAsync(scope, key, value, null).ConfigureAwait(false);
 
-        public static void SaveVar(API.PersistentVar scope, string key, string value, Action onComplete) => SaveVarAsync(scope, key, value, onComplete).ConfigureAwait(false);
+        public static void SaveVar(LegionAPI.PersistentVar scope, string key, string value, Action onComplete) => SaveVarAsync(scope, key, value, onComplete).ConfigureAwait(false);
 
-        public static async Task SaveVarAsync(API.PersistentVar scope, string key, string value, Action onComplete = null)
+        public static async Task SaveVarAsync(LegionAPI.PersistentVar scope, string key, string value, Action onComplete = null)
         {
-            (API.PersistentVar s, string scopeKey) = GetScopeKeyPair(scope);
-            string scopeStr = s.ToString();
+            (string scopeStr, string scopeKey) = GetScopeKeyPair(scope);
 
-            await _dbLock.WaitAsync();
             try
             {
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    SqliteCommand cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        INSERT OR REPLACE INTO persistent_vars (scope, scope_key, key, value)
-                        VALUES ($scope, $scope_key, $key, $value)";
-                    cmd.Parameters.AddWithValue("$scope", scopeStr);
-                    cmd.Parameters.AddWithValue("$scope_key", scopeKey);
-                    cmd.Parameters.AddWithValue("$key", key);
-                    cmd.Parameters.AddWithValue("$value", value);
-
-                    await cmd.ExecuteNonQueryAsync();
-                }
+                await Db.SaveValueAsync(scopeStr, scopeKey, key, value).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving var '{key}': {ex.Message}");
+                Log.Error($"Error saving var '{key}': {ex.Message}");
             }
-            finally
-            {
-                _dbLock.Release();
-                onComplete?.Invoke();
-            }
+
+            onComplete?.Invoke();
         }
 
-        public static void DeleteVar(API.PersistentVar scope, string key) => DeleteVarAsync(scope, key, null).ConfigureAwait(false);
+        public static void DeleteVar(LegionAPI.PersistentVar scope, string key) => DeleteVarAsync(scope, key, null).ConfigureAwait(false);
 
-        public static void DeleteVar(API.PersistentVar scope, string key, Action onComplete) => DeleteVarAsync(scope, key, onComplete).ConfigureAwait(false);
+        public static void DeleteVar(LegionAPI.PersistentVar scope, string key, Action onComplete) => DeleteVarAsync(scope, key, onComplete).ConfigureAwait(false);
 
-        public static async Task DeleteVarAsync(API.PersistentVar scope, string key, Action onComplete = null)
+        public static async Task DeleteVarAsync(LegionAPI.PersistentVar scope, string key, Action onComplete = null)
         {
-            (API.PersistentVar s, string scopeKey) = GetScopeKeyPair(scope);
-            string scopeStr = s.ToString();
+            (string scopeStr, string scopeKey) = GetScopeKeyPair(scope);
 
-            await _dbLock.WaitAsync();
             try
             {
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    SqliteCommand cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        DELETE FROM persistent_vars
-                        WHERE scope = $scope AND scope_key = $scope_key AND key = $key";
-                    cmd.Parameters.AddWithValue("$scope", scopeStr);
-                    cmd.Parameters.AddWithValue("$scope_key", scopeKey);
-                    cmd.Parameters.AddWithValue("$key", key);
-
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
+                await Db.DeleteValueAsync(scopeStr, scopeKey, key).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error deleting var '{key}': {ex.Message}");
+                Log.Error($"Error deleting var '{key}': {ex.Message}");
             }
-            finally
-            {
-                _dbLock.Release();
-                onComplete?.Invoke();
-            }
+
+            onComplete?.Invoke();
         }
 
-        public static Dictionary<string, string> GetAllVars(API.PersistentVar scope) => GetAllVarsAsync(scope).Result;
+        public static Dictionary<string, string> GetAllVars(LegionAPI.PersistentVar scope) => GetAllVarsAsync(scope).Result;
 
-        public static void Unload()
+        public static async Task<Dictionary<string, string>> GetAllVarsAsync(LegionAPI.PersistentVar scope)
         {
-            // SQLite handles this automatically - no need to flush
-            // Just ensure any pending operations complete
-            _dbLock.Wait();
-            _dbLock.Release();
-        }
+            (string scopeStr, string scopeKey) = GetScopeKeyPair(scope);
 
-        public static async Task<Dictionary<string, string>> GetAllVarsAsync(API.PersistentVar scope)
-        {
-            (API.PersistentVar s, string scopeKey) = GetScopeKeyPair(scope);
-            string scopeStr = s.ToString();
-            var result = new Dictionary<string, string>();
-
-            await _dbLock.WaitAsync();
             try
             {
-                using (var connection = new SqliteConnection(ConnectionString))
-                {
-                    await connection.OpenAsync();
-
-                    SqliteCommand cmd = connection.CreateCommand();
-                    cmd.CommandText = @"
-                        SELECT key, value FROM persistent_vars
-                        WHERE scope = $scope AND scope_key = $scope_key";
-                    cmd.Parameters.AddWithValue("$scope", scopeStr);
-                    cmd.Parameters.AddWithValue("$scope_key", scopeKey);
-
-                    using (SqliteDataReader reader = await cmd.ExecuteReaderAsync())
-                    {
-                        while (await reader.ReadAsync())
-                        {
-                            result[reader.GetString(0)] = reader.GetString(1);
-                        }
-                    }
-                }
-
-                return result;
+                return await Db.GetAllAsync(scopeStr, scopeKey).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error getting all vars: {ex.Message}");
-                return result;
+                Log.Error($"Error getting all vars: {ex.Message}");
+                return new Dictionary<string, string>();
             }
-            finally
+        }
+
+        private sealed class PersistentVarsDb : SqliteDatabase
+        {
+            // Column names must stay exactly as-is (including "scope_key") - this table already
+            // exists on disk for every existing install, and EnsureTableAsync only adds/drops
+            // columns, it never renames or migrates data between them.
+            [Table("persistent_vars")]
+            private sealed class PersistentVarRecord
             {
-                _dbLock.Release();
+                [ExplicitKey]
+                public string id { get; set; }
+                public string scope { get; set; }
+                public string scope_key { get; set; }
+                public string key { get; set; }
+                public string value { get; set; }
+            }
+
+            private static readonly SqliteTableSchema Schema = new("persistent_vars",
+                SqliteColumn.Str("id", primaryKey: true, notNull: true, def: "''"),
+                SqliteColumn.Str("scope", notNull: true),
+                SqliteColumn.Str("scope_key", notNull: true),
+                SqliteColumn.Str("key", notNull: true),
+                SqliteColumn.Str("value", notNull: true));
+
+            public PersistentVarsDb() : base(DB_FILE)
+            {
+                InitializeAsync().ConfigureAwait(false).GetAwaiter().GetResult();
+            }
+
+            private async Task InitializeAsync()
+            {
+                await EnsureTableAsync(Schema).ConfigureAwait(false);
+
+                await WithConnectionAsync(connection => connection.ExecuteAsync("""
+                                                                                 CREATE INDEX IF NOT EXISTS idx_scope_scopekey
+                                                                                 ON persistent_vars(scope, scope_key)
+                                                                                 """)).ConfigureAwait(false);
+
+                // Rows written before the "id" column existed (every install prior to this change)
+                // need it backfilled once, otherwise they become orphaned and unreadable through the
+                // id-based lookups below.
+                await WithConnectionAsync(connection => connection.ExecuteAsync("""
+                                                                                 UPDATE persistent_vars SET id = scope || char(31) || scope_key || char(31) || key
+                                                                                 WHERE id IS NULL OR id = ''
+                                                                                 """)).ConfigureAwait(false);
+            }
+
+            // The embedded character between segments is U+001F (unit separator, matches
+            // char(31) in the backfill above) so scope/scope_key/key stay unambiguous when
+            // concatenated into a single explicit key.
+            private static string MakeId(string scope, string scopeKey, string key) => $"{scope}{scopeKey}{key}";
+
+            public Task<string> GetValueAsync(string scope, string scopeKey, string key) => WithConnectionAsync(async connection =>
+            {
+                PersistentVarRecord record = await connection.GetAsync<PersistentVarRecord>(MakeId(scope, scopeKey, key)).ConfigureAwait(false);
+                return record?.value;
+            });
+
+            public Task SaveValueAsync(string scope, string scopeKey, string key, string value) => WithConnectionAsync(async connection =>
+            {
+                string id = MakeId(scope, scopeKey, key);
+                PersistentVarRecord existing = await connection.GetAsync<PersistentVarRecord>(id).ConfigureAwait(false);
+
+                if (existing == null)
+                {
+                    await connection.InsertAsync(new PersistentVarRecord { id = id, scope = scope, scope_key = scopeKey, key = key, value = value ?? "" }).ConfigureAwait(false);
+                }
+                else
+                {
+                    existing.value = value ?? "";
+                    await connection.UpdateAsync(existing).ConfigureAwait(false);
+                }
+            });
+
+            public Task DeleteValueAsync(string scope, string scopeKey, string key) => WithConnectionAsync(connection =>
+                connection.DeleteAsync(new PersistentVarRecord { id = MakeId(scope, scopeKey, key) }));
+
+            public async Task<Dictionary<string, string>> GetAllAsync(string scope, string scopeKey)
+            {
+                IEnumerable<PersistentVarRecord> rows = await WithConnectionAsync(connection =>
+                    connection.GetAllAsync<PersistentVarRecord>()).ConfigureAwait(false);
+
+                return rows.Where(r => r.scope == scope && r.scope_key == scopeKey)
+                            .ToDictionary(r => r.key, r => r.value);
             }
         }
     }

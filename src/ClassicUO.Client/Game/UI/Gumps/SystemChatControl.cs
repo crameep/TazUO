@@ -6,6 +6,7 @@ using System.Linq;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
@@ -35,8 +36,6 @@ namespace ClassicUO.Game.UI.Gumps
         UOAMChat,
         Prompt,
         UOChat,
-        ServUOCommand,
-        PolCommand
     }
 
     public class SystemChatControl : Control
@@ -44,7 +43,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int MAX_MESSAGE_LENGHT = 100;
         private const int CHAT_X_OFFSET = 3;
         private const int CHAT_HEIGHT = 15;
-        private static readonly List<Tuple<ChatMode, string>> _messageHistory = new List<Tuple<ChatMode, string>>();
+        private static readonly List<Tuple<ChatMode, string>> _messageHistory = new();
         private static int _messageHistoryIndex = -1;
 
         private readonly Label _currentChatModeLabel;
@@ -55,7 +54,6 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly WorldViewportGump _gump;
         private readonly LinkedList<ChatLineTime> _textEntries;
         private readonly AlphaBlendControl _trans;
-        private int lastAutoCompleteIndex = 0;
         private string command = string.Empty;
 
         public SystemChatControl(WorldViewportGump gump, int x, int y, int w, int h)
@@ -115,8 +113,6 @@ namespace ClassicUO.Game.UI.Gumps
             );
 
             WantUpdateSize = false;
-
-            _gump.World.MessageManager.MessageReceived += ChatOnMessageReceived;
 
             EventSink.MessageReceived += ChatOnMessageReceived;
             Mode = ChatMode.Default;
@@ -208,18 +204,6 @@ namespace ClassicUO.Game.UI.Gumps
                             AppendChatModePrefix(ResGumps.Chat, ProfileManager.CurrentProfile.ChatMessageHue, TextBoxControl.Text);
 
                             break;
-
-                        case ChatMode.ServUOCommand:
-                            DisposeChatModePrefix();
-                            AppendChatModePrefix($"[{command}", 32, null);
-                            TextBoxControl.Hue = ProfileManager.CurrentProfile.SpeechHue;
-                            break;
-
-                        case ChatMode.PolCommand:
-                            DisposeChatModePrefix();
-                            AppendChatModePrefix($".{command}", 32, null);
-                            TextBoxControl.Hue = ProfileManager.CurrentProfile.SpeechHue;
-                            break;
                     }
                 }
             }
@@ -249,6 +233,9 @@ namespace ClassicUO.Game.UI.Gumps
             }
 
             if (ProfileManager.CurrentProfile.DisableSystemChat)
+                return;
+
+            if (ProfileManager.CurrentProfile.DisableSystemChatWhileJournalOpen && UIManager.GetGump<ResizableJournal>() != null)
                 return;
 
             switch (e.Type)
@@ -305,8 +292,6 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override void Dispose()
         {
-                        _gump.World.MessageManager.MessageReceived -= ChatOnMessageReceived;
-
             EventSink.MessageReceived -= ChatOnMessageReceived;
             base.Dispose();
         }
@@ -390,7 +375,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                 first.Value.Update();
 
-                if (first.Value.IsDisposed)
+                if (first.Value.IsDisposed && first.List == _textEntries)
                 {
                     _textEntries.Remove(first);
                 }
@@ -470,22 +455,6 @@ namespace ClassicUO.Game.UI.Gumps
                             Mode = ChatMode.Yell;
 
                             break;
-
-                        case '[' when text.Length > 1 && text.Contains(" "):
-                            int bracketSpaceIndex = text.IndexOf(' ');
-                            command = text.Substring(1, bracketSpaceIndex - 1);
-                            Mode = ChatMode.ServUOCommand;
-                            // Remove the command from the textbox, keep parameters (trim leading space)
-                            TextBoxControl.SetText(text.Substring(bracketSpaceIndex).TrimStart());
-                            break;
-
-                        case '.' when text.Length > 1 && text.Contains(" "):
-                            int dotSpaceIndex = text.IndexOf(' ');
-                            command = text.Substring(1, dotSpaceIndex - 1);
-                            Mode = ChatMode.PolCommand;
-                            // Remove the command from the textbox, keep parameters (trim leading space)
-                            TextBoxControl.SetText(text.Substring(dotSpaceIndex).TrimStart());
-                            break;
                     }
                 }
             }
@@ -507,7 +476,7 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 LinkedListNode<ChatLineTime> prev = last.Previous;
 
-                if (last.Value.IsDisposed)
+                if (last.Value.IsDisposed && last.List == _textEntries)
                 {
                     _textEntries.Remove(last);
                 }
@@ -527,11 +496,11 @@ namespace ClassicUO.Game.UI.Gumps
             return base.Draw(batcher, x, y);
         }
 
-        protected override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
+        public override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
         {
             switch (key)
             {
-                case SDL.SDL_Keycode.SDLK_Q when Keyboard.Ctrl && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
+                case SDL.SDL_Keycode.SDLK_Q when HotKeys.IsPressed(HotKeyRegistrar.ChatHistoryModId) && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
 
                     GameScene scene = Client.Game.GetScene<GameScene>();
 
@@ -565,7 +534,7 @@ namespace ClassicUO.Game.UI.Gumps
 
                     break;
 
-                case SDL.SDL_Keycode.SDLK_W when Keyboard.Ctrl && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
+                case SDL.SDL_Keycode.SDLK_W when HotKeys.IsPressed(HotKeyRegistrar.ChatHistoryModId) && !ProfileManager.CurrentProfile.DisableCtrlQWBtn:
 
                     scene = Client.Game.GetScene<GameScene>();
 
@@ -627,49 +596,6 @@ namespace ClassicUO.Game.UI.Gumps
                     _gump.World.MessageManager.PromptData = default;
 
                     break;
-
-                case SDL.SDL_Keycode.SDLK_TAB when _mode == ChatMode.Default:
-                    List<string> autoComplete = TextHistoryManager.GetAutocompleteSuggestions(TextBoxControl.Text, 5);
-                    if (autoComplete != null && autoComplete.Count > 0)
-                    {
-                        autoComplete.Insert(0, TextBoxControl.Text);
-                        void selected(string s)
-                        {
-                            if (TextBoxControl == null)
-                                return;
-
-                            // Pre-process commands to avoid double-prefix issue
-                            if (s.Length > 1 && s.Contains(" "))
-                            {
-                                if (s[0] == '[')
-                                {
-                                    int spaceIndex = s.IndexOf(' ');
-                                    command = s.Substring(1, spaceIndex - 1);
-                                    Mode = ChatMode.ServUOCommand;
-                                    TextBoxControl.SetText(s.Substring(spaceIndex).TrimStart());
-                                    return;
-                                }
-                                else if (s[0] == '.')
-                                {
-                                    int spaceIndex = s.IndexOf(' ');
-                                    command = s.Substring(1, spaceIndex - 1);
-                                    Mode = ChatMode.PolCommand;
-                                    TextBoxControl.SetText(s.Substring(spaceIndex).TrimStart());
-                                    return;
-                                }
-                            }
-
-                            TextBoxControl.SetText(s);
-                        }
-
-                        var listGump = new SelectableItemListGump(autoComplete, selected, selected);
-                        Microsoft.Xna.Framework.Graphics.Viewport viewport = Client.Game.GetScene<GameScene>().Camera.GetViewport();
-                        listGump.X = viewport.X + 10;
-                        listGump.Y = viewport.Height - listGump.Height + viewport.Y - 20;
-                        UIManager.Add(listGump);
-                        listGump.SetKeyboardFocus();
-                    }
-                    break;
             }
         }
 
@@ -692,12 +618,6 @@ namespace ClassicUO.Game.UI.Gumps
 
             string fullText = text;
             ChatMode modMode = sentMode;
-            if (sentMode == ChatMode.ServUOCommand || sentMode == ChatMode.PolCommand)
-            {
-                string prefix = sentMode == ChatMode.ServUOCommand ? "[" : ".";
-                fullText = $"{prefix}{command} {text}";
-                modMode = ChatMode.Default;
-            }
             if(_messageHistory.Count < 1 || (_messageHistory[_messageHistory.Count - 1].Item1 != sentMode || _messageHistory[_messageHistory.Count - 1].Item2 != fullText))
             {
                 //Add to history if last message was not the same
@@ -744,8 +664,6 @@ namespace ClassicUO.Game.UI.Gumps
                 {
                     case ChatMode.Default:
                         GameActions.Say(text, ProfileManager.CurrentProfile.SpeechHue);
-
-                        TextHistoryManager.AddToHistoryIfCommand(text);
 
                         break;
 
@@ -979,22 +897,6 @@ namespace ClassicUO.Game.UI.Gumps
 
                     case ChatMode.UOChat:
                         AsyncNetClient.Socket.Send_ChatMessageCommand(text);
-
-                        break;
-
-                    case ChatMode.ServUOCommand:
-                        if (!text.StartsWith(" "))
-                            text = " " + text;
-                        GameActions.Say($"[{command}{text}", ProfileManager.CurrentProfile.SpeechHue);
-                        TextHistoryManager.AddToHistoryIfCommand($"[{command} {text}");
-
-                        break;
-
-                    case ChatMode.PolCommand:
-                        if (!text.StartsWith(" "))
-                            text = " " + text;
-                        GameActions.Say($".{command}{text}", ProfileManager.CurrentProfile.SpeechHue);
-                        TextHistoryManager.AddToHistoryIfCommand($".{command} {text}");
 
                         break;
                 }

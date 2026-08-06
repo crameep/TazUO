@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Timers;
+using ClassicUO.Common.Enums;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
@@ -223,6 +224,53 @@ namespace ClassicUO.Game.Managers
 
             macroManager.PushToBack(macro);
             UIManager.Add(new MacroButtonGump(World.Instance, macro, Mouse.Position.X, Mouse.Position.Y));
+        }
+
+        public OrganizerConfig FindConfig(string nameOrIndex)
+        {
+            if (string.IsNullOrWhiteSpace(nameOrIndex))
+            {
+                return null;
+            }
+
+            nameOrIndex = nameOrIndex.Trim();
+
+            if (int.TryParse(nameOrIndex, out int index))
+            {
+                return index >= 0 && index < OrganizerConfigs.Count
+                    ? OrganizerConfigs[index]
+                    : null;
+            }
+
+            return OrganizerConfigs.FirstOrDefault(config =>
+                config.Name.Equals(nameOrIndex, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        public void SetSourceContainerViaTarget(string nameOrIndex)
+        {
+            OrganizerConfig config = FindConfig(nameOrIndex);
+
+            if (config == null)
+            {
+                GameActions.Print(World.Instance, $"Organizer '{nameOrIndex}' not found.", Constants.HUE_ERROR);
+                return;
+            }
+
+            GameActions.Print(World.Instance, $"Target the source container for organizer '{config.Name}'.");
+            World.Instance.TargetManager.SetTargeting(targeted =>
+            {
+                if (targeted is Item item && item.ItemData.IsContainer)
+                {
+                    config.SourceContSerial = item.Serial;
+                    Save();
+                    GameActions.Print(World.Instance, $"Source container for organizer '{config.Name}' set.", Constants.HUE_SUCCESS);
+                }
+                else
+                {
+                    GameActions.Print(World.Instance, "That doesn't appear to be a valid container.", Constants.HUE_ERROR);
+                }
+            });
         }
         /// <summary>
         /// Resolves a destination serial to an Item container.

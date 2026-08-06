@@ -217,7 +217,7 @@ namespace ClassicUO.Game.UI.Controls
             return false;
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (
                 button == MouseButtonType.Right
@@ -247,7 +247,7 @@ namespace ClassicUO.Game.UI.Controls
             base.OnMouseUp(x, y, button);
         }
 
-        protected override void OnMouseOver(int x, int y) => SelectedObject.Object = _gump.World.Get(LocalSerial);
+        public override void OnMouseOver(int x, int y) => SelectedObject.Object = _gump.World.Get(LocalSerial);
 
         private bool CanPickup()
         {
@@ -268,16 +268,15 @@ namespace ClassicUO.Game.UI.Controls
                 return true;
             }
 
-            Point uiClick = UIManager.ScreenToUI(Mouse.LClickPosition);
-            split.X = uiClick.X - 80;
-            split.Y = uiClick.Y - 40;
+            split.X = Mouse.LClickPosition.X - 80;
+            split.Y = Mouse.LClickPosition.Y - 40;
             UIManager.AttemptDragControl(split, true);
             split.BringOnTop();
 
             return false;
         }
 
-        protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+        public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left || _gump.World.TargetManager.IsTargeting)
             {
@@ -339,11 +338,11 @@ namespace ClassicUO.Game.UI.Controls
                         centerY - (Mouse.Position.Y - ScreenCoordinateY)
                     );
 
-                    GameActions.PickUp(_gump.World, LocalSerial, centerX, centerY, offset: p, is_gump: _is_gump);
+                    GameActions.PickUp(_gump.World, LocalSerial, centerX, centerY, offset: p, isGump: _is_gump);
                 }
                 else
                 {
-                    GameActions.PickUp(_gump.World, LocalSerial, centerX, centerY, is_gump: _is_gump);
+                    GameActions.PickUp(_gump.World, LocalSerial, centerX, centerY, isGump: _is_gump);
                 }
             }
         }

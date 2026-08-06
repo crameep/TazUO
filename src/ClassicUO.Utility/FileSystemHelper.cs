@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -64,7 +65,7 @@ namespace ClassicUO.Utility
         {
             if (!File.Exists(path))
             {
-                throw new FileNotFoundException(path);
+                throw new FileNotFoundException($"Required file not found: {path}", path);
             }
         }
 
@@ -111,6 +112,69 @@ namespace ClassicUO.Utility
             catch (Exception ex)
             {
                 Log.Error("Error opening file: " + ex.Message);
+            }
+        }
+
+        public static bool OpenLocation(string dirOrFilePath)
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(dirOrFilePath);
+                if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+                    return false;
+
+                // This may not be 100% water-tight.
+                // Think this may work better than relying on ton xdg-open for Linux, though.
+                Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true, Verb = "open" });
+
+                // We return a 'true' here to avoid having to wait sync on the UI thread (since async introduces some undue complexity).
+                // Suboptimal but good enough for this case. The same issue is already present in `OpenFileWithDefaultApp` equivalent
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Error opening directory '{dirOrFilePath}': {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Safely write a file in try/catch.
+        /// Will log the error on failure.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="lines"></param>
+        /// <returns>true/false</returns>
+        public static bool WriteAllLinesSafe(string filePath, List<string> lines)
+        {
+            try 
+            {
+                File.WriteAllLines(filePath, lines, Encoding.UTF8);
+                return true;
+            } catch(Exception e)
+            {
+                Log.Error(e.ToString());
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Safely write a file in try/catch.
+        /// Will log the error on failure.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="lines"></param>
+        /// <returns>true/false</returns>
+        public static bool WriteAllTextSafe(string filePath, string text)
+        {
+            try 
+            {
+                File.WriteAllText(filePath, text, Encoding.UTF8);
+                return true;
+            } catch(Exception e)
+            {
+                Log.Error(e.ToString());
+                return false;
             }
         }
     }

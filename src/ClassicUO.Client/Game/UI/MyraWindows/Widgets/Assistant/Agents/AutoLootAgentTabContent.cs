@@ -1,0 +1,861 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using ClassicUO.Configuration;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
+using ClassicUO.Utility;
+using Myra.Graphics2D.UI;
+using Myra.Graphics2D;
+
+namespace ClassicUO.Game.UI.MyraWindows.Widgets.Assistant.Agents;
+
+public static class AutoLootAgentTabContent
+{
+    private static readonly string[] PriorityLabels = { "Low", "Normal", "High" };
+
+    public static Widget Build()
+    {
+        Profile? profile = ProfileManager.CurrentProfile;
+
+        var root = new VerticalStackPanel { Spacing = 6 };
+
+        // Enable Auto Loot + Set Grab Bag
+        var topRow = new HorizontalStackPanel { Spacing = 8 };
+        topRow.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.EnableAutoLoot,
+            b => profile.EnableAutoLoot = b,
+            "Enable Auto Loot",
+            "Auto Loot allows you to automatically pick up items from corpses based on configured criteria."));
+        topRow.Widgets.Add(new MyraButton("Set Grab Bag", () =>
+        {
+            GameActions.Print(Client.Game.UO.World, "Target container to grab items into");
+            Client.Game.UO.World.TargetManager.SetTargeting(CursorTarget.SetGrabBag, 0, TargetType.Neutral);
+        }) { Tooltip = "Choose a container to grab items into" });
+        root.Widgets.Add(topRow);
+
+        // Options
+        root.Widgets.Add(new MyraSpacer(15, 5));
+        root.Widgets.Add(new MyraLabel("Options:", MyraLabel.TextStyle.H2));
+
+        var optRow1 = new HorizontalStackPanel { Spacing = 8 };
+        optRow1.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.EnableScavenger,
+            b => profile.EnableScavenger = b,
+            "Enable Scavenger",
+            "Scavenger option allows picking objects from ground."));
+        optRow1.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.EnableAutoLootProgressBar,
+            b => profile.EnableAutoLootProgressBar = b,
+            "Enable Progress Bar",
+            "Shows a progress bar gump."));
+        root.Widgets.Add(optRow1);
+
+        var optRow2 = new HorizontalStackPanel { Spacing = 8 };
+        optRow2.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.AutoLootHumanCorpses,
+            b => profile.AutoLootHumanCorpses = b,
+            "Auto Loot Human Corpses",
+            "Auto loots human corpses."));
+        optRow2.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.HueCorpseAfterAutoloot,
+            b => profile.HueCorpseAfterAutoloot = b,
+            "Hue Corpse After Processing",
+            "Hue corpses after processing to make it easier to see if autoloot has processed them."));
+        root.Widgets.Add(optRow2);
+
+        var optRow3 = new HorizontalStackPanel { Spacing = 8, VerticalAlignment = Myra.Graphics2D.UI.VerticalAlignment.Center };
+        optRow3.Widgets.Add(new MyraLabel("Corpse retry delay (ms):", MyraLabel.TextStyle.P)
+        {
+            Tooltip = "Milliseconds before a failed corpse is retried. Minimum 1000ms.",
+            VerticalAlignment = Myra.Graphics2D.UI.VerticalAlignment.Center
+        });
+        var retrySpinner = new SpinButton
+        {
+            Integer = true,
+            Value = profile.AutoLootRetryDelay,
+            Minimum = 1000,
+            Maximum = 600000,
+            MinWidth = 100,
+            Tooltip = "Milliseconds before a failed corpse is retried. Minimum 1000ms."
+        };
+        retrySpinner.ValueChangedByUser += (_, _) =>
+            profile.AutoLootRetryDelay = (int)Math.Clamp(retrySpinner.Value ?? 5000f, 1000f, 600000f);
+        optRow3.Widgets.Add(retrySpinner);
+        optRow3.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.DisableAutolootCorpseRetry,
+            b => profile.DisableAutolootCorpseRetry = b,
+            TazLang.Get("autoloot_disableretry"),
+            TazLang.Get("autoloot_disableretry_tooltip")));
+        root.Widgets.Add(optRow3);
+
+        // Auto skinning section
+        root.Widgets.Add(new MyraSpacer(15, 5));
+        root.Widgets.Add(new MyraLabel(TazLang.Get("autoskinning_title", "Auto Skinning"), MyraLabel.TextStyle.H2));
+
+        var skinGraphicsBox = new MyraInputBox
+        {
+            Text = profile.AutoSkinningKnifeGraphics,
+            MinWidth = 250,
+            Tooltip = TazLang.Get("autoskinning_graphics_tooltip", "Graphic IDs of knives/daggers used to skin corpses. The first one found in your backpack is used. Separate multiple with ';'. Accepts hex (0x0F52) or decimal.")
+        };
+
+        var skinRow = new HorizontalStackPanel { Spacing = 8, VerticalAlignment = Myra.Graphics2D.UI.VerticalAlignment.Center };
+        skinRow.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.EnableAutoSkinning,
+            b => profile.EnableAutoSkinning = b,
+            TazLang.Get("autoskinning_enable", "Enable Auto Skinning"),
+            TazLang.Get("autoskinning_enable_tooltip", "When a corpse is opened, automatically use a knife/dagger from the graphic list below on it (double clicks the knife and targets the corpse). Uses the action queue.")));
+        skinRow.Widgets.Add(MyraCheckButton.CreateWithCallback(
+            profile.AutoSkinningHumanCorpses,
+            b => profile.AutoSkinningHumanCorpses = b,
+            TazLang.Get("autoskinning_humancorpses", "Skin Human Corpses"),
+            TazLang.Get("autoskinning_humancorpses_tooltip", "Also auto skin human/humanoid corpses.")));
+        skinRow.Widgets.Add(new MyraButton(TazLang.Get("autoskinning_targetweapon", "Target Skinning Weapon"), () =>
+        {
+            World.Instance.TargetManager.SetTargeting(targeted =>
+            {
+                if (targeted is Entity entity && SerialHelper.IsItem(entity))
+                {
+                    string appended = AppendSkinningGraphic(profile.AutoSkinningKnifeGraphics, entity.Graphic);
+                    profile.AutoSkinningKnifeGraphics = appended;
+                    skinGraphicsBox.Text = appended;
+                }
+            });
+        }) { Tooltip = TazLang.Get("autoskinning_targetweapon_tooltip", "Target a weapon to add its graphic to the skinning knife list.") });
+        root.Widgets.Add(skinRow);
+
+        var skinGraphicsRow = new HorizontalStackPanel { Spacing = 8, VerticalAlignment = Myra.Graphics2D.UI.VerticalAlignment.Center };
+        skinGraphicsRow.Widgets.Add(new MyraLabel(TazLang.Get("autoskinning_graphics", "Knife graphic IDs:"), MyraLabel.TextStyle.P)
+        {
+            Tooltip = TazLang.Get("autoskinning_graphics_tooltip", "Graphic IDs of knives/daggers used to skin corpses. The first one found in your backpack is used. Separate multiple with ';'. Accepts hex (0x0F52) or decimal."),
+            VerticalAlignment = Myra.Graphics2D.UI.VerticalAlignment.Center
+        });
+        skinGraphicsBox.TextChangedByUser += (_, _) => profile.AutoSkinningKnifeGraphics = skinGraphicsBox.Text;
+        skinGraphicsRow.Widgets.Add(skinGraphicsBox);
+        root.Widgets.Add(skinGraphicsRow);
+
+        // Entries panel (declared early so the loot-list selector callbacks can rebuild it).
+        var entriesPanel = new VerticalStackPanel { Spacing = 4 };
+
+        // Loot list selection
+        root.Widgets.Add(new MyraSpacer(15, 5));
+        root.Widgets.Add(new MyraLabel("Loot Profiles:", MyraLabel.TextStyle.H2));
+
+        var listSelectRow = new HorizontalStackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+
+        var listCombo = new ComboView { MinWidth = 160, VerticalAlignment = VerticalAlignment.Center };
+        bool suppressListEvent = false;
+        MyraButton deleteListBtn = null!;
+        MyraCheckButton activeProfileCheck = null!;
+        MyraInputBox profileDestinationBox = null!;
+
+        void PersistSelectedProfile(bool rebuildEntries = true)
+        {
+            AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+            if (selected == null) return;
+
+            if (rebuildEntries)
+                AutoLootManager.Instance.NotifyEntryChanged();
+            else
+                AutoLootManager.Instance.NotifyMatchCriteriaChanged();
+
+            AutoLootManager.Instance.SaveProfile(selected);
+        }
+
+        void RefreshListCombo()
+        {
+            suppressListEvent = true;
+            listCombo.ListView.Widgets.Clear();
+
+            IReadOnlyList<AutoLootManager.AutoLootProfile> lists = AutoLootManager.Instance.Profiles;
+            int selectedIdx = 0;
+            for (int i = 0; i < lists.Count; i++)
+            {
+                listCombo.ListView.Widgets.Add(new Label { Text = lists[i].Name });
+                if (lists[i] == AutoLootManager.Instance.SelectedProfile) selectedIdx = i;
+            }
+
+            if (lists.Count > 0) listCombo.ListView.SelectedIndex = selectedIdx;
+            if (deleteListBtn != null) deleteListBtn.Enabled = lists.Count > 1;
+            if (activeProfileCheck != null && AutoLootManager.Instance.SelectedProfile != null)
+                activeProfileCheck.IsChecked = AutoLootManager.Instance.SelectedProfile.IsActive;
+            if (profileDestinationBox != null && AutoLootManager.Instance.SelectedProfile != null)
+            {
+                uint destination = AutoLootManager.Instance.SelectedProfile.DestinationContainer;
+                profileDestinationBox.Text = destination == 0 ? "" : $"0x{destination:X}";
+            }
+            suppressListEvent = false;
+        }
+
+        listCombo.ListView.SelectedIndexChanged += (_, _) =>
+        {
+            if (suppressListEvent) return;
+
+            int? idx = listCombo.ListView.SelectedIndex;
+            IReadOnlyList<AutoLootManager.AutoLootProfile> lists = AutoLootManager.Instance.Profiles;
+            if (idx.HasValue && idx.Value >= 0 && idx.Value < lists.Count)
+            {
+                AutoLootManager.Instance.SelectedProfile = lists[idx.Value];
+                activeProfileCheck.IsChecked = lists[idx.Value].IsActive;
+                BuildEntriesList();
+            }
+        };
+        listSelectRow.Widgets.Add(listCombo);
+
+        listSelectRow.Widgets.Add(new MyraButton("New", () =>
+        {
+            var nameBox = new MyraInputBox { HintText = "List name", Width = 220 };
+            new MyraDialog("New Loot List", nameBox, ok =>
+            {
+                if (!ok) return;
+                AutoLootManager.Instance.SelectedProfile = AutoLootManager.Instance.CreateProfile(nameBox.Text);
+                RefreshListCombo();
+                BuildEntriesList();
+            });
+        }) { Tooltip = "Create a new loot list and switch to it." });
+
+        listSelectRow.Widgets.Add(new MyraButton("Rename", () =>
+        {
+            AutoLootManager.AutoLootProfile current = AutoLootManager.Instance.SelectedProfile;
+            var nameBox = new MyraInputBox { Text = current.Name, HintText = "List name", Width = 220 };
+            new MyraDialog("Rename Loot List", nameBox, ok =>
+            {
+                if (!ok || string.IsNullOrWhiteSpace(nameBox.Text)) return;
+                AutoLootManager.Instance.RenameProfile(current, nameBox.Text);
+                RefreshListCombo();
+            });
+        }) { Tooltip = "Rename the selected loot list." });
+
+        deleteListBtn = new MyraButton("Delete List", () =>
+        {
+            if (AutoLootManager.Instance.Profiles.Count <= 1)
+            {
+                GameActions.Print("You must have at least one loot list.", Constants.HUE_ERROR);
+                return;
+            }
+
+            AutoLootManager.AutoLootProfile current = AutoLootManager.Instance.SelectedProfile;
+            new MyraDialog("Delete Loot List",
+                new MyraLabel($"Delete list \"{current.Name}\" and all of its entries?", MyraLabel.TextStyle.P),
+                ok =>
+                {
+                    if (!ok) return;
+                    AutoLootManager.Instance.DeleteProfile(current);
+                    RefreshListCombo();
+                    BuildEntriesList();
+                });
+        }) { Tooltip = "Delete the selected loot list. At least one list must remain." };
+        listSelectRow.Widgets.Add(MyraStyle.ApplyButtonDangerStyle(deleteListBtn));
+
+        activeProfileCheck = MyraCheckButton.CreateWithCallback(
+            AutoLootManager.Instance.SelectedProfile?.IsActive ?? true,
+            isActive =>
+            {
+                AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+                if (selected == null || selected.IsActive == isActive) return;
+                selected.IsActive = isActive;
+                PersistSelectedProfile();
+            },
+            "Active",
+            "All active profiles are evaluated together in the displayed order."
+        );
+        listSelectRow.Widgets.Add(activeProfileCheck);
+        listSelectRow.Widgets.Add(new MyraButton("Up", () =>
+        {
+            int from = AutoLootManager.Instance.Profiles.IndexOf(AutoLootManager.Instance.SelectedProfile);
+            if (from <= 0) return;
+            AutoLootManager.Instance.ReorderProfile(from, from - 1);
+            RefreshListCombo();
+        }) { Tooltip = "Move this profile earlier in multi-profile evaluation order." });
+        listSelectRow.Widgets.Add(new MyraButton("Down", () =>
+        {
+            int from = AutoLootManager.Instance.Profiles.IndexOf(AutoLootManager.Instance.SelectedProfile);
+            if (from < 0 || from >= AutoLootManager.Instance.Profiles.Count - 1) return;
+            AutoLootManager.Instance.ReorderProfile(from, from + 1);
+            RefreshListCombo();
+        }) { Tooltip = "Move this profile later in multi-profile evaluation order." });
+
+        root.Widgets.Add(listSelectRow);
+
+        var profileDestinationRow = new HorizontalStackPanel
+        {
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        profileDestinationRow.Widgets.Add(new MyraLabel("Profile destination:", MyraLabel.TextStyle.P));
+        profileDestinationBox = new MyraInputBox
+        {
+            HintText = "Use grab bag",
+            MinWidth = 130,
+            Tooltip = "Fallback destination for entries in this profile. Leave empty to use the grab bag."
+        };
+        profileDestinationBox.TextChangedByUser += (_, _) =>
+        {
+            AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+            if (selected == null) return;
+
+            if (string.IsNullOrWhiteSpace(profileDestinationBox.Text))
+                selected.DestinationContainer = 0;
+            else if (uint.TryParse(
+                         profileDestinationBox.Text.Replace("0x", "", StringComparison.OrdinalIgnoreCase),
+                         NumberStyles.HexNumber,
+                         null,
+                         out uint serial
+                     ))
+                selected.DestinationContainer = serial;
+
+            PersistSelectedProfile();
+        };
+        profileDestinationRow.Widgets.Add(profileDestinationBox);
+        profileDestinationRow.Widgets.Add(new MyraButton("Target", () =>
+        {
+            World.Instance.TargetManager.SetTargeting(targeted =>
+            {
+                if (targeted is not Entity entity || !SerialHelper.IsItem(entity)) return;
+                AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+                if (selected == null) return;
+                selected.DestinationContainer = entity.Serial;
+                profileDestinationBox.Text = $"0x{entity.Serial:X}";
+                PersistSelectedProfile();
+            });
+        }));
+        root.Widgets.Add(profileDestinationRow);
+
+        // Entries section
+        root.Widgets.Add(new MyraSpacer(15, 5));
+        root.Widgets.Add(new MyraLabel("Entries:", MyraLabel.TextStyle.H2));
+
+        void BuildEntriesList()
+        {
+            entriesPanel.Widgets.Clear();
+            List<AutoLootManager.AutoLootConfigEntry> entries = AutoLootManager.Instance.SelectedProfile?.Entries
+                ?? new List<AutoLootManager.AutoLootConfigEntry>();
+
+            if (entries.Count == 0)
+            {
+                entriesPanel.Widgets.Add(new MyraLabel("No entries configured.", MyraLabel.TextStyle.P));
+                return;
+            }
+
+            var grid = new MyraGrid();
+            grid.SetupWithHeaders(
+                GridColumnInfo.Auto("Art"),
+                GridColumnInfo.Auto("Graphic"),
+                GridColumnInfo.Auto("Hue"),
+                GridColumnInfo.Auto("Regex"),
+                GridColumnInfo.Auto("Priority"),
+                GridColumnInfo.Auto("Scavenge"),
+                GridColumnInfo.Fill("Destination"),
+                GridColumnInfo.Auto("Order"),
+                GridColumnInfo.Auto("Actions")
+            );
+
+            int dataRow = 1;
+            for (int i = entries.Count - 1; i >= 0; i--)
+            {
+                AutoLootManager.AutoLootConfigEntry entry = entries[i];
+
+                // Art image (col 0)
+                if (entry.Graphic is > 0 and < ushort.MaxValue)
+                    grid.AddWidget(new MyraArtTexture((uint)entry.Graphic) { Tooltip = entry.Name, Margin = new Thickness(2, 0) }, dataRow, 0);
+                else
+                {
+                    var nameBox = new MyraInputBox
+                    {
+                        Text = entry.Name,
+                        HintText = "Name",
+                        Tooltip = "Display name for this entry.",
+                        MinWidth = 80,
+                    };
+                    nameBox.TextChangedByUser += (_, _) =>
+                    {
+                        entry.Name = nameBox.Text;
+                        PersistSelectedProfile(false);
+                    };
+                    grid.AddWidget(nameBox, dataRow, 0);
+                }
+
+                // Graphic
+                var graphicBox = new MyraInputBox
+                {
+                    Text = entry.Graphic == ushort.MaxValue ? "-1" : entry.Graphic.ToString(),
+                    Tooltip = "Item graphic ID. Set to -1 to match any graphic.",
+                };
+                graphicBox.TextChangedByUser += (_, _) =>
+                {
+                    if (StringHelper.TryParseInt(graphicBox.Text, out int g))
+                    {
+                        entry.Graphic = g == -1 ? ushort.MaxValue : g;
+                        PersistSelectedProfile();
+                    }
+                };
+                grid.AddWidget(graphicBox, dataRow, 1);
+
+                // Hue
+                var hueBox = MyraInputBox.Hue(entry.Hue);
+                hueBox.TextChangedByUser += (_, _) =>
+                {
+                    if (MyraInputBox.TryParseHue(hueBox.Text, out ushort hue))
+                    {
+                        entry.Hue = hue;
+                        PersistSelectedProfile(false);
+                    }
+                };
+                grid.AddWidget(hueBox, dataRow, 2);
+
+                // Regex edit — opens a MyraDialog (own Desktop, registered with UIManager)
+                grid.AddWidget(new MyraButton("Edit Regex", () =>
+                {
+                    var regexInput = new MyraInputBox
+                    {
+                        Text = entry.RegexSearch ?? "",
+                        Multiline = true,
+                        Width = 300,
+                        Height = 80,
+                        Tooltip = "Regex to match against item name and properties."
+                    };
+                    new MyraDialog("Edit Regex", regexInput, ok =>
+                    {
+                        if (ok)
+                        {
+                            entry.RegexSearch = regexInput.Text;
+                            PersistSelectedProfile(false);
+                        }
+                    });
+                }), dataRow, 3);
+
+                // Priority cycle: < label >
+                var priorityLabel = new MyraLabel(PriorityLabels[(int)entry.Priority], MyraLabel.TextStyle.P);
+                var priorityRow = new HorizontalStackPanel { Spacing = 2 };
+                priorityRow.Widgets.Add(new MyraButton("<", () =>
+                {
+                    int p = ((int)entry.Priority - 1 + PriorityLabels.Length) % PriorityLabels.Length;
+                    entry.Priority = (AutoLootManager.AutoLootPriority)p;
+                    priorityLabel.Text = PriorityLabels[p];
+                    PersistSelectedProfile(false);
+                }));
+                priorityRow.Widgets.Add(priorityLabel);
+                priorityRow.Widgets.Add(new MyraButton(">", () =>
+                {
+                    int p = ((int)entry.Priority + 1) % PriorityLabels.Length;
+                    entry.Priority = (AutoLootManager.AutoLootPriority)p;
+                    priorityLabel.Text = PriorityLabels[p];
+                    PersistSelectedProfile(false);
+                }));
+                grid.AddWidget(priorityRow, dataRow, 4);
+
+                grid.AddWidget(MyraCheckButton.CreateWithCallback(entry.Scavenge, scavenge =>
+                {
+                    entry.Scavenge = scavenge;
+                    PersistSelectedProfile(false);
+                }, tooltip: "Allow this entry to pick up matching ground items."), dataRow, 5);
+
+                // Destination box + Target button
+                var destCell = new HorizontalStackPanel { Spacing = 4 };
+                var destBox = new MyraInputBox
+                {
+                    Text = entry.DestinationContainer == 0 ? "" : $"0x{entry.DestinationContainer:X}",
+                    HintText = "Serial (hex)",
+                    Tooltip = "Destination container serial (hex). Leave empty to use grab bag.",
+                    MinWidth = 100,
+                };
+                destBox.TextChangedByUser += (_, _) =>
+                {
+                    if (string.IsNullOrWhiteSpace(destBox.Text))
+                    {
+                        entry.DestinationContainer = 0;
+                        PersistSelectedProfile(false);
+                    }
+                    else if (uint.TryParse(destBox.Text.Replace("0x", "").Replace("0X", ""), NumberStyles.HexNumber, null, out uint serial))
+                    {
+                        entry.DestinationContainer = serial;
+                        PersistSelectedProfile(false);
+                    }
+                };
+                StackPanel.SetProportionType(destBox, ProportionType.Fill);
+                destCell.Widgets.Add(destBox);
+                destCell.Widgets.Add(new MyraButton("Target", () =>
+                {
+                    World.Instance.TargetManager.SetTargeting(targeted =>
+                    {
+                        if (targeted is Entity e && SerialHelper.IsItem(e))
+                        {
+                            entry.DestinationContainer = e.Serial;
+                            destBox.Text = $"0x{e.Serial:X}";
+                            PersistSelectedProfile(false);
+                        }
+                    });
+                }) { Tooltip = "Target a container to use as the destination for this entry." });
+                grid.AddWidget(destCell, dataRow, 6);
+
+                // Up / Down reorder buttons (col 6)
+                // Display is reversed: i = entries.Count-1 is top row, i=0 is bottom row.
+                // "Up" in display = swap with i+1 in list; "Down" = swap with i-1.
+                var orderRow = new HorizontalStackPanel { Spacing = 2 };
+                var upBtn = new MyraButton("<", () =>
+                {
+                    int idx = entries.IndexOf(entry);
+                    if (idx < entries.Count - 1)
+                    {
+                        (entries[idx], entries[idx + 1]) = (entries[idx + 1], entries[idx]);
+                        PersistSelectedProfile();
+                        BuildEntriesList();
+                    }
+                }) { Tooltip = "Move up" };
+                var downBtn = new MyraButton(">", () =>
+                {
+                    int idx = entries.IndexOf(entry);
+                    if (idx > 0)
+                    {
+                        (entries[idx], entries[idx - 1]) = (entries[idx - 1], entries[idx]);
+                        PersistSelectedProfile();
+                        BuildEntriesList();
+                    }
+                }) { Tooltip = "Move down" };
+                if (i == entries.Count - 1) upBtn.Enabled = false;
+                if (i == 0) downBtn.Enabled = false;
+                orderRow.Widgets.Add(upBtn);
+                orderRow.Widgets.Add(downBtn);
+                grid.AddWidget(orderRow, dataRow, 7);
+
+                var delBtn = new MyraButton("Delete", () =>
+                {
+                    AutoLootManager.Instance.TryRemoveAutoLootEntry(entry.Uid);
+                    BuildEntriesList();
+                });
+                delBtn.VerticalAlignment = VerticalAlignment.Center;
+
+                void ShowTransferDialog(bool copy)
+                {
+                    AutoLootManager.AutoLootProfile? source = AutoLootManager.Instance.SelectedProfile;
+                    List<AutoLootManager.AutoLootProfile> targets = AutoLootManager.Instance.Profiles
+                        .Where(candidate => candidate != source)
+                        .ToList();
+                    if (source == null || targets.Count == 0) return;
+
+                    var targetCombo = new ComboView { MinWidth = 180 };
+                    foreach (AutoLootManager.AutoLootProfile target in targets)
+                        targetCombo.ListView.Widgets.Add(new Label { Text = target.Name });
+                    targetCombo.ListView.SelectedIndex = 0;
+
+                    new MyraDialog(copy ? "Copy Entry" : "Move Entry", targetCombo, ok =>
+                    {
+                        int? selectedIndex = targetCombo.ListView.SelectedIndex;
+                        if (!ok || !selectedIndex.HasValue || selectedIndex.Value >= targets.Count) return;
+
+                        AutoLootManager.AutoLootProfile target = targets[selectedIndex.Value];
+                        if (copy)
+                            AutoLootManager.Instance.CopyEntryToProfile(entry, target);
+                        else
+                            AutoLootManager.Instance.MoveEntryToProfile(entry, source, target);
+                        BuildEntriesList();
+                    });
+                }
+
+                var actions = new HorizontalStackPanel { Spacing = 2 };
+                actions.Widgets.Add(MyraStyle.ApplyButtonDangerStyle(delBtn));
+                actions.Widgets.Add(new MyraButton("Move", () => ShowTransferDialog(false)));
+                actions.Widgets.Add(new MyraButton("Copy", () => ShowTransferDialog(true)));
+                grid.AddWidget(actions, dataRow, 8);
+
+                dataRow += 1;
+            }
+
+            entriesPanel.Widgets.Add(grid);
+        }
+
+        BuildEntriesList();
+        RefreshListCombo();
+
+        // Add entry inline panel
+        var addEntryPanel = new VerticalStackPanel { Visible = false, Spacing = 4 };
+        var newNameBox = new MyraInputBox { HintText = "Name", Width = 100 };
+        var newGraphicBox = new MyraInputBox { HintText = "Graphic ID", Width = 100, Tooltip = "Graphic (-1 = any)" };
+        var newHueBox = MyraInputBox.Hue(ushort.MaxValue, 100, "Hue (-1 = any)");
+        var newRegexBox = new MyraInputBox { HintText = "Regex (optional)", Width = 200 };
+
+        var addFieldsRow = new HorizontalStackPanel { Spacing = 4 };
+        addFieldsRow.Widgets.Add(new MyraLabel("Name:", MyraLabel.TextStyle.P));
+        addFieldsRow.Widgets.Add(newNameBox);
+        addFieldsRow.Widgets.Add(new MyraLabel("Graphic:", MyraLabel.TextStyle.P));
+        addFieldsRow.Widgets.Add(newGraphicBox);
+        addFieldsRow.Widgets.Add(new MyraLabel("Hue:", MyraLabel.TextStyle.P));
+        addFieldsRow.Widgets.Add(newHueBox);
+        addFieldsRow.Widgets.Add(new MyraLabel("Regex:", MyraLabel.TextStyle.P));
+        addFieldsRow.Widgets.Add(newRegexBox);
+
+        var addConfirmRow = new HorizontalStackPanel { Spacing = 4 };
+        addConfirmRow.Widgets.Add(new MyraButton("Add", () =>
+        {
+            if (StringHelper.TryParseInt(newGraphicBox.Text, out int graphic))
+            {
+                if (graphic > ushort.MaxValue)
+                    return;
+
+                if(graphic == -1)
+                    graphic = ushort.MaxValue;
+
+                if (!MyraInputBox.TryParseHue(newHueBox.Text, out ushort hue))
+                    hue = ushort.MaxValue;
+
+                AutoLootManager.AutoLootConfigEntry? entry = AutoLootManager.Instance.AddAutoLootEntry((ushort)graphic, hue, newNameBox.Text);
+                if (entry == null) return;
+
+                entry.RegexSearch = newRegexBox.Text;
+
+                newNameBox.Text = "";
+                newGraphicBox.Text = "";
+                newHueBox.Text = "";
+                newRegexBox.Text = "";
+                addEntryPanel.Visible = false;
+                BuildEntriesList();
+            }
+        }));
+        addConfirmRow.Widgets.Add(new MyraButton("Cancel", () =>
+        {
+            addEntryPanel.Visible = false;
+            newGraphicBox.Text = "";
+            newHueBox.Text = "";
+            newRegexBox.Text = "";
+        }));
+
+        addEntryPanel.Widgets.Add(new MyraLabel("Add New Entry:", MyraLabel.TextStyle.H3));
+        addEntryPanel.Widgets.Add(addFieldsRow);
+        addEntryPanel.Widgets.Add(addConfirmRow);
+
+        // Import from character inline panel
+        var importCharPanel = new VerticalStackPanel { Visible = false, Spacing = 4 };
+
+        void BuildImportCharPanel()
+        {
+            importCharPanel.Widgets.Clear();
+            Dictionary<string, List<AutoLootManager.AutoLootConfigEntry>>? otherConfigs = AutoLootManager.Instance.GetOtherCharacterConfigs();
+
+            if (otherConfigs.Count == 0)
+            {
+                importCharPanel.Widgets.Add(new MyraLabel("No other character configurations found.", MyraLabel.TextStyle.P));
+            }
+            else
+            {
+                importCharPanel.Widgets.Add(new MyraLabel("Select a character to import from:", MyraLabel.TextStyle.H3));
+                foreach (KeyValuePair<string, List<AutoLootManager.AutoLootConfigEntry>> kv in otherConfigs.OrderBy(c => c.Key))
+                {
+                    string charName = kv.Key;
+                    List<AutoLootManager.AutoLootConfigEntry> configs = kv.Value;
+                    importCharPanel.Widgets.Add(new MyraButton($"{charName} ({configs.Count} items)", () =>
+                    {
+                        AutoLootManager.Instance.ImportFromOtherCharacter(charName, configs);
+                        BuildEntriesList();
+                        importCharPanel.Visible = false;
+                    }));
+                }
+            }
+
+            importCharPanel.Widgets.Add(new MyraButton("Cancel", () => importCharPanel.Visible = false));
+        }
+
+        // Action buttons
+        var actionRow = new HorizontalStackPanel { Spacing = 6 };
+        actionRow.Widgets.Add(new MyraButton("Import", () =>
+        {
+            string? json = Clipboard.GetClipboardText();
+            if (json.NotNullNotEmpty()
+                && AutoLootManager.Instance.ImportProfileFromClipboard(json) != null)
+            {
+                GameActions.Print("Imported loot profile!", Constants.HUE_SUCCESS);
+                RefreshListCombo();
+                BuildEntriesList();
+                return;
+            }
+            GameActions.Print("Your clipboard does not have a valid export copied.", Constants.HUE_ERROR);
+        }) { Tooltip = "Import from clipboard (must have a valid export copied)." });
+
+        actionRow.Widgets.Add(new MyraButton("Export", () =>
+        {
+            AutoLootManager.Instance.GetProfileJsonExport(AutoLootManager.Instance.SelectedProfile)?.CopyToClipboard();
+            GameActions.Print("Exported loot profile to your clipboard!", Constants.HUE_SUCCESS);
+        }) { Tooltip = "Export your list to clipboard." });
+
+        actionRow.Widgets.Add(new MyraButton("Import from Character", () =>
+        {
+            BuildImportCharPanel();
+            importCharPanel.Visible = !importCharPanel.Visible;
+        }) { Tooltip = "Import autoloot configuration from another character." });
+
+        actionRow.Widgets.Add(new MyraButton("Send to Organizer", () =>
+        {
+            AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+            if (selected == null || selected.Entries.Count == 0)
+            {
+                GameActions.Print("Profile has no entries to send.", Constants.HUE_ERROR);
+                return;
+            }
+
+            OrganizerConfig config = OrganizerAgent.Instance.NewOrganizerConfig();
+            config.Name = $"From: {selected.Name}";
+            config.DestContSerial = selected.DestinationContainer;
+            config.DestinationType = selected.DestinationContainer == 0
+                ? DestType.ConfigDefault
+                : DestType.Container;
+
+            foreach (AutoLootManager.AutoLootConfigEntry entry in selected.Entries)
+            {
+                if (entry.Graphic < 0 || entry.Graphic == ushort.MaxValue) continue;
+                OrganizerItemConfig item = config.NewItemConfig();
+                item.Name = entry.Name;
+                item.Graphic = entry.Graphic;
+                item.Hue = entry.Hue;
+                item.RegexSearch = entry.RegexSearch;
+                item.DestContSerial = entry.DestinationContainer;
+                item.DestinationType = entry.DestinationContainer == 0
+                    ? DestType.ConfigDefault
+                    : DestType.Container;
+            }
+
+            OrganizerAgent.Instance.Save();
+            GameActions.Print(
+                $"Created organizer '{config.Name}' with {config.ItemConfigs.Count} entries.",
+                Constants.HUE_SUCCESS
+            );
+        }) { Tooltip = "Create an organizer from this auto-loot profile." });
+
+        var addRow = new HorizontalStackPanel { Spacing = 6 };
+        addRow.Widgets.Add(new MyraButton("Add Manual Entry", () => addEntryPanel.Visible = !addEntryPanel.Visible));
+        addRow.Widgets.Add(new MyraButton("Add from Target", () =>
+        {
+            World.Instance.TargetManager.SetTargeting(targeted =>
+            {
+                if (targeted is Entity entity && SerialHelper.IsItem(entity))
+                {
+                    AutoLootManager.Instance.AddAutoLootEntry(entity.Graphic, entity.Hue, entity.Name);
+                    BuildEntriesList();
+                }
+            });
+        }) { Tooltip = "Target an item to add it to the loot list." });
+
+        root.Widgets.Add(actionRow);
+        root.Widgets.Add(addRow);
+        root.Widgets.Add(addEntryPanel);
+        root.Widgets.Add(importCharPanel);
+        root.Widgets.Add(new ScrollViewer { MaxHeight = 300, Content = entriesPanel });
+
+        root.Widgets.Add(new MyraSpacer(15, 5));
+        root.Widgets.Add(new MyraLabel("Global Exclusions:", MyraLabel.TextStyle.H2)
+        {
+            Tooltip = "Matching items are never auto-looted or scavenged, regardless of active profile."
+        });
+        var exclusionsPanel = new VerticalStackPanel { Spacing = 4 };
+
+        void BuildExclusionsList()
+        {
+            exclusionsPanel.Widgets.Clear();
+            List<AutoLootManager.AutoLootConfigEntry> exclusions = AutoLootManager.Instance.ExclusionList;
+
+            if (exclusions.Count == 0)
+            {
+                exclusionsPanel.Widgets.Add(new MyraLabel("No global exclusions configured.", MyraLabel.TextStyle.P));
+                return;
+            }
+
+            var exclusionGrid = new MyraGrid();
+            exclusionGrid.SetupWithHeaders(
+                GridColumnInfo.Fill("Name"),
+                GridColumnInfo.Auto("Graphic"),
+                GridColumnInfo.Auto("Hue"),
+                GridColumnInfo.Fill("Regex"),
+                GridColumnInfo.Auto("Actions")
+            );
+
+            for (int index = 0; index < exclusions.Count; index++)
+            {
+                AutoLootManager.AutoLootConfigEntry exclusion = exclusions[index];
+                int row = index + 1;
+                var name = new MyraInputBox { Text = exclusion.Name, MinWidth = 100 };
+                name.TextChangedByUser += (_, _) =>
+                {
+                    exclusion.Name = name.Text;
+                    AutoLootManager.Instance.NotifyExclusionsChanged();
+                };
+                exclusionGrid.AddWidget(name, row, 0);
+
+                var graphic = new MyraInputBox
+                {
+                    Text = exclusion.Graphic == ushort.MaxValue ? "-1" : exclusion.Graphic.ToString(),
+                    MinWidth = 70
+                };
+                graphic.TextChangedByUser += (_, _) =>
+                {
+                    if (!StringHelper.TryParseInt(graphic.Text, out int value)) return;
+                    exclusion.Graphic = value == -1 ? ushort.MaxValue : value;
+                    AutoLootManager.Instance.NotifyExclusionsChanged();
+                };
+                exclusionGrid.AddWidget(graphic, row, 1);
+
+                var hue = MyraInputBox.Hue(exclusion.Hue);
+                hue.TextChangedByUser += (_, _) =>
+                {
+                    if (!MyraInputBox.TryParseHue(hue.Text, out ushort value)) return;
+                    exclusion.Hue = value;
+                    AutoLootManager.Instance.NotifyExclusionsChanged();
+                };
+                exclusionGrid.AddWidget(hue, row, 2);
+
+                var regex = new MyraInputBox { Text = exclusion.RegexSearch, MinWidth = 140 };
+                regex.TextChangedByUser += (_, _) =>
+                {
+                    exclusion.RegexSearch = regex.Text;
+                    AutoLootManager.Instance.NotifyExclusionsChanged();
+                };
+                exclusionGrid.AddWidget(regex, row, 3);
+
+                exclusionGrid.AddWidget(MyraStyle.ApplyButtonDangerStyle(new MyraButton("Delete", () =>
+                {
+                    AutoLootManager.Instance.RemoveExclusionEntry(exclusion.Uid);
+                    BuildExclusionsList();
+                })), row, 4);
+            }
+
+            exclusionsPanel.Widgets.Add(exclusionGrid);
+        }
+
+        var exclusionActions = new HorizontalStackPanel { Spacing = 6 };
+        exclusionActions.Widgets.Add(new MyraButton("Add from Target", () =>
+        {
+            World.Instance.TargetManager.SetTargeting(targeted =>
+            {
+                if (targeted is not Entity entity || !SerialHelper.IsItem(entity)) return;
+                AutoLootManager.Instance.AddExclusionEntry(entity.Graphic, entity.Hue, entity.Name);
+                BuildExclusionsList();
+            });
+        }));
+        exclusionActions.Widgets.Add(new MyraButton("Add Wildcard", () =>
+        {
+            AutoLootManager.Instance.AddExclusionEntry(ushort.MaxValue, ushort.MaxValue, "New exclusion");
+            BuildExclusionsList();
+        }) { Tooltip = "Add an editable wildcard/regex exclusion." });
+        root.Widgets.Add(exclusionActions);
+        BuildExclusionsList();
+        root.Widgets.Add(new ScrollViewer { MaxHeight = 220, Content = exclusionsPanel });
+
+        return root;
+    }
+
+    /// <summary>
+    /// Appends <paramref name="graphic"/> (formatted as hex) to a ';'-separated skinning graphic
+    /// list, skipping it if an equal value is already present.
+    /// </summary>
+    private static string AppendSkinningGraphic(string current, ushort graphic)
+    {
+        current ??= string.Empty;
+
+        foreach (string part in current.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (StringHelper.TryParseInt(part, out int existing) && existing == graphic)
+                return current;
+
+        string entry = $"0x{graphic:X4}";
+        return string.IsNullOrWhiteSpace(current) ? entry : $"{current.TrimEnd(';', ' ')};{entry}";
+    }
+}

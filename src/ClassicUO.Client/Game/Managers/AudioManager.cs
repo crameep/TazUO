@@ -22,10 +22,20 @@ namespace ClassicUO.Game.Managers
         private readonly LinkedList<UOSound> _currentSounds = new LinkedList<UOSound>();
         private readonly UOMusic[] _currentMusic = { null, null };
         private readonly int[] _currentMusicIndices = { 0, 0 };
+        private UOSound _currentAmbient;
+        private int _currentAmbientIndex;
+        private float _currentAmbientVolume;
         public int LoginMusicIndex { get; private set; }
+        public int CurrentAmbientIndex => _currentAmbientIndex;
+        public bool HasAmbientSound => _currentAmbient != null;
         public int DeathMusicIndex { get; } = 42;
-        private int _lastPlayedSoundId = -1;
-        public int LastPlayedSoundId => _lastPlayedSoundId;
+        private long _nextAudioHealthCheck = 0;
+
+        /// <summary>
+        /// Index, Name
+        /// </summary>
+        public LimitedFIFOCollection<(int, string)> LastPlayedSounds { get; } = new(5);
+        public LimitedFIFOCollection<(int, string)> LastPlayedMusic { get; } = new(5);
 
         public void Initialize()
         {
@@ -111,9 +121,6 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            // Track last played sound
-            _lastPlayedSoundId = index;
-
             float volume = currentProfile.SoundVolume / SOUND_DELTA;
 
             if (Client.Game.IsActive)
@@ -142,6 +149,9 @@ namespace ClassicUO.Game.Managers
 
             if (sound != null)
             {
+                // Track last played sound
+                LastPlayedSounds.Add((index, sound.Name));
+
                 try
                 {
                     if (sound.Play(Time.Ticks, volume))
@@ -168,14 +178,10 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            // Check if sound is filtered
             if (SoundFilterManager.Instance.IsSoundFiltered(index))
             {
                 return;
             }
-
-            // Track last played sound
-            _lastPlayedSoundId = index;
 
             int distX = Math.Abs(x - world.Player.X);
             int distY = Math.Abs(y - world.Player.Y);
@@ -210,6 +216,9 @@ namespace ClassicUO.Game.Managers
 
             if (sound != null)
             {
+                // Track last played sound
+                LastPlayedSounds.Add((index, sound.Name));
+
                 try
                 {
                     if (sound.Play(Time.Ticks, volume, distanceFactor))
@@ -229,7 +238,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public void PlayMusic(int music, bool iswarmode = false, bool is_login = false)
+        public void PlayMusic(int music, bool iswarmode = false, bool is_login = false, bool skipIgnore = false)
         {
             if (!_canReproduceAudio || _audioDeviceDisconnected)
             {
@@ -237,6 +246,11 @@ namespace ClassicUO.Game.Managers
             }
 
             if (music >= Constants.MAX_MUSIC_DATA_INDEX_COUNT)
+            {
+                return;
+            }
+
+            if (!skipIgnore && SoundFilterManager.Instance.IsSoundFiltered(music, true))
             {
                 return;
             }
@@ -289,6 +303,7 @@ namespace ClassicUO.Game.Managers
                 try
                 {
                     _currentMusic[idx].Play(Time.Ticks, volume);
+                    LastPlayedMusic.Add((music, m.Name));
                 }
                 catch (Exception ex)
                 {
@@ -389,6 +404,112 @@ namespace ClassicUO.Game.Managers
 
         public void StopWarMusic() => PlayMusic(_currentMusicIndices[0]);
 
+        public void PlayAmbientSound(int index, float volume, bool skipFilter = false)
+        {
+            if (!_canReproduceAudio || _audioDeviceDisconnected)
+            {
+                return;
+            }
+
+            if (!skipFilter && SoundFilterManager.Instance.IsSoundFiltered(index))
+            {
+                return;
+            }
+
+            if (volume < -1 || volume > 1f)
+            {
+                return;
+            }
+
+            if (_currentAmbientIndex == index && _currentAmbient != null)
+            {
+                SetAmbientVolume(volume);
+                return;
+            }
+
+            StopAmbientSound();
+
+            var sound = (UOSound)Client.Game.UO.Sounds.GetSound(index);
+
+            if (sound == null)
+            {
+                return;
+            }
+
+            try
+            {
+                sound.IsLooping = true;
+
+                if (sound.Play(Time.Ticks, volume, 0.0f))
+                {
+                    sound.SubmitAdditionalBuffers(2);
+                    sound.X = -1;
+                    sound.Y = -1;
+                    sound.CalculateByDistance = false;
+
+                    _currentAmbient = sound;
+                    _currentAmbientIndex = index;
+                    _currentAmbientVolume = volume;
+                }
+                else
+                {
+                    sound.IsLooping = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to play ambient sound {index}: {ex.Message}");
+                _audioDeviceDisconnected = true;
+                sound.IsLooping = false;
+                _currentAmbient = null;
+                _currentAmbientIndex = 0;
+                _currentAmbientVolume = 0;
+            }
+        }
+
+        public void SetAmbientVolume(float volume)
+        {
+            if (!_canReproduceAudio || _audioDeviceDisconnected || _currentAmbient == null)
+            {
+                return;
+            }
+
+            if (volume < -1 || volume > 1f)
+            {
+                return;
+            }
+
+            try
+            {
+                _currentAmbientVolume = volume;
+                _currentAmbient.Volume = volume;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to set ambient volume: {ex.Message}");
+                _audioDeviceDisconnected = true;
+                StopAmbientPlayback(clearState: false);
+            }
+        }
+
+        public void StopAmbientSound() => StopAmbientPlayback(clearState: true);
+
+        private void StopAmbientPlayback(bool clearState)
+        {
+            if (_currentAmbient != null)
+            {
+                _currentAmbient.IsLooping = false;
+                _currentAmbient.Stop();
+                _currentAmbient = null;
+            }
+
+            if (clearState)
+            {
+                _currentAmbientIndex = 0;
+                _currentAmbientVolume = 0;
+            }
+        }
+
         public void StopSounds()
         {
             LinkedListNode<UOSound> first = _currentSounds.First;
@@ -421,7 +542,11 @@ namespace ClassicUO.Game.Managers
                 }
             }
 
-            CheckAudioDeviceHealth();
+            if(Time.Ticks > _nextAudioHealthCheck)
+            {
+                CheckAudioDeviceHealth();
+                _nextAudioHealthCheck = Time.Ticks + 5000;
+            }
 
             bool runninWarMusic = _currentMusic[1] != null;
             Profile currentProfile = ProfileManager.CurrentProfile;
@@ -446,6 +571,16 @@ namespace ClassicUO.Game.Managers
                 _currentMusic[i]?.Update();
             }
 
+            try
+            {
+                _currentAmbient?.MaintainLoopBuffers();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to maintain ambient buffers: {ex.Message}");
+                _audioDeviceDisconnected = true;
+                StopAmbientPlayback(clearState: false);
+            }
 
             LinkedListNode<UOSound> first = _currentSounds.First;
 
@@ -510,6 +645,7 @@ namespace ClassicUO.Game.Managers
                 _audioDeviceDisconnected = false;
                 Log.Info("Immediate audio fallback successful!");
                 RestoreCurrentMusic();
+                RestoreCurrentAmbient();
             }
             else
             {
@@ -534,6 +670,7 @@ namespace ClassicUO.Game.Managers
                 _audioDeviceDisconnected = false;
                 Log.Info("Audio recovery successful!");
                 RestoreCurrentMusic();
+                RestoreCurrentAmbient();
             }
             else
             {
@@ -580,10 +717,19 @@ namespace ClassicUO.Game.Managers
             {
                 StopSounds();
                 StopMusic();
+                StopAmbientPlayback(clearState: false);
             }
             catch (Exception ex)
             {
                 Log.Warn($"Error stopping audio during device disconnection: {ex.Message}");
+            }
+        }
+
+        private void RestoreCurrentAmbient()
+        {
+            if (_currentAmbientIndex > 0)
+            {
+                PlayAmbientSound(_currentAmbientIndex, _currentAmbientVolume);
             }
         }
 

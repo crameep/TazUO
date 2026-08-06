@@ -4,7 +4,9 @@ using System.Linq;
 using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.UI.Controls;
+using ClassicUO.Game.UI.MyraWindows;
 using ClassicUO.Input;
 using ClassicUO.Renderer;
 using ClassicUO.Utility;
@@ -191,7 +193,7 @@ public class BaseOptionsGump : Gump
 
     protected static void SetParentsForMatchingSearch(Control c, int page)
     {
-        for (Control p = c.Parent; p != null; p = p.Parent)
+        for (IGui p = c.Parent; p != null; p = p.Parent)
         {
             if (p is LeftSideMenuRightSideContent content)
             {
@@ -527,19 +529,24 @@ public class BaseOptionsGump : Gump
         }
     }
 
+    /// <summary>
+    /// A compact label that shows the currently assigned hotkey and, when clicked, opens the shared
+    /// <see cref="HotkeyCaptureWindow"/> to record a new one. All input capture happens inside that
+    /// single window; this control only displays the result and raises <see cref="HotkeyChanged"/>
+    /// (or <see cref="HotkeyCancelled"/> when the binding is cleared).
+    /// </summary>
     protected class HotkeyBox : Control
     {
-        private bool _actived;
-        private readonly ModernButton _buttonOK, _buttonCancel;
         private readonly TextBox _label;
+        private HotkeyCaptureWindow _captureWindow;
 
         public HotkeyBox()
         {
             CanMove = false;
             AcceptMouseInput = true;
-            AcceptKeyboardInput = true;
+            AcceptKeyboardInput = false;
 
-            Width = 300;
+            Width = 150;
             Height = 40;
 
             var bg = new AlphaBlendControl()
@@ -557,24 +564,7 @@ public class BaseOptionsGump : Gump
 
             _label.MouseUp += LabelOnMouseUp;
 
-            Add
-            (
-                _buttonOK = new ModernButton(152, 0, 75, 40, ButtonAction.Activate, "Save", ThemeSettings.BUTTON_FONT_COLOR)
-                {
-                    ButtonParameter = (int)ButtonState.Ok
-                }
-            );
-
-            Add
-            (
-                _buttonCancel = new ModernButton(_buttonOK.Bounds.Right + 5, 0, 75, 40, ButtonAction.Activate, "Cancel", ThemeSettings.BUTTON_FONT_COLOR)
-                {
-                    ButtonParameter = (int)ButtonState.Cancel
-                }
-            );
-
             WantUpdateSize = false;
-            IsActive = false;
         }
 
         public SDL.SDL_Keycode Key { get; private set; }
@@ -584,43 +574,7 @@ public class BaseOptionsGump : Gump
         public bool WheelUp { get; private set; }
         public SDL.SDL_Keymod Mod { get; private set; }
 
-        public bool IsActive
-        {
-            get => _actived;
-            set
-            {
-                _actived = value;
-
-                if (value)
-                {
-                    _buttonOK.IsVisible = _buttonCancel.IsVisible = true;
-                    _buttonOK.IsEnabled = _buttonCancel.IsEnabled = true;
-                }
-                else
-                {
-                    _buttonOK.IsVisible = _buttonCancel.IsVisible = false;
-                    _buttonOK.IsEnabled = _buttonCancel.IsEnabled = false;
-                }
-            }
-        }
-
         public event EventHandler HotkeyChanged, HotkeyCancelled;
-
-        protected override void OnControllerButtonDown(SDL.SDL_GamepadButton button)
-        {
-            if (IsActive)
-            {
-                SetButtons(Controller.PressedButtons());
-            }
-        }
-
-        protected override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
-        {
-            if (IsActive)
-            {
-                SetKey(key, mod);
-            }
-        }
 
         public void SetButtons(SDL.SDL_GamepadButton[] buttons)
         {
@@ -653,31 +607,6 @@ public class BaseOptionsGump : Gump
             }
         }
 
-        protected override void OnMouseDown(int x, int y, MouseButtonType button)
-        {
-            if (button == MouseButtonType.Middle || button == MouseButtonType.XButton1 || button == MouseButtonType.XButton2)
-            {
-                SDL.SDL_Keymod mod = SDL.SDL_Keymod.SDL_KMOD_NONE;
-
-                if (Keyboard.Alt)
-                {
-                    mod |= SDL.SDL_Keymod.SDL_KMOD_ALT;
-                }
-
-                if (Keyboard.Shift)
-                {
-                    mod |= SDL.SDL_Keymod.SDL_KMOD_SHIFT;
-                }
-
-                if (Keyboard.Ctrl)
-                {
-                    mod |= SDL.SDL_Keymod.SDL_KMOD_CTRL;
-                }
-
-                SetMouseButton(button, mod);
-            }
-        }
-
         public void SetMouseButton(MouseButtonType button, SDL.SDL_Keymod mod)
         {
             string newvalue = KeysTranslator.GetMouseButton(button, mod);
@@ -689,35 +618,6 @@ public class BaseOptionsGump : Gump
                 MouseButton = button;
                 Mod = mod;
                 _label.Text = newvalue;
-            }
-        }
-
-        protected override void OnMouseWheel(MouseEventType delta)
-        {
-            SDL.SDL_Keymod mod = SDL.SDL_Keymod.SDL_KMOD_NONE;
-
-            if (Keyboard.Alt)
-            {
-                mod |= SDL.SDL_Keymod.SDL_KMOD_ALT;
-            }
-
-            if (Keyboard.Shift)
-            {
-                mod |= SDL.SDL_Keymod.SDL_KMOD_SHIFT;
-            }
-
-            if (Keyboard.Ctrl)
-            {
-                mod |= SDL.SDL_Keymod.SDL_KMOD_CTRL;
-            }
-
-            if (delta == MouseEventType.WheelScrollUp)
-            {
-                SetMouseWheel(true, mod);
-            }
-            else if (delta == MouseEventType.WheelScrollDown)
-            {
-                SetMouseWheel(false, mod);
             }
         }
 
@@ -741,41 +641,84 @@ public class BaseOptionsGump : Gump
             Key = 0;
             MouseButton = MouseButtonType.None;
             WheelScroll = false;
+            WheelUp = false;
             Mod = 0;
             _label.Text = "None";
             Buttons = null;
         }
 
+        /// <summary>Builds a <see cref="HotkeyBinding"/> from the currently displayed binding.</summary>
+        private HotkeyBinding ToBinding() => new()
+        {
+            Key = Key,
+            Ctrl = (Mod & SDL.SDL_Keymod.SDL_KMOD_CTRL) != 0,
+            Shift = (Mod & SDL.SDL_Keymod.SDL_KMOD_SHIFT) != 0,
+            Alt = (Mod & SDL.SDL_Keymod.SDL_KMOD_ALT) != 0,
+            MouseButton = MouseButton,
+            WheelScroll = WheelScroll,
+            WheelUp = WheelUp,
+            ControllerButtons = Buttons
+        };
+
+        /// <summary>Applies a captured <see cref="HotkeyBinding"/> back into this control's fields.</summary>
+        private void ApplyBinding(HotkeyBinding binding)
+        {
+            SDL.SDL_Keymod mod = binding.Mod;
+
+            if (binding.HasController)
+                SetButtons(binding.ControllerButtons);
+            else if (binding.HasMouseButton)
+                SetMouseButton(binding.MouseButton, mod);
+            else if (binding.WheelScroll)
+                SetMouseWheel(binding.WheelUp, mod);
+            else if (binding.HasKey)
+                SetKey(binding.Key, mod);
+            else
+                ResetBinding();
+        }
+
         private void LabelOnMouseUp(object sender, MouseEventArgs e)
         {
-            IsActive = true;
-            SetKeyboardFocus();
-        }
-
-        public override void OnButtonClick(int buttonID)
-        {
-            switch ((ButtonState)buttonID)
+            if (_captureWindow is { IsDisposed: false })
             {
-                case ButtonState.Ok: HotkeyChanged.Raise(this); break;
-
-                case ButtonState.Cancel:
-                    _label.Text = "None";
-
-                    HotkeyCancelled.Raise(this);
-
-                    Key = SDL.SDL_Keycode.SDLK_UNKNOWN;
-                    Mod = SDL.SDL_Keymod.SDL_KMOD_NONE;
-
-                    break;
+                _captureWindow.BringOnTop();
+                return;
             }
 
-            IsActive = false;
+            _captureWindow = new HotkeyCaptureWindow(
+                prompt: null,
+                existing: ToBinding(),
+                onSaved: OnBindingSaved,
+                capturesMouseEvents: true
+            );
         }
 
-        private enum ButtonState
+        private void OnBindingSaved(HotkeyBinding binding)
         {
-            Ok,
-            Cancel
+            // This control only dispatches key, mouse, wheel or controller bindings; a bare
+            // modifier-only capture (or an empty one) is treated as clearing the binding.
+            bool usable = binding.HasController || binding.HasMouseButton || binding.WheelScroll || binding.HasKey;
+
+            if (!usable)
+            {
+                ResetBinding();
+                Key = SDL.SDL_Keycode.SDLK_UNKNOWN;
+                Mod = SDL.SDL_Keymod.SDL_KMOD_NONE;
+                HotkeyCancelled.Raise(this);
+                return;
+            }
+
+            ApplyBinding(binding);
+            HotkeyChanged.Raise(this);
+        }
+
+        public override void Dispose()
+        {
+            if (_captureWindow is { IsDisposed: false })
+                _captureWindow.Dispose();
+
+            _captureWindow = null;
+            base.Dispose();
         }
     }
 
@@ -865,7 +808,7 @@ public class BaseOptionsGump : Gump
 
         public void SetText(string text) => _textbox.SetText(text);
 
-        public void SetTooltip(string text)
+        public new void SetTooltip(string text)
         {
             base.SetTooltip(text);
             _textbox.SetTooltip(text);
@@ -1150,13 +1093,13 @@ public class BaseOptionsGump : Gump
                 UpdateCaretScreenPosition();
             }
 
-            internal override void OnFocusEnter()
+            public override void OnFocusEnter()
             {
                 base.OnFocusEnter();
                 CaretIndex = Text?.Length ?? 0;
             }
 
-            internal override void OnFocusLost()
+            public override void OnFocusLost()
             {
                 if (Stb != null)
                     Stb.SelectStart = Stb.SelectEnd = 0;
@@ -1164,7 +1107,7 @@ public class BaseOptionsGump : Gump
                 base.OnFocusLost();
             }
 
-            protected override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
+            public override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
             {
                 ControlKeys? stb_key = null;
                 bool update_caret = false;
@@ -1618,7 +1561,7 @@ public class BaseOptionsGump : Gump
                 }
             }
 
-            protected override void OnMouseDown(int x, int y, MouseButtonType button)
+            public override void OnMouseDown(int x, int y, MouseButtonType button)
             {
                 if (button == MouseButtonType.Left && IsEditable)
                 {
@@ -1633,7 +1576,7 @@ public class BaseOptionsGump : Gump
                 base.OnMouseDown(x, y, button);
             }
 
-            protected override void OnMouseUp(int x, int y, MouseButtonType button)
+            public override void OnMouseUp(int x, int y, MouseButtonType button)
             {
                 if (button == MouseButtonType.Left)
                 {
@@ -1643,7 +1586,7 @@ public class BaseOptionsGump : Gump
                 base.OnMouseUp(x, y, button);
             }
 
-            protected override void OnMouseOver(int x, int y)
+            public override void OnMouseOver(int x, int y)
             {
                 base.OnMouseOver(x, y);
 
@@ -1663,7 +1606,7 @@ public class BaseOptionsGump : Gump
                 base.Dispose();
             }
 
-            protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+            public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
             {
                 if (!NoSelection && CaretIndex < Text.Length && CaretIndex >= 0 && !char.IsWhiteSpace(Text[CaretIndex]))
                 {
@@ -1762,7 +1705,7 @@ public class BaseOptionsGump : Gump
 
                 if (value)
                 {
-                    Control p = Parent;
+                    IGui p = Parent;
 
                     if (p == null)
                     {
@@ -1797,7 +1740,7 @@ public class BaseOptionsGump : Gump
             return null;
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (button == MouseButtonType.Left)
             {
@@ -1932,7 +1875,7 @@ public class BaseOptionsGump : Gump
             {
                 for (int i = start; i < Children.Count; i++)
                 {
-                    Control child = Children[i];
+                    IGui child = Children[i];
 
                     if (!child.IsVisible || (child.Page != ActivePage && child.Page != 0))
                     {
@@ -1960,7 +1903,7 @@ public class BaseOptionsGump : Gump
             }
         }
 
-        protected override void OnMouseWheel(MouseEventType delta)
+        public override void OnMouseWheel(MouseEventType delta)
         {
             if (IsDisposed || _scrollBar == null)
             {
@@ -1997,7 +1940,7 @@ public class BaseOptionsGump : Gump
 
             for (int i = 1; i < Children.Count; i++)
             {
-                Control c = Children[i];
+                IGui c = Children[i];
 
                 if (c.IsVisible && !c.IsDisposed && (c.Page == 0 || c.Page == ActivePage))
                 {
@@ -2085,7 +2028,7 @@ public class BaseOptionsGump : Gump
 
             protected override int GetScrollableArea() => Height - _rectSlider.Height;
 
-            protected override void OnMouseDown(int x, int y, MouseButtonType button)
+            public override void OnMouseDown(int x, int y, MouseButtonType button)
             {
                 base.OnMouseDown(x, y, button);
 
@@ -2140,7 +2083,16 @@ public class BaseOptionsGump : Gump
         private Combobox _comboBox;
         private readonly string[] options;
 
-        public ComboBoxWithLabel(World world, string label, int labelWidth, int comboWidth, string[] options, int selectedIndex, Action<int, string> onOptionSelected = null)
+        public ComboBoxWithLabel(
+            World world,
+            string label,
+            int labelWidth,
+            int comboWidth,
+            string[] options,
+            int selectedIndex,
+            Action<int, string> onOptionSelected = null,
+            bool autoSortComboboxItems = true
+        )
         {
             AcceptMouseInput = true;
             CanMove = true;
@@ -2152,7 +2104,7 @@ public class BaseOptionsGump : Gump
 
             Add
             (
-                _comboBox = new Combobox(world, comboWidth, options, selectedIndex, onOptionSelected: onOptionSelected)
+                _comboBox = new Combobox(world, comboWidth, options, selectedIndex, onOptionSelected: onOptionSelected, sortItems:autoSortComboboxItems)
                 {
                     X = _label.MeasuredSize.X + _label.X + 5
                 }
@@ -2224,7 +2176,15 @@ public class BaseOptionsGump : Gump
 
             private World world;
 
-            public Combobox(World world, int width, string[] items, int selected = -1, int maxHeight = 400, Action<int, string> onOptionSelected = null)
+            public Combobox(
+                World world,
+                int width,
+                string[] items,
+                int selected = -1,
+                int maxHeight = 400,
+                Action<int, string> onOptionSelected = null,
+                bool sortItems = true
+            )
             {
                 this.world = world;
                 Width = width;
@@ -2234,18 +2194,22 @@ public class BaseOptionsGump : Gump
                 OnOptionSelected = onOptionSelected;
                 AcceptMouseInput = true;
 
-                // Create sorted items with original index mapping
+                // When sorting is on, create a sorted items array with original index mapping
                 _originalIndices = Enumerable.Range(0, items.Length).ToArray();
                 _sortedItems = new string[items.Length];
                 Array.Copy(items, _sortedItems, items.Length);
 
-                // Sort both arrays together
-                Array.Sort(_sortedItems, _originalIndices);
+                if (sortItems)
+                    Array.Sort(_sortedItems, _originalIndices); // Sort both arrays together
 
                 // Find the display index for the selected original index
                 int displayIndex = selected > -1 ? Array.IndexOf(_originalIndices, selected) : -1;
 
-                string initialText = displayIndex > -1 ? _sortedItems[displayIndex] : _sortedItems[_originalIndices[0]];
+                string initialText;
+                if (_sortedItems?.Length > 0)
+                    initialText = displayIndex > -1 ? _sortedItems[displayIndex] : _sortedItems[0];
+                else
+                    initialText = "";
 
                 Add(new ColorBox(Width, Height, ThemeSettings.SEARCH_BACKGROUND));
 
@@ -2280,7 +2244,7 @@ public class BaseOptionsGump : Gump
 
             public Action<int, string> OnOptionSelected { get; }
 
-            protected override void OnMouseUp(int x, int y, MouseButtonType button)
+            public override void OnMouseUp(int x, int y, MouseButtonType button)
             {
                 if (button != MouseButtonType.Left)
                 {
@@ -2405,7 +2369,7 @@ public class BaseOptionsGump : Gump
                     }
 
                     public bool DrawBackgroundCurrentIndex = true;
-                    public bool IsSelected, ForceHover;
+                    public bool IsSelected;
 
                     public Color Hue;
 
@@ -2419,7 +2383,7 @@ public class BaseOptionsGump : Gump
                                 _label.FontColor = Hue;
                             }
                         }
-                        else if (MouseIsOver || ForceHover)
+                        else if (MouseIsOver)
                         {
                             if (Hue != _overHue)
                             {
@@ -2683,7 +2647,7 @@ public class BaseOptionsGump : Gump
 
         protected virtual void OnCheckedChanged() => ValueChanged?.Invoke(IsChecked);
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (button == MouseButtonType.Left && MouseIsOver)
             {
@@ -2869,7 +2833,7 @@ public class BaseOptionsGump : Gump
                 return base.Draw(batcher, x, y);
             }
 
-            protected override void OnMouseDown(int x, int y, MouseButtonType button)
+            public override void OnMouseDown(int x, int y, MouseButtonType button)
             {
                 if (button != MouseButtonType.Left)
                 {
@@ -2879,7 +2843,7 @@ public class BaseOptionsGump : Gump
                 _clicked = true;
             }
 
-            protected override void OnMouseUp(int x, int y, MouseButtonType button)
+            public override void OnMouseUp(int x, int y, MouseButtonType button)
             {
                 if (button != MouseButtonType.Left)
                 {
@@ -2890,7 +2854,7 @@ public class BaseOptionsGump : Gump
                 CalculateNew(x);
             }
 
-            protected override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
+            public override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
             {
                 base.OnKeyUp(key, mod);
 

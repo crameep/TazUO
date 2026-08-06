@@ -2,6 +2,7 @@
 
 using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Input;
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
@@ -36,11 +37,11 @@ namespace ClassicUO.Game.UI.Gumps
         public int WidthMultiplier { get; protected set; } = 1;
         public int HeightMultiplier { get; protected set; } = 1;
 
-        public bool ShowLock => Keyboard.Alt && UIManager.AnchorManager[this] != null;
+        public bool ShowLock => HotKeys.IsPressed(HotKeyRegistrar.GumpModifierId) && UIManager.AnchorManager[this] != null;
 
         protected override void OnMove(int x, int y)
         {
-            if (Keyboard.Alt && !ProfileManager.CurrentProfile.HoldAltToMoveGumps)
+            if (HotKeys.IsPressed(HotKeyRegistrar.GumpModifierId) && !ProfileManager.CurrentProfile.HoldAltToMoveGumps)
             {
                 UIManager.AnchorManager.DetachControl(this);
             }
@@ -55,7 +56,7 @@ namespace ClassicUO.Game.UI.Gumps
             base.OnMove(x, y);
         }
 
-        protected override void OnMouseDown(int x, int y, MouseButtonType button)
+        public override void OnMouseDown(int x, int y, MouseButtonType button)
         {
             UIManager.AnchorManager[this]?.MakeTopMost();
 
@@ -65,7 +66,7 @@ namespace ClassicUO.Game.UI.Gumps
             base.OnMouseDown(x, y, button);
         }
 
-        protected override void OnMouseOver(int x, int y)
+        public override void OnMouseOver(int x, int y)
         {
             if (!IsDisposed && UIManager.IsDragging && UIManager.DraggingControl == this && AnchorType != ANCHOR_TYPE.DISABLED)
             {
@@ -99,7 +100,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (button == MouseButtonType.Left && ShowLock)
             {
@@ -201,11 +202,11 @@ namespace ClassicUO.Game.UI.Gumps
             return true;
         }
 
-        protected override void CloseWithRightClick()
+        public override void CloseWithRightClick()
         {
             if (
                 UIManager.AnchorManager[this] == null
-                || Keyboard.Alt
+                || HotKeys.IsPressed(HotKeyRegistrar.GumpModifierId)
                 || !ProfileManager.CurrentProfile.HoldDownKeyAltToCloseAnchored
             )
             {

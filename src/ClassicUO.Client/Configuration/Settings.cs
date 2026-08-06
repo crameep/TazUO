@@ -1,8 +1,10 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClassicUO.Assets;
 using ClassicUO.Configuration.Json;
 using ClassicUO.Game;
 using Microsoft.Xna.Framework;
@@ -24,6 +26,8 @@ namespace ClassicUO.Configuration
 
     public sealed class Settings
     {
+        [JsonIgnore] public CustomServers? CustomServer;
+
         public const string SETTINGS_FILENAME = "settings.json";
         public static Settings GlobalSettings = new Settings();
         public static string CustomSettingsFilepath = null;
@@ -33,7 +37,16 @@ namespace ClassicUO.Configuration
 
         [JsonPropertyName("password")] public string Password { get; set; } = string.Empty;
 
-        [JsonPropertyName("ip")] public string IP { get; set; } = "";
+        [JsonPropertyName("ip")]
+        public string IP
+        {
+            get;
+            set
+            {
+                field = value;
+                DetectCustomServers();
+            }
+        } = "";
 
         [JsonPropertyName("port"), JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)] public ushort Port { get; set; } = 2593;
 
@@ -71,7 +84,7 @@ namespace ClassicUO.Configuration
 
         [JsonPropertyName("login_music")] public bool LoginMusic { get; set; } = true;
 
-        [JsonPropertyName("login_music_volume")] public int LoginMusicVolume { get; set; } = 70;
+        [JsonPropertyName("login_music_volume")] public int LoginMusicVolume { get; set; } = 50;
 
         [JsonPropertyName("fixed_time_step")] public bool FixedTimeStep { get; set; } = true;
 
@@ -88,6 +101,31 @@ namespace ClassicUO.Configuration
 
         [JsonPropertyName("plugins")] public string[] Plugins { get; set; } = { "" };
 
+        [JsonIgnore] public bool SkipServerSelect { get; set; }
+
+        /// <summary>
+        /// Uses the campfire/Diablo-style character selection screen instead of the classic list.
+        /// SQL-backed (Global scope) rather than JSON so it can be read/written at the
+        /// character-selection screen before any profile is loaded; persists on assignment.
+        /// </summary>
+        [JsonIgnore]
+        public bool UseCampfireCharacterSelect
+        {
+            get => Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.CAMPFIRE_CHAR_SELECT, false);
+            set => Client.Settings.Set(SettingsScope.Global, Constants.SqlSettings.CAMPFIRE_CHAR_SELECT, value);
+        }
+
+        /// <summary>
+        /// UI language code used for TazLang strings, persisted in global SQL settings.
+        /// Defaults to <c>"EN"</c> when no value is stored.
+        /// </summary>
+        [JsonIgnore]
+        public string UILanguage
+        {
+            get => Client.Settings.Get(SettingsScope.Global, Constants.SqlSettings.UI_LANGUAGE, "EN");
+            set => Client.Settings.Set(SettingsScope.Global, Constants.SqlSettings.UI_LANGUAGE, value);
+        }
+
         public static string GetSettingsFilepath()
         {
             if (CustomSettingsFilepath != null)
@@ -102,7 +140,6 @@ namespace ClassicUO.Configuration
 
             return Path.Combine(CUOEnviroment.ExecutablePath, SETTINGS_FILENAME);
         }
-
 
         public void Save()
         {
@@ -123,6 +160,24 @@ namespace ClassicUO.Configuration
             // NOTE: We can do any other settings clean-ups here before we save them
 
             ConfigurationResolver.Save(settingsToSave, GetSettingsFilepath(), SettingsJsonContext.RealDefault.Settings);
+        }
+
+        private void DetectCustomServers()
+        {
+            string[] _eventineIPs = ["shard.uoeventine.net", "shard.uoeventine.com"];
+
+            if (_eventineIPs.Contains(IP))
+            {
+                CustomServer = CustomServers.Eventine;
+                CustomServerSettings.GetCustomAnimPath = () => Path.Combine(Path.GetFullPath(UltimaOnlineDirectory), "Anims" );
+                return;
+            }
+        }
+
+        public enum CustomServers
+        {
+            LOCAL_SERVER,
+            Eventine
         }
     }
 }

@@ -7,6 +7,7 @@ using System.Xml;
 using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using ClassicUO.Renderer;
@@ -43,11 +44,11 @@ namespace ClassicUO.Game.UI.Gumps
 
         public float AlphaOffset = 0;
 
-        protected override void OnMouseWheel(MouseEventType delta)
+        public override void OnMouseWheel(MouseEventType delta)
         {
             base.OnMouseWheel(delta);
 
-            if (Keyboard.Alt && ProfileManager.CurrentProfile.EnableAlphaScrollingOnGumps)
+            if (HotKeys.IsPressed(HotKeyRegistrar.GumpOpacityId) && ProfileManager.CurrentProfile.EnableAlphaScrollingOnGumps)
             {
                 if (delta == MouseEventType.WheelScrollUp && Alpha < 0.99)
                 {
@@ -109,20 +110,21 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override void Dispose()
         {
+            if (IsDisposed)
+                return;
+
             Item it = World.Items.Get(LocalSerial);
 
             if (it != null && it.Opened)
-            {
                 it.Opened = false;
-            }
 
             base.Dispose();
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             base.OnMouseUp(x, y, button);
-            if (CanBeLocked && ((Keyboard.Ctrl && Keyboard.Alt) || Controller.Button_LeftTrigger) && UIManager.MouseOverControl != null && (UIManager.MouseOverControl == this || UIManager.MouseOverControl.RootParent == this))
+            if (CanBeLocked && (HotKeys.IsPressed(HotKeyRegistrar.GumpLockId) || Controller.Button_LeftTrigger) && UIManager.MouseOverControl != null && (UIManager.MouseOverControl == this || UIManager.MouseOverControl.RootParent == this))
             {
                 IsLocked ^= true;
             }
@@ -141,34 +143,28 @@ namespace ClassicUO.Game.UI.Gumps
 
         public void CenterXInScreen()
         {
-            Rectangle windowBounds = Client.Game.Window.ClientBounds;
-            float inv = 1f / Client.Game.UIScale;
-            X = ((int)(windowBounds.Width * inv) - Width) / 2;
+            // Width is already in logical UI space, so only the window bounds need converting.
+            // (The previous form multiplied Width by RenderScale, double-counting it and
+            // mis-centering whenever the game scale was not 1.0.)
+            X = (ScaleHelper.LogicalWindowWidth - Width) / 2;
         }
 
         public void CenterYInScreen()
         {
-            Rectangle windowBounds = Client.Game.Window.ClientBounds;
-            float inv = 1f / Client.Game.UIScale;
-            Y = ((int)(windowBounds.Height * inv) - Height) / 2;
+            // Height is already in logical UI space; see CenterXInScreen for the double-count fix.
+            Y = (ScaleHelper.LogicalWindowHeight - Height) / 2;
         }
 
         public void CenterXInViewPort()
         {
             Camera camera = Client.Game.Scene.Camera;
-            float inv = 1f / Client.Game.UIScale;
-            int bx = (int)(camera.Bounds.X * inv);
-            int bw = (int)(camera.Bounds.Width * inv);
-            X = bx + ((bw - Width) / 2);
+            X = camera.Bounds.X + ((camera.Bounds.Width - Width) / 2);
         }
 
         public void CenterYInViewPort()
         {
             Camera camera = Client.Game.Scene.Camera;
-            float inv = 1f / Client.Game.UIScale;
-            int by = (int)(camera.Bounds.Y * inv);
-            int bh = (int)(camera.Bounds.Height * inv);
-            Y = by + ((bh - Height) / 2);
+            Y = camera.Bounds.Y + ((camera.Bounds.Height - Height) / 2);
         }
 
         public Gump CenterInViewPort()
@@ -181,15 +177,12 @@ namespace ClassicUO.Game.UI.Gumps
         public void SetInScreen()
         {
             Rectangle windowBounds = Client.Game.Window.ClientBounds;
-            float inv = 1f / Client.Game.UIScale;
-            int maxW = (int)(windowBounds.Width * inv);
-            int maxH = (int)(windowBounds.Height * inv);
 
             int halfWidth = Width / 2;
             int halfHeight = Height / 2;
 
-            int newX = (int)MathHelper.Clamp(X, -halfWidth, maxW - halfWidth);
-            int newY = (int)MathHelper.Clamp(Y, -halfHeight, maxH - halfHeight);
+            int newX = (int)MathHelper.Clamp(X, -halfWidth, windowBounds.Width - halfWidth);
+            int newY = (int)MathHelper.Clamp(Y, -halfHeight, windowBounds.Height - halfHeight);
 
             X = newX;
             Y = newY;
@@ -303,7 +296,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void CloseWithRightClick()
+        public override void CloseWithRightClick()
         {
             if (!CanCloseWithRightClick)
             {

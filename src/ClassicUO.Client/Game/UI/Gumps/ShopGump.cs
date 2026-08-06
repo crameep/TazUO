@@ -15,6 +15,7 @@ using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ClassicUO.Renderer.Animations;
+using ClassicUO.Game.Managers.Hotkeys;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -487,7 +488,7 @@ namespace ClassicUO.Game.UI.Gumps
                 return;
             }
 
-            int total = Keyboard.Shift ? shopItem.Amount : 1;
+            int total = HotKeys.IsPressed(HotKeyRegistrar.ShopBulkId) ? shopItem.Amount : 1;
 
             if (
                 _transactionItems.TryGetValue(
@@ -525,7 +526,7 @@ namespace ClassicUO.Game.UI.Gumps
         {
             var transactionItem = (TransactionItem)sender;
 
-            int total = Keyboard.Shift ? transactionItem.Amount : 1;
+            int total = HotKeys.IsPressed(HotKeyRegistrar.ShopBulkId) ? transactionItem.Amount : 1;
 
             if (transactionItem.Amount > 0)
             {
@@ -764,7 +765,7 @@ namespace ClassicUO.Game.UI.Gumps
                 WantUpdateSize = false;
             }
 
-            protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button) => true;
+            public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button) => true;
 
             public override bool Draw(UltimaBatcher2D batcher, int x, int y)
             {

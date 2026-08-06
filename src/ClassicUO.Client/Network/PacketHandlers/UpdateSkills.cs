@@ -149,11 +149,11 @@ internal static class UpdateSkills
                         if (isSingleUpdate)
                         {
                             if (lastBase != skill.BaseFixed)
-                                Skill.InvokeSkillBaseChanged(id);
+                                EventSink.InvokeSkillBaseChanged(id);
                             if (lastValue != skill.ValueFixed)
-                                Skill.InvokeSkillValueChanged(id);
+                                EventSink.InvokeSkillValueChanged(id);
                             if (lastCap != skill.CapFixed)
-                                Skill.InvokeSkillCapChanged(id);
+                                EventSink.InvokeSkillCapChanged(id);
                         }
 
                         standard?.Update(id);

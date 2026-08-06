@@ -1,5 +1,6 @@
 using System;
 using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
@@ -15,7 +16,7 @@ public class SpellQuickSearch : NineSliceGump
     private Action<SpellDefinition>  onClick;
     private bool disposeOnReturn;
 
-    public SpellQuickSearch(World world, int x, int y, Action<SpellDefinition> onClick = null, bool disposeOnReturn = false) : base(world, x, y, 200, 79, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BoderSize, false)
+    public SpellQuickSearch(World world, int x, int y, Action<SpellDefinition> onClick = null, bool disposeOnReturn = false) : base(world, x, y, 200, 79, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BorderSize, false)
     {
         CanMove = true;
         X = x;
@@ -31,7 +32,7 @@ public class SpellQuickSearch : NineSliceGump
     private void Build()
     {
         Add(searchField = new TTFTextInputField(Width - 10, 25, Width - 10){Y = 49, X = 5});
-        searchField.SetPlaceholder("Search..");
+        searchField.SetPlaceholder(TazLang.Get("spellbar_search"));
         searchField.SetFocus();
 
         searchField.TextChanged += SearchTextChanged;
@@ -87,7 +88,7 @@ public class SpellQuickSearch : NineSliceGump
 
         public override bool AcceptMouseInput { get; set; } = true;
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             base.OnMouseUp(x, y, button);
 

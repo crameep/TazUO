@@ -29,55 +29,30 @@ namespace ClassicUO.Game.Managers
         {
             Camera camera = Client.Game.Scene.Camera;
 
-            // if (SerialHelper.IsMobile(_world.TargetManager.LastTargetInfo.Serial))
-            // {
-            //     DrawHealthLineWithMath(
-            //         batcher,
-            //         _world.TargetManager.LastTargetInfo.Serial,
-            //         camera.Bounds.Width,
-            //         camera.Bounds.Height
-            //     );
-            //     DrawTargetIndicator(batcher, _world.TargetManager.LastTargetInfo.Serial);
-            // }
+            bool showTargetIndicator = ProfileManager.CurrentProfile?.ShowTargetIndicator ?? false;
+            bool hasNewTarget = SerialHelper.IsMobile(_world.TargetManager.NewTargetSystemSerial);
 
-            // if (SerialHelper.IsMobile(_world.TargetManager.SelectedTarget))
-            // {
-            //     DrawHealthLineWithMath(
-            //         batcher,
-            //         _world.TargetManager.SelectedTarget,
-            //         camera.Bounds.Width,
-            //         camera.Bounds.Height
-            //     );
-            //     DrawTargetIndicator(batcher, _world.TargetManager.SelectedTarget);
-            // }
-
-            // if (SerialHelper.IsMobile(_world.TargetManager.LastAttack))
-            // {
-            //     DrawHealthLineWithMath(
-            //         batcher,
-            //         _world.TargetManager.LastAttack,
-            //         camera.Bounds.Width,
-            //         camera.Bounds.Height
-            //     );
-            //     DrawTargetIndicator(batcher, _world.TargetManager.LastAttack);
-            // }
-
-            if (!IsEnabled)
+            if (!IsEnabled && !(showTargetIndicator && hasNewTarget))
             {
                 return;
             }
 
             int mode = ProfileManager.CurrentProfile.MobileHPType;
 
-            if (mode < 0)
+            if (mode < 0 && !showTargetIndicator)
             {
                 return;
             }
 
             int showWhen = ProfileManager.CurrentProfile.MobileHPShowWhen;
-            bool useNewTargetSystem = ProfileManager.CurrentProfile.UseNewTargetSystem;
             Renderer.Animations.Animations animations = Client.Game.UO.Animations;
             bool isEnabled = IsEnabled;
+
+            // When false, health bars/overhead text are drawn in screen space at a constant size
+            // (see GameScene.DrawOverheads). Their sprite-relative anchors are converted from world
+            // to screen space below so they still follow the zoomed world, but their own pixel
+            // dimensions no longer scale with the camera zoom.
+            bool scaleWithZoom = ProfileManager.CurrentProfile.OverheadsScaleWithZoom;
 
             foreach (Mobile mobile in _world.Mobiles.Values)
             {
@@ -95,9 +70,14 @@ namespace ClassicUO.Game.Managers
                     _world.TargetManager.SelectedTarget == mobile ||
                     _world.TargetManager.NewTargetSystemSerial == mobile)
                 {
-                    newTargSystem = useNewTargetSystem && _world.TargetManager.NewTargetSystemSerial == mobile;
+                    newTargSystem = showTargetIndicator && _world.TargetManager.NewTargetSystemSerial == mobile;
                     passive = false;
                     forceDraw = true;
+                }
+
+                if (!isEnabled && !newTargSystem)
+                {
+                    continue;
                 }
 
                 int current = mobile.Hits;
@@ -148,7 +128,7 @@ namespace ClassicUO.Game.Managers
                                 Point p1 = p;
                                 p1.Y -= height + centerY + 8 + 22;
 
-                                if (mobile.IsGargoyle && mobile.IsFlying)
+                                if (mobile.IsGargoyle && mobile.IsFlyingAnimationEnabled)
                                 {
                                     p1.Y -= 22;
                                 }
@@ -157,7 +137,20 @@ namespace ClassicUO.Game.Managers
                                     p1.Y += 22;
                                 }
 
-                                p1 = Client.Game.Scene.Camera.WorldToScreen(p1);
+                                // When scaling with zoom, this overhead pass is drawn through a batcher
+                                // begun with Camera.ViewTransformMatrix (see GameScene.DrawOverheads), so
+                                // the camera transform is applied automatically and world coordinates are
+                                // used directly. Applying WorldToScreen manually in that case transforms the
+                                // position a second time, which made the percent text drift in a radius
+                                // around the mobile as the zoom changed instead of staying centered on top.
+                                // When NOT scaling with zoom the pass is drawn in screen space, so the
+                                // sprite-relative anchor must be converted here (before the native texture
+                                // offsets below) so the text stays glued to the mobile at a constant size.
+                                if (!scaleWithZoom)
+                                {
+                                    p1 = camera.WorldToScreen(p1);
+                                }
+
                                 p1.X -= (mobile.HitsTexture.Width >> 1) + 5;
                                 p1.Y -= mobile.HitsTexture.Height;
 
@@ -189,7 +182,15 @@ namespace ClassicUO.Game.Managers
                 }
 
                 p.X -= 5;
-                //p = Client.Game.Scene.Camera.WorldToScreen(p);
+
+                // See the note above: only convert the sprite anchor to screen space when the pass
+                // is drawn in screen space (constant size). The bar's own pixel dimensions below are
+                // applied afterwards so they stay native.
+                if (!scaleWithZoom)
+                {
+                    p = camera.WorldToScreen(p);
+                }
+
                 p.X -= BAR_WIDTH_HALF;
                 p.Y -= BAR_HEIGHT_HALF;
 
@@ -313,7 +314,8 @@ namespace ClassicUO.Game.Managers
                     ? Notoriety.GetHue(mobile.NotorietyFlag)
                     : Notoriety.GetHue(NotorietyFlag.Gray);
 
-            Vector3 hueVec = ShaderHueTranslator.GetHueVector(hue, false, alpha);
+            Vector3 hueVecZero = ShaderHueTranslator.GetHueVector(0, false, alpha);
+            Vector3 hueVecNoto = ShaderHueTranslator.GetHueVector(hue, false, alpha);
 
             if (mobile == null)
             {
@@ -338,7 +340,21 @@ namespace ClassicUO.Game.Managers
 
                 uint topGump;
                 uint bottomGump;
-                uint gumpHue = 0x7570;
+                uint gumpHue = 0x7572; // gray
+
+                if (mobile.NotorietyFlag == NotorietyFlag.Innocent)
+                    gumpHue = 0x7570; // blue
+                else if (mobile.NotorietyFlag == NotorietyFlag.Ally)
+                    gumpHue = 0x7571; // green
+                else if (mobile.NotorietyFlag == NotorietyFlag.Criminal || mobile.NotorietyFlag == NotorietyFlag.Gray)
+                    gumpHue = 0x7572; // grey
+                else if (mobile.NotorietyFlag == NotorietyFlag.Enemy)
+                    gumpHue = 0x7573; // orange
+
+                if (mobile.NotorietyFlag == NotorietyFlag.Invulnerable)
+                    gumpHue = 0x7575; // yellow
+                else if (mobile.NotorietyFlag == NotorietyFlag.Murderer)
+                    gumpHue = 0x7577; // red
                 if (width >= 80)
                 {
                     topGump = 0x756D;
@@ -365,7 +381,7 @@ namespace ClassicUO.Game.Managers
                         newTargGumpInfo.Texture,
                         new Vector2(targetX, y - topTargetY),
                         newTargGumpInfo.UV,
-                        hueVec
+                        hueVecZero
                     );
 
                 if (hueGumpInfo.Texture != null)
@@ -373,7 +389,7 @@ namespace ClassicUO.Game.Managers
                         hueGumpInfo.Texture,
                         new Vector2(targetX, y - topTargetY),
                         hueGumpInfo.UV,
-                        hueVec
+                        hueVecZero
                     );
 
                 y += 7 + newTargGumpInfo.UV.Height / 2 - centerY;
@@ -384,10 +400,14 @@ namespace ClassicUO.Game.Managers
                         newTargGumpInfo.Texture,
                         new Vector2(targetX, y - 1 - newTargGumpInfo.UV.Height / 2f),
                         newTargGumpInfo.UV,
-                        hueVec
+                        hueVecZero
                     );
             }
 
+            if (newTargetSystem && ProfileManager.CurrentProfile != null && !ProfileManager.CurrentProfile.ShowMobilesHP)
+            {
+                return;
+            }
 
             ref readonly SpriteInfo gumpInfo = ref Client.Game.UO.Gumps.GetGump(BACKGROUND_GRAPHIC);
             Rectangle bounds = gumpInfo.UV;
@@ -399,20 +419,20 @@ namespace ClassicUO.Game.Managers
                 gumpInfo.Texture,
                 new Rectangle(x, y, gumpInfo.UV.Width * multiplier, gumpInfo.UV.Height * multiplier),
                 gumpInfo.UV,
-                hueVec
+                hueVecNoto
             );
 
-            hueVec.X = 90;
+            hueVecNoto.X = 90;
 
             if (mobile != null)
             {
                 if (mobile.IsPoisoned)
                 {
-                    hueVec.X = 63;
+                    hueVecNoto.X = 63;
                 }
                 else if (mobile.IsYellowHits)
                 {
-                    hueVec.X = 53;
+                    hueVecNoto.X = 53;
                 }
             }
 
@@ -425,7 +445,7 @@ namespace ClassicUO.Game.Managers
                 SolidColorTextureCache.GetTexture(Color.White),
                 new Vector2(x + (3 * multiplier), y + (4 * multiplier)),
                 new Rectangle(0, 0, (int)(((BAR_WIDTH * multiplier) - (6 * multiplier)) * hitPerecentage), (bounds.Height * multiplier) - (6 * multiplier)),
-                hueVec
+                hueVecNoto
                 );
         }
     }

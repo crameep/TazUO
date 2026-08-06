@@ -71,12 +71,7 @@ namespace ClassicUO.Game.Map
                     return;
                 }
 
-                MapBlock block;
-                lock (Map.MapFileIOLock)
-                {
-                    im.MapFile.Seek((long)im.MapAddress, System.IO.SeekOrigin.Begin);
-                    block = im.MapFile.Read<MapBlock>();
-                }
+                MapBlock block = im.MapFile.ReadAt<MapBlock>((long)im.MapAddress);
 
                 MapCellsArray cells = block.Cells;
                 int bx = X << 3;
@@ -128,11 +123,7 @@ namespace ClassicUO.Game.Map
                 {
                     StaticsBlock[] staticsBlockBuffer = ArrayPool<StaticsBlock>.Shared.Rent((int)im.StaticCount);
                     Span<StaticsBlock> staticsSpan = staticsBlockBuffer.AsSpan(0, (int)im.StaticCount);
-                    lock (Map.MapFileIOLock)
-                    {
-                        im.StaticFile.Seek((long)im.StaticAddress, System.IO.SeekOrigin.Begin);
-                        im.StaticFile.Read(MemoryMarshal.AsBytes(staticsSpan));
-                    }
+                    im.StaticFile.ReadAt((long)im.StaticAddress, MemoryMarshal.AsBytes(staticsSpan));
 
                     foreach (ref StaticsBlock sb in staticsSpan)
                     {
@@ -501,7 +492,7 @@ namespace ClassicUO.Game.Map
                 }
             }
 
-            if (Node.Next != null || Node.Previous != null)
+            if (Node != null && (Node.Next != null || Node.Previous != null))
             {
                 Node.List?.Remove(Node);
             }
@@ -543,12 +534,57 @@ namespace ClassicUO.Game.Map
                 }
             }
 
-            if (Node.Next != null || Node.Previous != null)
+            if (Node != null && (Node.Next != null || Node.Previous != null))
             {
                 Node.List?.Remove(Node);
             }
 
             IsDestroyed = true;
+        }
+
+        /// <summary>
+        /// Clears the chunk's tile objects for an in-place reload (UltimaLive block
+        /// update) WITHOUT destroying or unlinking the chunk itself. The chunk stays
+        /// owned by the map: its <see cref="Map.Map._terrainChunks"/> slot and
+        /// <see cref="Node"/> are left intact and <see cref="IsDestroyed"/> stays false.
+        /// Using <see cref="Clear"/>/<see cref="Destroy"/> here would remove
+        /// <see cref="Node"/> from the map's used-indices list while the slot still
+        /// references this chunk; the reloaded chunk would then no longer be tracked
+        /// for cleanup (it could never be garbage collected by ClearUnusedBlocks and
+        /// would stay loaded until relog).
+        /// </summary>
+        public void ClearForReload()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    GameObject obj = Tiles[i, j];
+
+                    if (obj == null)
+                    {
+                        continue;
+                    }
+
+                    GameObject first = GetHeadObject(i, j);
+
+                    while (first != null)
+                    {
+                        GameObject next = first.TNext;
+
+                        if (!ReferenceEquals(first, _world.Player))
+                        {
+                            first.Destroy();
+                        }
+
+                        first.TPrevious = null;
+                        first.TNext = null;
+                        first = next;
+                    }
+
+                    Tiles[i, j] = null;
+                }
+            }
         }
 
         public bool HasNoExternalData()

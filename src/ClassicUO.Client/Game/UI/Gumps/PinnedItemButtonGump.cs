@@ -3,6 +3,7 @@
 using System;
 using System.Xml;
 using ClassicUO.Assets;
+using ClassicUO.Common.Enums;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
@@ -250,9 +251,8 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         }
 
         var gump = new PinnedItemButtonGump(world, item);
-        Point uiPos = UIManager.ScreenToUI(Mouse.Position);
-        gump.X = uiPos.X;
-        gump.Y = uiPos.Y;
+        gump.X = Mouse.Position.X;
+        gump.Y = Mouse.Position.Y;
         gump.SetInScreen();
         UIManager.Add(gump);
     }
@@ -293,7 +293,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         return base.Draw(batcher, x, y);
     }
 
-    protected override void OnMouseWheel(MouseEventType delta)
+    public override void OnMouseWheel(MouseEventType delta)
     {
         base.OnMouseWheel(delta);
 
@@ -312,7 +312,7 @@ public sealed class PinnedItemButtonGump : AnchorableGump
         }
     }
 
-    protected override void OnMouseUp(int x, int y, MouseButtonType button)
+    public override void OnMouseUp(int x, int y, MouseButtonType button)
     {
         base.OnMouseUp(x, y, button);
 

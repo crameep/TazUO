@@ -20,6 +20,8 @@ namespace ClassicUO.Game.Managers
     [JsonSerializable(typeof(List<AutoLootManager.AutoLootConfigEntry>))]
     [JsonSerializable(typeof(AutoLootManager.AutoLootPriority))]
     [JsonSerializable(typeof(AutoLootManager.AutoLootProfile))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootList))]
+    [JsonSerializable(typeof(AutoLootManager.AutoLootData))]
     [JsonSourceGenerationOptions(WriteIndented = true)]
     public partial class AutoLootJsonContext : JsonSerializerContext
     {
@@ -27,6 +29,13 @@ namespace ClassicUO.Game.Managers
 
     public class AutoLootManager
     {
+        public const string DefaultListName = "Default";
+        public const ushort LootedCorpseHue = 73;
+
+        private const int MaxLootedCorpseHistory = 10000;
+        private static readonly HashSet<uint> _huedCorpses = new();
+        private static readonly Queue<uint> _huedCorpseOrder = new();
+
         public static AutoLootManager Instance
         {
             get
@@ -37,7 +46,7 @@ namespace ClassicUO.Game.Managers
             }
             private set => field = value;
         }
-        public List<AutoLootConfigEntry> AutoLootList { get => _mergedEntries; }
+        public IReadOnlyList<AutoLootConfigEntry> ActiveAutoLootEntries => _mergedEntries;
 
         private const int SCAVENGER_TRACKING_RADIUS = 20;
         private const int GROUND_LOOT_RETRY_COOLDOWN_MS = 10000;
@@ -109,6 +118,12 @@ namespace ClassicUO.Game.Managers
         /// (e.g. hue or regex changes). Only clears the match cache so items are re-evaluated.
         /// </summary>
         public void NotifyMatchCriteriaChanged() => ClearMatchCache();
+
+        public void NotifyExclusionsChanged()
+        {
+            RebuildExclusionIndex();
+            SaveExclusions();
+        }
 
         public bool IsBeingLooted(uint serial) => _quickContainsLookup.Contains(serial);
 
@@ -330,7 +345,34 @@ namespace ClassicUO.Game.Managers
                 CheckAndLoot((Item)i);
 
             if(ProfileManager.CurrentProfile.HueCorpseAfterAutoloot)
-                corpse.Hue = 73;
+            {
+                corpse.Hue = LootedCorpseHue;
+                MarkCorpseHued(corpse.Serial);
+            }
+        }
+
+        public static void MarkCorpseHued(uint serial)
+        {
+            if (serial == 0 || !_huedCorpses.Add(serial))
+            {
+                return;
+            }
+
+            _huedCorpseOrder.Enqueue(serial);
+
+            while (_huedCorpseOrder.Count > MaxLootedCorpseHistory
+                   && _huedCorpseOrder.TryDequeue(out uint oldest))
+            {
+                _huedCorpses.Remove(oldest);
+            }
+        }
+
+        public static void ApplyLootedHueIfNeeded(Item corpse)
+        {
+            if (corpse != null && _huedCorpses.Contains(corpse.Serial))
+            {
+                corpse.Hue = LootedCorpseHue;
+            }
         }
 
         public void TryRemoveAutoLootEntry(string uid)
@@ -391,8 +433,8 @@ namespace ClassicUO.Game.Managers
             LoadProfiles();
             LoadExclusions();
             EventSink.OPLOnReceive += OnOPLReceived;
-            EventSink.OnItemCreated += OnItemCreatedOrUpdated;
-            EventSink.OnItemUpdated += OnItemCreatedOrUpdated;
+            EventSink.OnItemCreatedInternal += OnItemCreatedOrUpdated;
+            EventSink.OnItemUpdatedInternal += OnItemCreatedOrUpdated;
             EventSink.OnOpenContainer += OnOpenContainer;
             EventSink.OnPositionChanged += OnPositionChanged;
         }
@@ -400,8 +442,8 @@ namespace ClassicUO.Game.Managers
         public void OnSceneUnload()
         {
             EventSink.OPLOnReceive -= OnOPLReceived;
-            EventSink.OnItemCreated -= OnItemCreatedOrUpdated;
-            EventSink.OnItemUpdated -= OnItemCreatedOrUpdated;
+            EventSink.OnItemCreatedInternal -= OnItemCreatedOrUpdated;
+            EventSink.OnItemUpdatedInternal -= OnItemCreatedOrUpdated;
             EventSink.OnOpenContainer -= OnOpenContainer;
             EventSink.OnPositionChanged -= OnPositionChanged;
             _nearbyGroundItems.Clear();
@@ -651,6 +693,15 @@ namespace ClassicUO.Game.Managers
                 GameActions.Print("Could not find a container to loot into. Try setting a grab bag.");
 
             _nextLootTime = Time.Ticks + ProfileManager.CurrentProfile.MoveMultiObjectDelay;
+        }
+
+        public void ClearActiveLootQueue()
+        {
+            _lootItems.Clear();
+            _currentLootTotalCount = 0;
+            _quickContainsLookup.Clear();
+            _progressBarGump?.Dispose();
+            _progressBarGump = null;
         }
 
         private void CreateProgressBar()
@@ -1077,6 +1128,7 @@ namespace ClassicUO.Game.Managers
             for (int i = 0; i < Profiles.Count; i++)
                 Profiles[i].DisplayOrder = i;
 
+            RebuildMergedList();
             SaveAll();
         }
 
@@ -1464,6 +1516,26 @@ namespace ClassicUO.Game.Managers
         }
 
         public enum AutoLootPriority { Low = 0, Normal = 1, High = 2 }
+
+        /// <summary>
+        /// Compatibility model for the single-selected-list format used by newer upstream
+        /// releases before the fork's multi-active profile format was reapplied.
+        /// </summary>
+        public class AutoLootList
+        {
+            public string Name { get; set; } = "";
+            public List<AutoLootConfigEntry> Entries { get; set; } = new();
+            public string Uid { get; set; } = Guid.NewGuid().ToString();
+        }
+
+        /// <summary>
+        /// Compatibility root for importing upstream auto-loot list files.
+        /// </summary>
+        public class AutoLootData
+        {
+            public List<AutoLootList> Lists { get; set; } = new();
+            public string SelectedUid { get; set; } = "";
+        }
 
         public class AutoLootConfigEntry
         {

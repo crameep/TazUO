@@ -2,6 +2,7 @@
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
@@ -16,9 +17,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml;
+using ClassicUO.Common.Enums;
 using ClassicUO.Game.UI.Gumps.SpellBar;
 using ClassicUO.LegionScripting;
 using static SDL3.SDL;
+using ClassicUO.Game.UI;
 
 namespace ClassicUO.Game.Managers
 {
@@ -27,6 +30,7 @@ namespace ClassicUO.Game.Managers
         public static readonly string[] MacroNames = Enum.GetNames(typeof(MacroType));
         private readonly uint[] _itemsInHand = new uint[2];
         private MacroObject _lastMacro;
+        private MacroObject _currentMacroHead; // head node of the macro currently executing (for toggle-stop)
         private long _nextTimer;
         private readonly World _world;
 
@@ -50,7 +54,29 @@ namespace ClassicUO.Game.Managers
         };
 
 
-        public MacroManager(World world) { _world = world; }
+        public MacroManager(World world)
+        {
+            _world = world;
+            EventSink.JournalEntryAdded += OnJournalEntryAdded;
+        }
+
+        private void OnJournalEntryAdded(object sender, JournalEntry e)
+        {
+            if (e == null || string.IsNullOrEmpty(e.Text) || _world?.Player == null)
+            {
+                return;
+            }
+
+            for (var macro = (Macro)Items; macro != null; macro = (Macro)macro.Next)
+            {
+                if (macro.HasJournalTriggers && macro.MatchesJournalTrigger(e.Text) && macro.Items is MacroObject macroObject)
+                {
+                    SetMacroToExecute(macroObject);
+                    WaitForTargetTimer = 0;
+                    break;
+                }
+            }
+        }
 
         public long WaitForTargetTimer { get; set; }
 
@@ -102,12 +128,13 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public void Save()
+        public void Save(string path = null)
         {
             List<Macro> list = GetAllMacros();
 
             string tempPath = Path.GetTempFileName();
-            string path = Path.Combine(ProfileManager.ProfilePath, "macros.xml");
+
+            path ??= Path.Combine(ProfileManager.ProfilePath, "macros.xml");
 
             if (!File.Exists(tempPath))
             {
@@ -137,7 +164,7 @@ namespace ClassicUO.Game.Managers
                     xml.WriteEndDocument();
                 }
 
-                if(File.Exists(path))
+                if (File.Exists(path))
                     File.Delete(path);
                 File.Move(tempPath, path);
             }
@@ -148,7 +175,7 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        #nullable enable
+#nullable enable
         public string? GetXmlExport()
         {
             try
@@ -181,7 +208,7 @@ namespace ClassicUO.Game.Managers
 
             return null;
         }
-        #nullable disable
+#nullable disable
 
         public bool ImportFromXml(string xml)
         {
@@ -232,6 +259,8 @@ namespace ClassicUO.Game.Managers
 
         private void CreateDefaultMacros()
         {
+            if (LoadFromDefaultMacroSave()) return;
+
             PushToBack
             (
                 new Macro
@@ -335,6 +364,40 @@ namespace ClassicUO.Game.Managers
             );
         }
 
+        private bool LoadFromDefaultMacroSave()
+        {
+            string defaultMacroXmlPath = Path.Combine(ProfileManager.RootPath, "macros.xml");
+
+            if (!Path.Exists(defaultMacroXmlPath)) return false;
+
+            var doc = new XmlDocument();
+
+            try
+            {
+                doc.Load(defaultMacroXmlPath);
+                Clear();
+
+                XmlElement root = doc["macros"];
+
+                if (root != null)
+                {
+                    foreach (XmlElement xml in root.GetElementsByTagName("macro"))
+                    {
+                        var macro = new Macro(xml.GetAttribute("name"));
+                        macro.Load(xml);
+                        PushToBack(macro);
+                    }
+
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.ToString());
+            }
+
+            return false;
+        }
 
         public List<Macro> GetAllMacros()
         {
@@ -496,7 +559,61 @@ namespace ClassicUO.Game.Managers
             return obj;
         }
 
-        public void SetMacroToExecute(MacroObject macro) => _lastMacro = macro;
+        public void SetMacroToExecute(MacroObject macro)
+        {
+            // If this exact macro is already running and it contains a loop,
+            // treat triggering it again as a "stop" request.
+            if (_lastMacro != null && _currentMacroHead == macro && MacroContainsLoop(macro))
+            {
+                StopExecution();
+                return;
+            }
+
+            // Reset any loop containers in this macro's action chain so a fresh
+            // invocation always starts loops from iteration 0, even if a previous
+            // run was interrupted mid-loop.
+            for (MacroObject node = macro; node != null; node = (MacroObject)node.Next)
+            {
+                if (node is MacroLoopContainer loop)
+                {
+                    loop.Reset();
+                }
+            }
+
+            _lastMacro = macro;
+            _currentMacroHead = macro;
+        }
+
+        private static bool MacroContainsLoop(MacroObject macro)
+        {
+            for (MacroObject node = macro; node != null; node = (MacroObject)node.Next)
+            {
+                if (node is MacroLoopContainer)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void StopExecution()
+        {
+            // Reset any loop containers so a future run starts clean.
+            if (_currentMacroHead != null)
+            {
+                for (MacroObject node = _currentMacroHead; node != null; node = (MacroObject)node.Next)
+                {
+                    if (node is MacroLoopContainer loop)
+                    {
+                        loop.Reset();
+                    }
+                }
+            }
+
+            _lastMacro = null;
+            _currentMacroHead = null;
+        }
 
         public void Update()
         {
@@ -506,6 +623,7 @@ namespace ClassicUO.Game.Managers
                 {
                     case 2:
                         _lastMacro = null;
+                        _currentMacroHead = null;
 
                         break;
 
@@ -513,6 +631,11 @@ namespace ClassicUO.Game.Managers
 
                     case 0:
                         _lastMacro = (MacroObject)_lastMacro?.Next;
+
+                        if (_lastMacro == null)
+                        {
+                            _currentMacroHead = null;
+                        }
 
                         break;
                 }
@@ -546,6 +669,11 @@ namespace ClassicUO.Game.Managers
                 return 0;
             }
 
+            if (macro is MacroLoopContainer loopContainer)
+            {
+                return ProcessLoopContainer(loopContainer);
+            }
+
             int result = 0;
 
             switch (macro.Code)
@@ -556,9 +684,7 @@ namespace ClassicUO.Game.Managers
                 case MacroType.Yell:
                 case MacroType.RazorMacro:
 
-                    string text = ((MacroObjectString)macro).Text;
-
-                    if (!string.IsNullOrEmpty(text))
+                    if (macro is MacroObjectString { Text: { } text })
                     {
                         MessageType type = MessageType.Regular;
                         ushort hue = ProfileManager.CurrentProfile.SpeechHue;
@@ -590,6 +716,27 @@ namespace ClassicUO.Game.Managers
                         }
 
                         GameActions.Say(text, hue, type);
+                    }
+
+                    break;
+
+                case MacroType.PrivateSay:
+
+                    if (macro is MacroObjectString { Text: { } msg })
+                    {
+                        _world.MessageManager.HandleMessage
+                        (
+                            _world.Player,
+                            msg,
+                            _world.Player.Name ?? "Me",
+                            ProfileManager.CurrentProfile.SpeechHue,
+                            MessageType.Regular,
+                            3,
+                            TextType.OBJECT,
+                            true,
+                            Settings.GlobalSettings.Language,
+                            true
+                        );
                     }
 
                     break;
@@ -1212,7 +1359,7 @@ namespace ClassicUO.Game.Managers
                     break;
 
                 case MacroType.Mount:
-                    if(!GameActions.Mount())
+                    if (!GameActions.Mount())
                     {
                         GameActions.Print(_world, "Saved mount not found.", Constants.HUE_ERROR);
                         goto case MacroType.SetMount;
@@ -1234,7 +1381,7 @@ namespace ClassicUO.Game.Managers
                     else
                     {
                         // Player is not mounted, try to mount
-                        if(!GameActions.Mount())
+                        if (!GameActions.Mount())
                         {
                             GameActions.Print(_world, "Saved mount not found.", Constants.HUE_ERROR);
                             goto case MacroType.SetMount;
@@ -1440,6 +1587,37 @@ namespace ClassicUO.Game.Managers
 
                     break;
 
+                case MacroType.ToggleVoiceRecognition:
+                    {
+                        VoiceRecognitionManager vm = VoiceRecognitionManager.Instance;
+                        if (vm.IsInitializing)
+                        {
+                            GameActions.Print(_world, "[Voice] Model is still loading...");
+                        }
+                        else if (!vm.IsInitialized)
+                        {
+                            Configuration.Profile profile = ProfileManager.CurrentProfile;
+                            if (profile != null && !string.IsNullOrEmpty(profile.VoiceModelPath))
+                            {
+                                GameActions.Print(_world, "[Voice] Loading model...");
+                                vm.InitializeAsync(profile.VoiceModelPath, startListeningAfter: true);
+                            }
+                            else
+                            {
+                                GameActions.Print(_world, "[Voice] No model path set - configure in Options > Sound");
+                            }
+                        }
+                        else
+                        {
+                            vm.ToggleListening();
+                            if (!vm.IsListening)
+                                GameActions.Print(_world, "[Voice] Off");
+                            // "[Voice] Listening..." is printed by VoiceRecognitionManager.StatusMessage when recording actually starts
+                        }
+
+                        break;
+                    }
+
                 case MacroType.LastObject:
 
                     if (_world.Get(_world.LastObject) != null)
@@ -1539,7 +1717,7 @@ namespace ClassicUO.Game.Managers
 
                     if (_itemsInHand[handIndex] != 0)
                     {
-                        if(_world.Items.TryGetValue(_itemsInHand[handIndex], out Item item))
+                        if (_world.Items.TryGetValue(_itemsInHand[handIndex], out Item item))
                         {
                             ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.EquipItem(item, (Layer)item.ItemData.Layer), ActionPriority.EquipItem);
 
@@ -1716,7 +1894,16 @@ namespace ClassicUO.Game.Managers
 
                 case MacroType.TargetSystemOnOff:
 
-                    GameActions.Print(_world, ResGeneral.TargetSystemNotImplemented);
+                    if (ProfileManager.CurrentProfile.UseNewTargetSystem)
+                    {
+                        ProfileManager.CurrentProfile.UseNewTargetSystem = false;
+                        GameActions.Print(_world, "Target System: Off");
+                    }
+                    else
+                    {
+                        ProfileManager.CurrentProfile.UseNewTargetSystem = true;
+                        GameActions.Print(_world, "Target System: On");
+                    }
 
                     break;
 
@@ -1964,6 +2151,14 @@ namespace ClassicUO.Game.Managers
 
                     break;
 
+                case MacroType.SetZoomLevel:
+                    if (macro is MacroObjectString zoomStr && float.TryParse(zoomStr.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float zoomLevel))
+                    {
+                        Client.Game.Scene.Camera.Zoom = zoomLevel;
+                    }
+
+                    break;
+
                 case MacroType.ToggleChatVisibility:
                     UIManager.SystemChat?.ToggleChatVisibility();
 
@@ -1983,6 +2178,16 @@ namespace ClassicUO.Game.Managers
                     _world.TargetManager.SetTargeting(CursorTarget.Grab, 0, TargetType.Neutral);
 
                     break;
+
+                case MacroType.LootHoveredItem:
+                {
+                    Item lootItem = GetHoveredItem();
+
+                    if (lootItem != null && !lootItem.IsDestroyed && lootItem.IsLootable)
+                        GameActions.GrabItem(_world, lootItem.Serial, lootItem.Amount);
+
+                    break;
+                }
 
                 case MacroType.SetGrabBag:
                     GameActions.Print(_world, ResGumps.TargetContainerToGrabItemsInto);
@@ -2240,16 +2445,16 @@ namespace ClassicUO.Game.Managers
                     break;
 
                 case MacroType.CloseCorpses:
-                    int? gridLootType = ProfileManager.CurrentProfile?.GridLootType; // 0 = none, 1 = only grid, 2 = both
+                    CorpseContainerStyle corpseStyle = ProfileManager.CurrentProfile?.CorpseContainerStyle ?? CorpseContainerStyle.Grid;
 
-                    if (gridLootType == 0 || gridLootType == 2)
+                    if (corpseStyle is CorpseContainerStyle.Original or CorpseContainerStyle.OldGridLootAndContainer)
                         UIManager.ForEach<ContainerGump>(g =>
                         {
-                            if(g.Graphic == ContainerGump.CORPSES_GUMP)
+                            if (g.Graphic == ContainerGump.CORPSES_GUMP)
                                 g.Dispose();
                         });
 
-                    if (gridLootType == 1 || gridLootType == 2)
+                    if (corpseStyle is CorpseContainerStyle.OldGridLoot or CorpseContainerStyle.OldGridLootAndContainer)
                         UIManager.ForEach<GridLootGump>(g =>
                         {
                             g.Dispose();
@@ -2280,7 +2485,7 @@ namespace ClassicUO.Game.Managers
 
                 case MacroType.BorderCaveTiles:
                     ProfileManager.CurrentProfile.EnableCaveBorder = !ProfileManager.CurrentProfile.EnableCaveBorder;
-                    if(ProfileManager.CurrentProfile.EnableCaveBorder)
+                    if (ProfileManager.CurrentProfile.EnableCaveBorder)
                         StaticFilters.ApplyCaveTileBorder();
 
                     break;
@@ -2329,8 +2534,7 @@ namespace ClassicUO.Game.Managers
                     break;
 
                 case MacroType.ToggleHotkeys:
-                    ProfileManager.CurrentProfile.DisableHotkeys = !ProfileManager.CurrentProfile.DisableHotkeys;
-                    GameActions.Print($"Hotkeys {(ProfileManager.CurrentProfile.DisableHotkeys ? "disabled" : "enabled")}.");
+                    HotKeyRegistrar.ToggleHotkeysEnabled();
                     break;
 
 
@@ -2339,9 +2543,82 @@ namespace ClassicUO.Game.Managers
 
                     GameActions.CastSpell(mspell);
                     break;
+
+                case MacroType.ToggleAutoLoot:
+                    ProfileManager.CurrentProfile.EnableAutoLoot = !ProfileManager.CurrentProfile.EnableAutoLoot;
+                    if (!ProfileManager.CurrentProfile.EnableAutoLoot) AutoLootManager.Instance.ClearActiveLootQueue();
+                    break;
+
+                case MacroType.SetLastTarget:
+                    GameActions.Print("Who would you like to set as last target?");
+                    _world.TargetManager.SetTargeting((o) =>
+                    {
+                        if (o is Entity e)
+                            SetLastTarget(e);
+                    });
+                    break;
+
+                case MacroType.ToggleAutoWalk:
+                    GameScene.Instance.ToggleAutoWalk(null);
+                    break;
+
+                case MacroType.ToggleBandageAgent:
+                    bool newStatus = !ProfileManager.CurrentProfile.EnableBandageAgent;
+                    ProfileManager.CurrentProfile.EnableBandageAgent = newStatus;
+                    GameActions.Print($"Bandage agent {(newStatus ? "enabled" : "disabled")}.", newStatus ? Constants.HUE_SUCCESS : Constants.HUE_ERROR);
+                    break;
+
+                case MacroType.ToggleBuyAgent:
+                    bool newBuyStatus = !ProfileManager.CurrentProfile.BuyAgentEnabled;
+                    ProfileManager.CurrentProfile.BuyAgentEnabled = newBuyStatus;
+                    GameActions.Print($"Buy agent {(newBuyStatus ? "enabled" : "disabled")}.", newBuyStatus ? Constants.HUE_SUCCESS : Constants.HUE_ERROR);
+                    break;
+
+                case MacroType.ToggleSellAgent:
+                    bool newSellStatus = !ProfileManager.CurrentProfile.SellAgentEnabled;
+                    ProfileManager.CurrentProfile.SellAgentEnabled = newSellStatus;
+                    GameActions.Print($"Sell agent {(newSellStatus ? "enabled" : "disabled")}.", newSellStatus ? Constants.HUE_SUCCESS : Constants.HUE_ERROR);
+                    break;
+
+                case MacroType.SetOrganizerSource:
+                    if (macro is MacroObjectString { Text: { } organizerName } && !string.IsNullOrWhiteSpace(organizerName))
+                    {
+                        OrganizerAgent.Instance.SetSourceContainerViaTarget(organizerName);
+                    }
+                    else
+                    {
+                        GameActions.Print(_world, "Set the organizer name (or index) in the macro to target a source container for it.", Constants.HUE_ERROR);
+                    }
+                    break;
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Resolves the item currently under the mouse for the LootHoveredItem macro.
+        /// Prefers the UI control directly under the cursor (grid containers, regular
+        /// containers, paperdoll and modern paperdoll all expose their item via
+        /// LocalSerial), stopping at the gump boundary so empty space inside a container
+        /// does not resolve to the container itself. Falls back to the world object under
+        /// the cursor for items on the ground and item nameplates.
+        /// </summary>
+        private Item GetHoveredItem()
+        {
+            for (IGui control = UIManager.MouseOverControl; control != null && control is not Gump; control = control.Parent)
+            {
+                if (!SerialHelper.IsItem(control.LocalSerial))
+                    continue;
+
+                Item item = _world.Items.Get(control.LocalSerial);
+
+                if (item != null)
+                    return item;
+            }
+
+            BaseGameObject obj = SelectedObject.Object;
+
+            return obj as Item ?? (obj as TextObject)?.Owner as Item;
         }
 
         private void SetLastTarget(uint serial)
@@ -2354,7 +2631,8 @@ namespace ClassicUO.Game.Managers
                 {
                     if (ent != null)
                     {
-                        GameActions.MessageOverhead(_world, string.Format(ResGeneral.Target0, ent.Name), Notoriety.GetHue(((Mobile)ent).NotorietyFlag), _world.Player);
+                        if (!ProfileManager.CurrentProfile.HideMacroTargetMessage)
+                            GameActions.MessageOverhead(_world, string.Format(ResGeneral.Target0, ent.Name), Notoriety.GetHue(((Mobile)ent).NotorietyFlag), _world.Player);
 
                         _world.TargetManager.NewTargetSystemSerial = serial;
                         _world.TargetManager.SelectedTarget = serial;
@@ -2367,7 +2645,8 @@ namespace ClassicUO.Game.Managers
                 {
                     if (ent != null)
                     {
-                        GameActions.MessageOverhead(_world, string.Format(ResGeneral.Target0, ent.Name), 992, _world.Player);
+                        if (!ProfileManager.CurrentProfile.HideMacroTargetMessage)
+                            GameActions.MessageOverhead(_world, string.Format(ResGeneral.Target0, ent.Name), 992, _world.Player);
                         _world.TargetManager.SelectedTarget = serial;
                         _world.TargetManager.LastTargetInfo.SetEntity(serial);
 
@@ -2377,6 +2656,63 @@ namespace ClassicUO.Game.Managers
             }
 
             GameActions.Print(_world, ResGeneral.EntityNotFound);
+        }
+
+        private int ProcessLoopContainer(MacroLoopContainer container)
+        {
+            // First time touching this container
+            if (container.CurrentIteration == -1)
+            {
+                container.CurrentIteration = 0;
+                container.CurrentItemIndex = 0;
+            }
+
+            // All iterations done -> container finished, advance to next outer item
+            if (container.CurrentIteration >= container.LoopCount)
+            {
+                container.Reset();
+                return 0;
+            }
+
+            // Reached end of items for this iteration
+            if (container.CurrentItemIndex < 0 || container.CurrentItemIndex >= container.Items.Count)
+            {
+                container.CurrentIteration++;
+
+                if (container.CurrentIteration < container.LoopCount)
+                {
+                    container.CurrentItemIndex = 0;
+
+                    if (container.DelayBetweenIterations > 0)
+                    {
+                        _nextTimer = Time.Ticks + container.DelayBetweenIterations;
+                    }
+
+                    // Stay on this container; don't let Update() advance _lastMacro
+                    return 1;
+                }
+                else
+                {
+                    container.Reset();
+                    return 0; // whole loop finished, move to next outer item
+                }
+            }
+
+            // Execute current item
+            MacroObject currentItem = container.Items.ElementAt(container.CurrentItemIndex);
+            int result = Process(currentItem);
+
+            if (result == 0)
+            {
+                container.CurrentItemIndex++;
+
+                // More items remain (or more iterations) -> keep Update() on this container
+                // so it processes the next item on the next call, rather than advancing past it.
+                return 1;
+            }
+
+            // result == 1 (waiting/break) or 2 (stop) -> propagate as-is
+            return result;
         }
 
     }
@@ -2424,6 +2760,76 @@ namespace ClassicUO.Game.Managers
         public bool Alt { get; set; }
         public bool Ctrl { get; set; }
         public bool Shift { get; set; }
+
+        private string _journalTriggers = string.Empty;
+
+        /// <summary>
+        /// Semicolon (;) separated list of journal messages that will trigger this macro when received.
+        /// A macro is triggered when a journal entry contains any one of these substrings (case-insensitive).
+        /// </summary>
+        public string JournalTriggers
+        {
+            get => _journalTriggers;
+            set
+            {
+                _journalTriggers = value ?? string.Empty;
+                HasJournalTriggers = !string.IsNullOrWhiteSpace(_journalTriggers);
+            }
+        }
+
+        /// <summary>
+        /// Cached flag indicating this macro has at least one journal trigger configured.
+        /// Used as a cheap pre-check so journal processing can skip macros without triggers.
+        /// </summary>
+        public bool HasJournalTriggers { get; private set; }
+
+        /// <summary>
+        /// Returns true when the given journal text matches one of this macro's configured journal triggers.
+        /// </summary>
+        public bool MatchesJournalTrigger(string text)
+        {
+            if (!HasJournalTriggers || string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            string[] triggers = _journalTriggers.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (string trigger in triggers)
+            {
+                if (!string.IsNullOrEmpty(trigger) && text.Contains(trigger, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public HotkeyBinding GetBinding() => new()
+        {
+            Key = Key,
+            Ctrl = Ctrl,
+            Shift = Shift,
+            Alt = Alt,
+            MouseButton = MouseButton,
+            WheelScroll = WheelScroll,
+            WheelUp = WheelUp,
+            ControllerButtons = ControllerButtons
+        };
+
+        public void ApplyBinding(HotkeyBinding binding)
+        {
+            Key = binding.Key;
+            Ctrl = binding.Ctrl;
+            Shift = binding.Shift;
+            Alt = binding.Alt;
+            MouseButton = binding.MouseButton;
+            WheelScroll = binding.WheelScroll;
+            WheelUp = binding.WheelUp;
+            ControllerButtons = binding.ControllerButtons;
+        }
+
         public bool HideLabel = false;
         public ushort Hue = 0x00;
         public ushort? Graphic = null;
@@ -2487,22 +2893,30 @@ namespace ClassicUO.Game.Managers
             writer.WriteAttributeString("hue", Hue.ToString());
             writer.WriteAttributeString("graphic", Graphic.HasValue ? Graphic.ToString() : string.Empty);
             writer.WriteAttributeString("scale", Scale.ToString());
+            writer.WriteAttributeString("journaltriggers", JournalTriggers ?? string.Empty);
 
             writer.WriteStartElement("actions");
 
             for (var action = (MacroObject)Items; action != null; action = (MacroObject)action.Next)
             {
-                writer.WriteStartElement("action");
-                writer.WriteAttributeString("code", ((int)action.Code).ToString());
-                writer.WriteAttributeString("subcode", ((int)action.SubCode).ToString());
-                writer.WriteAttributeString("submenutype", action.SubMenuType.ToString());
-
-                if (action.HasString())
+                if (action is MacroLoopContainer loopContainer)
                 {
-                    writer.WriteAttributeString("text", ((MacroObjectString)action).Text);
+                    loopContainer.Save(writer);
                 }
+                else
+                {
+                    writer.WriteStartElement("action");
+                    writer.WriteAttributeString("code", ((int)action.Code).ToString());
+                    writer.WriteAttributeString("subcode", ((int)action.SubCode).ToString());
+                    writer.WriteAttributeString("submenutype", action.SubMenuType.ToString());
 
-                writer.WriteEndElement();
+                    if (action.HasString())
+                    {
+                        writer.WriteAttributeString("text", ((MacroObjectString)action).Text);
+                    }
+
+                    writer.WriteEndElement();
+                }
             }
 
             writer.WriteEndElement();
@@ -2529,7 +2943,12 @@ namespace ClassicUO.Game.Managers
                 return;
             }
 
-            Key = (SDL_Keycode)int.Parse(xml.GetAttribute("key"));
+            if (!Enum.TryParse(xml.GetAttribute("key"), out SDL_Keycode mainKey))
+                mainKey = (int)SDL_Keycode.SDLK_UNKNOWN;
+            
+
+
+            Key = mainKey;
             Alt = bool.Parse(xml.GetAttribute("alt"));
             Ctrl = bool.Parse(xml.GetAttribute("ctrl"));
             Shift = bool.Parse(xml.GetAttribute("shift"));
@@ -2542,6 +2961,11 @@ namespace ClassicUO.Game.Managers
             if (ushort.TryParse(xml.GetAttribute("graphic"), out ushort graphic))
             {
                 Graphic = graphic;
+            }
+
+            if (xml.HasAttribute("journaltriggers"))
+            {
+                JournalTriggers = xml.GetAttribute("journaltriggers");
             }
 
             if (xml.HasAttribute("mousebutton"))
@@ -2563,58 +2987,65 @@ namespace ClassicUO.Game.Managers
 
             if (actions != null)
             {
-                foreach (XmlElement xmlAction in actions.GetElementsByTagName("action"))
+                foreach (XmlNode node in actions.ChildNodes)
                 {
-                    var code = (MacroType)int.Parse(xmlAction.GetAttribute("code"));
-                    var sub = (MacroSubType)int.Parse(xmlAction.GetAttribute("subcode"));
-
-                    // ########### PATCH ###########
-                    // FIXME: path to remove the MovePlayer macro. This macro is not needed. We have Walk.
-                    if ((int)code == 61 /*MacroType.MovePlayer*/)
+                    if (node is XmlElement xmlElement)
                     {
-                        code = MacroType.Walk;
-
-                        switch ((int)sub)
+                        if (xmlElement.Name == "loop")
                         {
-                            case 211: // top
-                                sub = MacroSubType.NW;
+                            var container = MacroLoopContainer.Load(xmlElement);
+                            PushToBack(container);
+                        }
+                        else if (xmlElement.Name == "action")
+                        {
+                            var code = (MacroType)int.Parse(xmlElement.GetAttribute("code"));
+                            var sub = (MacroSubType)int.Parse(xmlElement.GetAttribute("subcode"));
 
-                                break;
+                            // ########### PATCH ###########
+                            // FIXME: path to remove the MovePlayer macro. This macro is not needed. We have Walk.
+                            if ((int)code == 61 /*MacroType.MovePlayer*/)
+                            {
+                                code = MacroType.Walk;
 
-                            case 214: // left
-                                sub = MacroSubType.SW;
+                                switch ((int)sub)
+                                {
+                                    case 211: // top
+                                        sub = MacroSubType.NW;
+                                        break;
 
-                                break;
+                                    case 214: // left
+                                        sub = MacroSubType.SW;
+                                        break;
 
-                            case 213: // down
-                                sub = MacroSubType.SE;
+                                    case 213: // down
+                                        sub = MacroSubType.SE;
+                                        break;
 
-                                break;
+                                    case 212: // right
+                                        sub = MacroSubType.NE;
+                                        break;
+                                }
+                            }
+                            // ########### END PATCH ###########
 
-                            case 212: // right
-                                sub = MacroSubType.NE;
+                            sbyte subMenuType = sbyte.Parse(xmlElement.GetAttribute("submenutype"));
 
-                                break;
+                            MacroObject m;
+
+                            if (xmlElement.HasAttribute("text"))
+                            {
+                                m = new MacroObjectString(code, sub, xmlElement.GetAttribute("text"));
+                            }
+                            else
+                            {
+                                m = new MacroObject(code, sub);
+                            }
+
+                            m.SubMenuType = subMenuType;
+
+                            PushToBack(m);
                         }
                     }
-                    // ########### END PATCH ###########
-
-                    sbyte subMenuType = sbyte.Parse(xmlAction.GetAttribute("submenutype"));
-
-                    MacroObject m;
-
-                    if (xmlAction.HasAttribute("text"))
-                    {
-                        m = new MacroObjectString(code, sub, xmlAction.GetAttribute("text"));
-                    }
-                    else
-                    {
-                        m = new MacroObject(code, sub);
-                    }
-
-                    m.SubMenuType = subMenuType;
-
-                    PushToBack(m);
                 }
             }
 
@@ -2656,6 +3087,9 @@ namespace ClassicUO.Game.Managers
                 case MacroType.SetSpellBarRow:
                 case MacroType.ClientCommand:
                 case MacroType.UseType:
+                case MacroType.SetOrganizerSource:
+                case MacroType.SetZoomLevel:
+                case MacroType.PrivateSay:
                     obj = new MacroObjectString(code, MacroSubType.MSC_NONE);
 
                     break;
@@ -2667,6 +3101,16 @@ namespace ClassicUO.Game.Managers
             }
 
             return obj;
+        }
+
+        public static MacroLoopContainer CreateLoopContainer(int loopCount = 1, int delayBetweenIterations = 0)
+        {
+            var container = new MacroLoopContainer
+            {
+                LoopCount = loopCount,
+                DelayBetweenIterations = delayBetweenIterations
+            };
+            return container;
         }
 
         public static Macro CreateEmptyMacro(string name)
@@ -2842,6 +3286,9 @@ namespace ClassicUO.Game.Managers
                 case MacroType.SetSpellBarRow:
                 case MacroType.ClientCommand:
                 case MacroType.UseType:
+                case MacroType.SetOrganizerSource:
+                case MacroType.SetZoomLevel:
+                case MacroType.PrivateSay:
                     SubMenuType = 2;
 
                     break;
@@ -2872,414 +3319,75 @@ namespace ClassicUO.Game.Managers
         public override bool HasString() => true;
     }
 
-    public enum MacroType
+    public class MacroLoopContainer : MacroObject
     {
-        None = 0,
-        Say,
-        Emote,
-        Whisper,
-        Yell,
-        Walk,
-        WarPeace,
-        Paste,
-        Open,
-        Close,
-        Minimize,
-        Maximize,
-        OpenDoor,
-        UseSkill,
-        LastSkill,
-        CastSpell,
-        LastSpell,
-        LastObject,
-        Bow,
-        Salute,
-        QuitGame,
-        AllNames,
-        LastTarget,
-        TargetSelf,
-        ArmDisarm,
-        WaitForTarget,
-        TargetNext,
-        AttackLast,
-        Delay,
-        CircleTrans,
-        CloseGump,
-        AlwaysRun,
-        SaveDesktop,
-        KillGumpOpen,
-        PrimaryAbility,
-        SecondaryAbility,
-        EquipLastWeapon,
-        SetUpdateRange,
-        ModifyUpdateRange,
-        IncreaseUpdateRange,
-        DecreaseUpdateRange,
-        MaxUpdateRange,
-        MinUpdateRange,
-        DefaultUpdateRange,
-        EnableRangeColor,
-        DisableRangeColor,
-        ToggleRangeColor,
-        InvokeVirtue,
-        SelectNext,
-        SelectPrevious,
-        SelectNearest,
-        AttackSelectedTarget,
-        UseSelectedTarget,
-        CurrentTarget,
-        TargetSystemOnOff,
-        ToggleBuffIconGump,
-        BandageSelf,
-        BandageTarget,
-        ToggleGargoyleFly,
-        Zoom,
-        ToggleChatVisibility,
-        INVALID,
-        Aura,
-        AuraOnOff,
-        Grab,
-        SetGrabBag,
-        NamesOnOff,
-        UseItemInHand,
-        UsePotion,
-        CloseAllHealthBars,
-        RazorMacro,
-        ToggleDrawRoofs,
-        ToggleTreeStumps,
-        ToggleVegetation,
-        BorderCaveTiles,
-        CloseInactiveHealthBars,
-        CloseCorpses,
-        UseObject,
-        LookAtMouse,
-        UseCounterBar,
-        ClientCommand,
-        StunAbility,
-        DisarmAbility,
-        ToggleGump,
-        ToggleDurabilityGump,
-        ShowNearbyItems,
-        ToggleNearbyLootGump,
-        ToggleLegionScripting,
-        SetSpellBarRow,
-        SpellBarRowUp,
-        SpellBarRowDown,
-        Dismount,
-        ToggleHouses,
-        ToggleHudVisible,
-        Resync,
-        Mount,
-        SetMount,
-        AddFriend,
-        RemoveFriend,
-        ToggleHotkeys,
-        ToggleMount,
-        ClearHands,
-        EquipHands,
-        UseType,
-        CastMasterySpell
-    }
+        public int LoopCount { get; set; } = 1;
+        public int DelayBetweenIterations { get; set; } = 0;
+        public int CurrentIteration { get; set; } = -1;
+        public int CurrentItemIndex { get; set; } = -1;
+        public LinkedList<MacroObject> Items { get; } = new();
 
-    public enum MacroSubType
-    {
-        MSC_NONE = 0,
-        NW, //Walk group
-        N,
-        NE,
-        E,
-        SE,
-        S,
-        SW,
-        W,
-        Configuration, //Open/Close/Minimize/Maximize group
-        Paperdoll,
-        Status,
-        Journal,
-        Skills,
-        MageSpellbook,
-        Chat,
-        Backpack,
-        Overview,
-        WorldMap,
-        Mail,
-        PartyManifest,
-        PartyChat,
-        NecroSpellbook,
-        PaladinSpellbook,
-        CombatBook,
-        BushidoSpellbook,
-        NinjitsuSpellbook,
-        Guild,
-        SpellWeavingSpellbook,
-        QuestLog,
-        MysticismSpellbook,
-        RacialAbilitiesBook,
-        BardSpellbook,
-        Anatomy, //Skills group
-        AnimalLore,
-        AnimalTaming,
-        ArmsLore,
-        Begging,
-        Cartography,
-        DetectingHidden,
-        Discordance,
-        EvaluatingIntelligence,
-        ForensicEvaluation,
-        Hiding,
-        Imbuing,
-        Inscription,
-        ItemIdentification,
-        Meditation,
-        Peacemaking,
-        Poisoning,
-        Provocation,
-        RemoveTrap,
-        SpiritSpeak,
-        Stealing,
-        Stealth,
-        TasteIdentification,
-        Tracking,
-        LeftHand,
-        ///Arm/Disarm group
-        RightHand,
-        Honor, //Invoke Virture group
-        Sacrifice,
-        Valor,
-        Clumsy, //Cast Spell group
-        CreateFood,
-        Feeblemind,
-        Heal,
-        MagicArrow,
-        NightSight,
-        ReactiveArmor,
-        Weaken,
-        Agility,
-        Cunning,
-        Cure,
-        Harm,
-        MagicTrap,
-        MagicUntrap,
-        Protection,
-        Strength,
-        Bless,
-        Fireball,
-        MagicLock,
-        Poison,
-        Telekinesis,
-        Teleport,
-        Unlock,
-        WallOfStone,
-        ArchCure,
-        ArchProtection,
-        Curse,
-        FireField,
-        GreaterHeal,
-        Lightning,
-        ManaDrain,
-        Recall,
-        BladeSpirits,
-        DispellField,
-        Incognito,
-        MagicReflection,
-        MindBlast,
-        Paralyze,
-        PoisonField,
-        SummonCreature,
-        Dispel,
-        EnergyBolt,
-        Explosion,
-        Invisibility,
-        Mark,
-        MassCurse,
-        ParalyzeField,
-        Reveal,
-        ChainLightning,
-        EnergyField,
-        FlameStrike,
-        GateTravel,
-        ManaVampire,
-        MassDispel,
-        MeteorSwarm,
-        Polymorph,
-        Earthquake,
-        EnergyVortex,
-        Resurrection,
-        AirElemental,
-        SummonDaemon,
-        EarthElemental,
-        FireElemental,
-        WaterElemental,
-        AnimateDead,
-        BloodOath,
-        CorpseSkin,
-        CurseWeapon,
-        EvilOmen,
-        HorrificBeast,
-        LichForm,
-        MindRot,
-        PainSpike,
-        PoisonStrike,
-        Strangle,
-        SummonFamiliar,
-        VampiricEmbrace,
-        VengefulSpirit,
-        Wither,
-        WraithForm,
-        Exorcism,
-        CleanseByFire,
-        CloseWounds,
-        ConsecrateWeapon,
-        DispelEvil,
-        DivineFury,
-        EnemyOfOne,
-        HolyLight,
-        NobleSacrifice,
-        RemoveCurse,
-        SacredJourney,
-        HonorableExecution,
-        Confidence,
-        Evasion,
-        CounterAttack,
-        LightingStrike,
-        MomentumStrike,
-        FocusAttack,
-        DeathStrike,
-        AnimalForm,
-        KiAttack,
-        SurpriseAttack,
-        Backstab,
-        Shadowjump,
-        MirrorImage,
-        ArcaneCircle,
-        GiftOfRenewal,
-        ImmolatingWeapon,
-        Attunement,
-        Thunderstorm,
-        NaturesFury,
-        SummonFey,
-        SummonFiend,
-        ReaperForm,
-        Wildfire,
-        EssenceOfWind,
-        DryadAllure,
-        EtherealVoyage,
-        WordOfDeath,
-        GiftOfLife,
-        ArcaneEmpowerment,
-        NetherBolt,
-        HealingStone,
-        PurgeMagic,
-        Enchant,
-        Sleep,
-        EagleStrike,
-        AnimatedWeapon,
-        StoneForm,
-        SpellTrigger,
-        MassSleep,
-        CleansingWinds,
-        Bombard,
-        SpellPlague,
-        HailStorm,
-        NetherCyclone,
-        RisingColossus,
-        DEPRECATED, //Can't remove without breaking peoples setups
-        DEPRECATED0,
-        DEPRECATED1,
-        DEPRECATED2,
-        DEPRECATED3,
-        DEPRECATED4,
+        public MacroLoopContainer() : base((MacroType)MacroType.LoopContainer, MacroSubType.MSC_NONE)
+        {
+            Code = (MacroType)MacroType.LoopContainer;
+            SubMenuType = 0;
+        }
 
+        public void Save(XmlTextWriter writer)
+        {
+            writer.WriteStartElement("loop");
+            writer.WriteAttributeString("loopcount", LoopCount.ToString());
+            writer.WriteAttributeString("delaybetween", DelayBetweenIterations.ToString());
 
+            foreach (MacroObject action in Items)
+            {
+                writer.WriteStartElement("action");
+                writer.WriteAttributeString("code", ((int)action.Code).ToString());
+                writer.WriteAttributeString("subcode", ((int)action.SubCode).ToString());
+                writer.WriteAttributeString("submenutype", action.SubMenuType.ToString());
 
-        Hostile, //Select Next/Preveous/Nearest group
-        Party,
-        Follower,
-        Object,
-        Mobile,
-        MscTotalCount,
+                if (action.HasString())
+                    writer.WriteAttributeString("text", ((MacroObjectString)action).Text);
 
-        INVALID_0,
-        INVALID_1,
-        INVALID_2,
-        INVALID_3,
+                writer.WriteEndElement();
+            }
 
+            writer.WriteEndElement();
+        }
 
-        ConfusionBlastPotion = 215,
-        CurePotion,
-        AgilityPotion,
-        StrengthPotion,
-        PoisonPotion,
-        RefreshPotion,
-        HealPotion,
-        ExplosionPotion,
+        public static MacroLoopContainer Load(XmlElement xmlLoop)
+        {
+            var container = new MacroLoopContainer();
 
-        DefaultZoom,
-        ZoomIn,
-        ZoomOut,
+            if (int.TryParse(xmlLoop.GetAttribute("loopcount"), out int loopCount))
+                container.LoopCount = loopCount;
 
-        BestHealPotion,
-        BestCurePotion,
-        BestRefreshPotion,
-        BestStrengthPotion,
-        BestAgiPotion,
-        BestExplosionPotion,
-        BestConflagPotion,
-        EnchantedApple,
-        PetalsOfTrinsic,
-        OrangePetals,
-        TrappedBox,
-        SmokeBomb,
-        HealStone,
-        SpellStone,
+            if (int.TryParse(xmlLoop.GetAttribute("delaybetween"), out int delay))
+                container.DelayBetweenIterations = delay;
 
-        LookForwards,
-        LookBackwards,
+            foreach (XmlElement xmlAction in xmlLoop.GetElementsByTagName("action"))
+            {
+                var code = (MacroType)int.Parse(xmlAction.GetAttribute("code"));
+                var sub = (MacroSubType)int.Parse(xmlAction.GetAttribute("subcode"));
+                sbyte subMenuType = sbyte.Parse(xmlAction.GetAttribute("submenutype"));
 
-        Inspire,
-        Invigorate,
-        Resilience,
-        Perseverance,
-        Tribulation,
-        Despair,
-        DeathRay,
-        EtherealBurst,
-        NetherBlast,
-        MysticWeapon,
-        CommandUndead,
-        Conduit,
-        ManaShield,
-        SummonReaper,
-        EnchantedSummoning,
-        AnticipateHit,
-        Warcry,
-        Intuition,
-        Rejuvenate,
-        HolyFist,
-        Shadow,
-        WhiteTigerForm,
-        FlamingShot,
-        PlayingTheOdds,
-        Thrust,
-        Pierce,
-        Stagger,
-        Toughness,
-        Onslaught,
-        FocusedEye,
-        ElementalFury,
-        CalledShot,
-        WarriorsGifts,
-        ShieldBash,
-        Bodyguard,
-        HeightenSenses,
-        Tolerance,
-        InjectedStrike,
-        Potency,
-        Rampage,
-        FistsofFury,
-        Knockout,
-        Whispering,
-        CombatTraining,
-        Boarding,
+                MacroObject m;
+                if (xmlAction.HasAttribute("text"))
+                    m = new MacroObjectString(code, sub, xmlAction.GetAttribute("text"));
+                else
+                    m = new MacroObject(code, sub);
+
+                m.SubMenuType = subMenuType;
+                container.Items.AddLast(m);
+            }
+
+            return container;
+        }
+
+        public void Reset()
+        {
+            CurrentIteration = -1;
+            CurrentItemIndex = -1;
+        }
     }
 }

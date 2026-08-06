@@ -56,10 +56,7 @@ internal static class DenyMoveItem
                         UIManager
                             .GetGump<ContainerGump>(Client.Game.UO.GameCursor.ItemHold.Container)
                             ?.RequestUpdateContents();
-                        GridContainer.NotifyContainerUpdate(
-                            world,
-                            Client.Game.UO.GameCursor.ItemHold.Container
-                        );
+                        GridContainer.NotifyContainerUpdate(world, Client.Game.UO.GameCursor.ItemHold.Container);
                     }
                     else
                     {
