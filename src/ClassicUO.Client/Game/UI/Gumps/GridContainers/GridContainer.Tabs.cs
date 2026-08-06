@@ -28,6 +28,7 @@ public partial class GridContainer
     private readonly List<HitBox> _tabCloseButtons = new();
     private int _activeTabIndex;
     private int _tabRowCount = 1;
+    private uint _pendingActiveTabSerial;
 
     private ContainerTab ActiveTab => _tabs.Count == 0 ? null : _tabs[_activeTabIndex];
     private Item ActiveContainer => ActiveTab == null ? Container : World.Items.Get(ActiveTab.ContainerSerial) ?? Container;
@@ -50,13 +51,13 @@ public partial class GridContainer
             SortMode = _sortMode
         });
 
+        _pendingActiveTabSerial = ProfileManager.CurrentProfile.GridContainerTabsEnabled
+            ? _gridContainerEntry.GetSavedActiveTabSerial()
+            : 0;
         RestoreSavedTabsIfAvailable();
         AutoOpenTabs();
         BuildTabBar();
-
-        int savedIndex = Math.Clamp(_gridContainerEntry.CurrentTabIndex, 0, _tabs.Count - 1);
-        if (savedIndex > 0)
-            SwitchToTab(savedIndex);
+        TryRestorePendingActiveTab();
     }
 
     /// <summary>
@@ -78,6 +79,10 @@ public partial class GridContainer
                 AddTabCore(savedTab.ContainerSerial, false);
             }
         }
+
+        // Nested container objects often arrive after the root gump is constructed. Restore by
+        // serial instead of clamping the saved index against the tabs that happen to exist now.
+        TryRestorePendingActiveTab();
     }
 
     private void AutoOpenTabs()
@@ -96,19 +101,38 @@ public partial class GridContainer
         }
         else
         {
-            AutoOpenRecursive(Container);
+            AutoOpenRecursive(Container, new HashSet<uint>(), 100);
         }
     }
 
-    private void AutoOpenRecursive(Item container)
+    private void AutoOpenRecursive(Item container, HashSet<uint> visited, int remainingDepth)
     {
+        if (container == null || remainingDepth <= 0 || !visited.Add(container.Serial))
+            return;
+
         for (LinkedObject node = container.Items; node != null; node = node.Next)
         {
             if (node is not Item child || !child.ItemData.IsContainer || child.IsDestroyed)
                 continue;
 
             AddTabCore(child.Serial, false);
-            AutoOpenRecursive(child);
+            AutoOpenRecursive(child, visited, remainingDepth - 1);
+        }
+    }
+
+    private void TryRestorePendingActiveTab()
+    {
+        if (_pendingActiveTabSerial == 0)
+            return;
+
+        for (int i = 1; i < _tabs.Count; i++)
+        {
+            if (_tabs[i].ContainerSerial != _pendingActiveTabSerial)
+                continue;
+
+            _pendingActiveTabSerial = 0;
+            SwitchToTab(i);
+            return;
         }
     }
 
@@ -185,7 +209,13 @@ public partial class GridContainer
 
     private void SwitchToTab(int tabIndex)
     {
-        if (tabIndex < 0 || tabIndex >= _tabs.Count || tabIndex == _activeTabIndex)
+        if (tabIndex < 0 || tabIndex >= _tabs.Count)
+            return;
+
+        // Any explicit tab selection wins over a saved tab that has not arrived yet.
+        // TryRestorePendingActiveTab clears this first, so the deferred restore still works.
+        _pendingActiveTabSerial = 0;
+        if (tabIndex == _activeTabIndex)
             return;
 
         ContainerTab currentTab = _tabs[_activeTabIndex];
@@ -552,15 +582,29 @@ public partial class GridContainer
         if (container == null || !World.OPL.TryGetNameAndData(container.Serial, out _, out string data) || string.IsNullOrEmpty(data))
             return -1;
 
+        return TryParseOplItemCount(data, out int count) ? count : -1;
+    }
+
+    internal static bool TryParseOplItemCount(string data, out int count)
+    {
+        count = -1;
+        if (string.IsNullOrEmpty(data))
+            return false;
+
         foreach (string line in data.Split('\n'))
         {
             string trimmed = line.Trim();
             int index = trimmed.IndexOf(" item", StringComparison.OrdinalIgnoreCase);
-            if (index > 0 && int.TryParse(trimmed.AsSpan(0, index), out int count))
-                return count;
+            if (index > 0
+                && int.TryParse(trimmed.AsSpan(0, index), out int parsed)
+                && parsed >= 0)
+            {
+                count = parsed;
+                return true;
+            }
         }
 
-        return -1;
+        return false;
     }
 
     private void DrawCapacityBar(UltimaBatcher2D batcher, int x, int y)

@@ -334,6 +334,14 @@ public class GridContainerEntry
 
     [JsonPropertyName("tbi")] public int CurrentTabIndex { get; set; }
 
+    public uint GetSavedActiveTabSerial()
+    {
+        if (Tabs == null || CurrentTabIndex <= 0 || CurrentTabIndex > Tabs.Count)
+            return 0;
+
+        return Tabs[CurrentTabIndex - 1]?.ContainerSerial ?? 0;
+    }
+
     public GridContainerSlotEntry GetSlot(uint serial)
     {
         if (Slots.TryGetValue(serial, out GridContainerSlotEntry entry))
