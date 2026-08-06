@@ -31,6 +31,26 @@ public class GridContainerTabStateTest
     }
 
     [Fact]
+    public void SetPositionForAllStates_UsesOneAnchorForMinimizedAndMaximizedViews()
+    {
+        var entry = new GridContainerEntry
+        {
+            X = 1,
+            Y = 2,
+            MaximizedX = 3,
+            MaximizedY = 4,
+            MinimizedX = 5,
+            MinimizedY = 6
+        };
+
+        entry.SetPositionForAllStates(120, 240);
+
+        Assert.Equal(new Microsoft.Xna.Framework.Point(120, 240), entry.GetPosition());
+        Assert.Equal(new Microsoft.Xna.Framework.Point(120, 240), entry.GetPositionForState(false));
+        Assert.Equal(new Microsoft.Xna.Framework.Point(120, 240), entry.GetPositionForState(true));
+    }
+
+    [Fact]
     public void TabState_RoundTripsWithoutLosingActiveTabOrPerTabData()
     {
         GridContainerEntry original = CreateEntryWithTabs();

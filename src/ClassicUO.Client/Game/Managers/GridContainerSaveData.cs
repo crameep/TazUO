@@ -382,6 +382,12 @@ public class GridContainerEntry
         Y = y;
     }
 
+    public void SetPositionForAllStates(int x, int y)
+    {
+        X = MaximizedX = MinimizedX = x;
+        Y = MaximizedY = MinimizedY = y;
+    }
+
     public void UpdateSaveDataEntry(GridContainer container) => GridContainerSaveData.Instance.AddOrReplaceContainer(container);
 
     public GridContainerEntry UpdateFromContainer(GridContainer container)
@@ -390,7 +396,9 @@ public class GridContainerEntry
         Width = container.Width;
         // Store the full height, not the minimized height
         Height = container.IsMinimized ? container.HeightBeforeMinimize : container.Height;
-        SetPositionForState(container.X, container.Y, container.IsMinimized);
+        // Minimize is a size-only state. Persist one shared anchor so a later toggle cannot jump
+        // to a stale minimized/maximized location from an older save.
+        SetPositionForAllStates(container.X, container.Y);
         // If the container was given a new explicit preference, use it, otherwise, use whatever we already have stored.
         // Null is also fine here and indicates a 'default', ergo, go with the profile's `GridContainersDefaultToOldStyleView` settings
         UseOriginalContainer = container.UseOldContainerStyle ?? container.GridContainerEntry.UseOriginalContainer;

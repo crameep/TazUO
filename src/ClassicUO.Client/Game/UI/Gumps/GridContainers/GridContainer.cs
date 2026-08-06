@@ -186,20 +186,14 @@ public partial class GridContainer : ResizableGump
         }
 
         /// <summary>
-        /// Switches between minimized and maximized position states
+        /// Saves the current position as the single anchor for both window states so toggling
+        /// minimize changes only the container height and never jumps to a stale location.
         /// </summary>
-        /// <param name="fromMinimized">True if switching from minimized to maximized, false otherwise</param>
-        private void SwitchPositionState(bool fromMinimized)
+        private void SyncPositionToBothStates()
         {
             if (_gridContainerEntry == null) return;
 
-            // Save current position for current state
-            _gridContainerEntry.SetPositionForState(X, Y, fromMinimized);
-
-            // Load position for new state
-            Point newPos = _gridContainerEntry.GetPositionForState(!fromMinimized);
-            X = newPos.X;
-            Y = newPos.Y;
+            _gridContainerEntry.SetPositionForAllStates(X, Y);
         }
 
         /// <summary>
@@ -593,13 +587,13 @@ public partial class GridContainer : ResizableGump
                 // Store current height before minimizing
                 _heightBeforeMinimize = Height;
 
-                SwitchPositionState(false);
+                SyncPositionToBothStates();
                 SetControlsVisibility(false);
                 ApplyMinimizedHeight();
             }
             else
             {
-                SwitchPositionState(true);
+                SyncPositionToBothStates();
                 SetControlsVisibility(true);
 
                 // Restore original height (fallback to a reasonable default if not set)
@@ -975,7 +969,7 @@ public partial class GridContainer : ResizableGump
 
             if (_gridContainerEntry != null)
             {
-                _gridContainerEntry.SetPositionForState(X, Y, IsMinimized);
+                _gridContainerEntry.SetPositionForAllStates(X, Y);
             }
 
             // Backpack special handling
