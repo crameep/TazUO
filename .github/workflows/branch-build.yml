@@ -4,6 +4,8 @@ on:
   push:
     branches-ignore: [main, dev]
     tags-ignore: ['**']
+    paths-ignore:
+      - 'docs/**'
   delete:
 
 concurrency:
@@ -202,6 +204,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: branch-${{ steps.sanitize.outputs.name }}
+          target_commitish: ${{ github.sha }}
           prerelease: true
           make_latest: false
           files: TazUO-*.zip
