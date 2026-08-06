@@ -118,6 +118,75 @@ namespace ClassicUO.UnitTests.Game.Managers
         }
 
         [Fact]
+        public void TryMigrateLegacyConfigFile_ShouldCopyLegacyFileWithoutRemovingRecoverySource()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            string legacyPath = Path.Combine(tempDir, "Data", "OrganizerConfig.json");
+            string profilePath = Path.Combine(tempDir, "Profiles", "OrganizerConfig.json");
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+                File.WriteAllText(legacyPath, "[{\"Name\":\"Legacy\"}]");
+
+                OrganizerAgent.TryMigrateLegacyConfigFile(legacyPath, profilePath).Should().BeTrue();
+
+                File.ReadAllText(profilePath).Should().Be("[{\"Name\":\"Legacy\"}]");
+                File.ReadAllText(legacyPath).Should().Be("[{\"Name\":\"Legacy\"}]");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void TryMigrateLegacyConfigFile_ShouldNotOverwriteExistingProfileFile()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            string legacyPath = Path.Combine(tempDir, "Data", "OrganizerConfig.json");
+            string profilePath = Path.Combine(tempDir, "Profiles", "OrganizerConfig.json");
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(legacyPath)!);
+                Directory.CreateDirectory(Path.GetDirectoryName(profilePath)!);
+                File.WriteAllText(legacyPath, "legacy");
+                File.WriteAllText(profilePath, "current");
+
+                OrganizerAgent.TryMigrateLegacyConfigFile(legacyPath, profilePath).Should().BeFalse();
+
+                File.ReadAllText(profilePath).Should().Be("current");
+                File.ReadAllText(legacyPath).Should().Be("legacy");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void TryMigrateLegacyConfigFile_ShouldIgnoreMissingLegacyFile()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            string legacyPath = Path.Combine(tempDir, "Data", "OrganizerConfig.json");
+            string profilePath = Path.Combine(tempDir, "Profiles", "OrganizerConfig.json");
+
+            try
+            {
+                OrganizerAgent.TryMigrateLegacyConfigFile(legacyPath, profilePath).Should().BeFalse();
+                File.Exists(profilePath).Should().BeFalse();
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
         public void OrganizerItemConfig_IsMatch_ShouldSupportGraphicHueAndRegexWildcards()
         {
             var wildcardGraphic = new OrganizerItemConfig

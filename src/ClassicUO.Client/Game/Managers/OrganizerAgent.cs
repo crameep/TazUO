@@ -49,9 +49,8 @@ namespace ClassicUO.Game.Managers
         {
             Instance = new OrganizerAgent();
             string newPath = Path.Combine(GetDataPath(), "OrganizerConfig.json");
-            string oldPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data");
-            if(File.Exists(oldPath))
-                File.Move(oldPath, newPath);
+            string oldPath = Path.Combine(CUOEnviroment.ExecutablePath, "Data", "OrganizerConfig.json");
+            TryMigrateLegacyConfigFile(oldPath, newPath);
 
             if (JsonHelper.Load<List<OrganizerConfig>>(newPath, OrganizerAgentContext.Default.ListOrganizerConfig, out List<OrganizerConfig> configs))
                 Instance.OrganizerConfigs = configs;
@@ -62,6 +61,38 @@ namespace ClassicUO.Game.Managers
             {
                 TomeManager.Instance.Save();
                 Instance.Save();
+            }
+        }
+
+        /// <summary>
+        /// Copies the original executable-wide organizer file into the current character profile.
+        /// The source is deliberately retained as a recovery copy and an existing profile file is
+        /// never overwritten.
+        /// </summary>
+        internal static bool TryMigrateLegacyConfigFile(string legacyPath, string profilePath)
+        {
+            if (string.IsNullOrWhiteSpace(legacyPath)
+                || string.IsNullOrWhiteSpace(profilePath)
+                || !File.Exists(legacyPath)
+                || File.Exists(profilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                string profileDirectory = Path.GetDirectoryName(profilePath);
+                if (!string.IsNullOrWhiteSpace(profileDirectory))
+                    Directory.CreateDirectory(profileDirectory);
+
+                File.Copy(legacyPath, profilePath, false);
+                Utility.Logging.Log.Info($"Migrated legacy organizer config from '{legacyPath}' to '{profilePath}'.");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Utility.Logging.Log.Error($"Failed to migrate legacy organizer config from '{legacyPath}' to '{profilePath}': {e}");
+                return false;
             }
         }
 
