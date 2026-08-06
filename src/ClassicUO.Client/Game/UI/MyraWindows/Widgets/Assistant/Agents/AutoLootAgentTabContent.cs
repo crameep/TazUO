@@ -675,7 +675,21 @@ public static class AutoLootAgentTabContent
 
         actionRow.Widgets.Add(new MyraButton("Export", () =>
         {
-            AutoLootManager.Instance.GetProfileJsonExport(AutoLootManager.Instance.SelectedProfile)?.CopyToClipboard();
+            AutoLootManager.AutoLootProfile? selected = AutoLootManager.Instance.SelectedProfile;
+            if (selected == null)
+            {
+                GameActions.Print("Select a loot profile before exporting.", Constants.HUE_ERROR);
+                return;
+            }
+
+            string? json = AutoLootManager.Instance.GetProfileJsonExport(selected);
+            if (json == null)
+            {
+                GameActions.Print("Unable to export the selected loot profile.", Constants.HUE_ERROR);
+                return;
+            }
+
+            json.CopyToClipboard();
             GameActions.Print("Exported loot profile to your clipboard!", Constants.HUE_SUCCESS);
         }) { Tooltip = "Export your list to clipboard." });
 
