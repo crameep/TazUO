@@ -194,11 +194,16 @@ jobs:
         id: sanitize
         run: echo "name=$(echo '${{ github.ref_name }}' | sed 's/[^a-zA-Z0-9._-]/-/g')" >> "$GITHUB_OUTPUT"
 
-      - name: Replace branch release
+      - name: Retarget existing branch tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_TAG: branch-${{ steps.sanitize.outputs.name }}
-        run: gh release delete "$BRANCH_TAG" --yes --cleanup-tag || true
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/${BRANCH_TAG}" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${{ github.repository }}/git/refs/tags/${BRANCH_TAG}" \
+              -f sha="${COMMIT_SHA}" -F force=true >/dev/null
+          fi
 
       - name: Publish launcher-compatible branch release
         uses: softprops/action-gh-release@v2
