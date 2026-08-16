@@ -95,7 +95,12 @@ jobs:
 
     - name: Echo release notes
       shell: bash
-      run: echo "${{ steps.release_notes.outputs.RELEASE_NOTES }}"
+      env:
+        # Passed through the environment rather than interpolated into the script.
+        # Release notes are commit messages: a quote, backtick or $(...) in one would
+        # otherwise break the command or execute on the runner.
+        RELEASE_NOTES: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+      run: echo "$RELEASE_NOTES"
 
     - name: Remove old Release
       uses: dev-drprasad/delete-tag-and-release@v0.2.1

@@ -232,7 +232,12 @@ jobs:
       - name: Echo release notes
         if: ${{ strategy.job-index == 0 }}
         shell: bash
-        run: echo "${{ steps.release_notes.outputs.RELEASE_NOTES }}"
+        env:
+          # Passed through the environment rather than interpolated into the script.
+          # Release notes are commit messages: a quote, backtick or $(...) in one would
+          # otherwise break the command or execute on the runner.
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+        run: echo "$RELEASE_NOTES"
 
       - name: Create tag
         continue-on-error: true
