@@ -97,9 +97,6 @@ internal sealed class RuntimeStoragePaths : IRuntimeStoragePaths
             throw new ArgumentException("rootPath is required", nameof(rootPath));
 
         string baseRoot = rootPath;
-        string mobileRoot = Environment.GetEnvironmentVariable("TAZUO_IOS_SANDBOX_ROOT");
-        if (!string.IsNullOrWhiteSpace(mobileRoot))
-            baseRoot = mobileRoot;
 
         ScriptsPath = Path.Combine(baseRoot, "LegionScripts");
         LogsPath = Path.Combine(baseRoot, "Data", "LegionScripting", "Logs");
