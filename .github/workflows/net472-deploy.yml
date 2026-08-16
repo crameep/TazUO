@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   workflow_run:
     branches: [legacy]
-    workflows: [Build-Test]
+    workflows: [CI Build and Test]
     types:
       - completed
 
@@ -113,8 +113,8 @@ jobs:
         content: |
           # v${{ env.VERSION }} Legacy Build (net474) is available.
 
-          [Download here](<https://github.com/bittiez/TazUO/releases/tag/${{ env.TAG_NAME }}>)
-          Or use the [launcher](<https://github.com/bittiez/TUO-Launcher/releases/latest>)
+          [Download here](<https://github.com/crameep/TazUO/releases/tag/${{ env.TAG_NAME }}>)
+          Or use the [launcher](<https://github.com/crameep/TUO-Launcher/releases/latest>)
 
           # Release notes
           `These are automatically generated`

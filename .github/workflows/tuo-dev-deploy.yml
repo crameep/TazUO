@@ -1,10 +1,10 @@
-name: TUO-Dev-Deploy
+name: Bleeding Edge Release
 
 on:
   workflow_dispatch:
   workflow_run:
     branches: [dev]
-    workflows: [Build-Test]
+    workflows: [CI Build and Test]
     types:
       - completed
 
@@ -12,9 +12,10 @@ env:
   CUO_OUTPUT_PATH: 'build/dist'
   CUO_PROJECT_PATH: "src/ClassicUO.Client/ClassicUO.Client.csproj"
   TAG_NAME: "TazUO-BleedingEdge"
-  RELEASE_LINK: "https://github.com/bittiez/TazUO/releases/tag/TazUO-BleedingEdge"
+  RELEASE_LINK: "https://github.com/crameep/TazUO/releases/tag/TazUO-BleedingEdge"
   UPLOAD_BODY: |
-    These are built automatically on the dev branch.
+    Bleeding Edge channel - select "Bleeding Edge" in the TazUO Launcher to receive these builds.
+    Built automatically from the dev branch.
     These may include features that are still being worked on/not complete.
     These are modern dotnet builds of TazUO, they do not support plugins. For plugin support see the Legacy releases.
   UPLOAD_MAKELATEST: false
@@ -277,7 +278,7 @@ jobs:
         uses: ncipollo/release-action@v1.20.0
         with:
           artifacts: "zips/*.zip"
-          name: 'Development v${{ needs.build.outputs.version }}'
+          name: 'Bleeding Edge v${{ needs.build.outputs.version }}'
           body: |
             ${{ env.UPLOAD_BODY }}
 
@@ -299,7 +300,7 @@ jobs:
             # v${{ needs.build.outputs.version }} is available for [${{ env.TAG_NAME }}].
 
             [Download here](<${{ env.RELEASE_LINK }}>)
-            Or use the [launcher](<https://github.com/bittiez/TUO-Launcher/releases/latest>)
+            Or use the [launcher](<https://github.com/crameep/TUO-Launcher/releases/latest>)
 
             # Release notes
             `These are automatically generated`

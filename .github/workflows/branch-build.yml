@@ -1,4 +1,4 @@
-name: Branch Build
+name: Feature Branch Build
 
 on:
   push:
@@ -213,9 +213,9 @@ jobs:
           prerelease: true
           make_latest: false
           files: TazUO-*.zip
-          name: "Branch: ${{ github.ref_name }}"
+          name: "Feature Branch: ${{ github.ref_name }}"
           body: |
             Feature branch build: ${{ github.ref_name }}
             Commit: ${{ github.sha }}
 
-            This `branch-*` release is discoverable by the custom TazUO launcher Branch channel.
+            This `branch-*` release is discoverable by the TazUO Launcher's "Feature Branch" channel.
