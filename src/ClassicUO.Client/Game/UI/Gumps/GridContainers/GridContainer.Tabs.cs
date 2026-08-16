@@ -241,6 +241,19 @@ public partial class GridContainer
         InvalidateContents = true;
     }
 
+    /// <summary>
+    /// Tab buttons use <see cref="ButtonAction.Activate"/> so they can carry their tab index in
+    /// <see cref="Control.ButtonParameter"/>. That makes <see cref="NiceButton.OnMouseUp"/> bubble an
+    /// OnButtonClick up to the gump, and the base <see cref="Gump.OnButtonClick"/> treats any gump with a
+    /// non-zero LocalSerial as a server gump: it replies to the server and disposes itself. GridContainer
+    /// is a client-side gump whose LocalSerial is the container item, so that path would close the whole
+    /// container the moment a tab is clicked. Tab activation is handled by the button's own MouseUp
+    /// handler in <see cref="BuildTabBar"/>, so this override intentionally does nothing.
+    /// </summary>
+    public override void OnButtonClick(int buttonID)
+    {
+    }
+
     private void BuildTabBar()
     {
         foreach (NiceButton button in _tabButtons)

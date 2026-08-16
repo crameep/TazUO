@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text.Json;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
@@ -99,6 +100,21 @@ public class GridContainerTabStateTest
 
         Assert.Equal(expectedResult, result);
         Assert.Equal(expectedCount, count);
+    }
+
+    [Fact]
+    public void OnButtonClick_IsOverriddenSoTabClicksDoNotCloseTheContainer()
+    {
+        // Tab buttons are ButtonAction.Activate, so NiceButton.OnMouseUp bubbles OnButtonClick to the
+        // gump. Gump.OnButtonClick treats a non-zero LocalSerial as a server gump and disposes itself,
+        // which closed the whole container whenever a tab was clicked. GridContainer must override it.
+        MethodInfo onButtonClick = typeof(GridContainer).GetMethod(
+            nameof(GridContainer.OnButtonClick),
+            BindingFlags.Instance | BindingFlags.Public
+        );
+
+        Assert.NotNull(onButtonClick);
+        Assert.Equal(typeof(GridContainer), onButtonClick.DeclaringType);
     }
 
     private static GridContainerEntry CreateEntryWithTabs() =>
