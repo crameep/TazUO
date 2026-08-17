@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
+using ClassicUO.Configuration;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Myra.Graphics2D.UI;
@@ -186,6 +187,29 @@ namespace ClassicUO.Input
 
         public static int ControllerSensitivity { get; set; } = 10;
 
+        /// <summary>
+        /// Frames per second the legacy per-frame sensitivity value was implicitly tuned
+        /// against (<see cref="Configuration.Settings.FPS"/> defaults to 60).
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ControllerSensitivity"/> is serialized in user profiles and used to mean
+        /// "pixels per frame", so its effective speed varied with framerate. Multiplying by
+        /// this constant reinterprets the stored value as pixels per second, which keeps the
+        /// familiar feel at 60 FPS while making it framerate independent everywhere else. This
+        /// avoids having to migrate the persisted value.
+        /// </remarks>
+        private const float SensitivityReferenceFps = 60f;
+
+        /// <summary>
+        /// Fractional pixels carried between frames.
+        /// </summary>
+        /// <remarks>
+        /// Cursor position is integral, but delta-time motion routinely produces sub-pixel
+        /// steps at low stick deflection. Truncating each frame would silently discard them
+        /// and the cursor would refuse to move slowly at all.
+        /// </remarks>
+        private static Vector2 _controllerSubPixel;
+
         private static bool _isWarpingMouse = false;
 
         public static void Update()
@@ -207,17 +231,7 @@ namespace ClassicUO.Input
                 SDL.SDL_GetMouseState(out float x, out float y);
                 Position.X = (int)x;
                 Position.Y = (int)y;
-                GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
-
-                if (gamePadState.IsConnected && gamePadState.ThumbSticks.Right != Vector2.Zero)
-                {
-                    Position.X += (int)(ControllerSensitivity * gamePadState.ThumbSticks.Right.X);
-                    Position.Y -= (int)(ControllerSensitivity * gamePadState.ThumbSticks.Right.Y);
-
-                    _isWarpingMouse = true;
-                    SDL.SDL_WarpMouseInWindow(Client.Game.Window.Handle, Position.X, Position.Y);
-                    _isWarpingMouse = false;
-                }
+                UpdateControllerCursor();
             }
 
             Position.X = (int)((double)Position.X * Client.Game.GraphicManager.PreferredBackBufferWidth / Client.Game.Window.ClientBounds.Width);
@@ -230,6 +244,71 @@ namespace ClassicUO.Input
             // While a point comparison is not a 'heavy' operation, a null check should generally be quicker.
             if (Moved != null && previous != Position)
                 Moved?.Invoke(null, new MouseMovedEventArgs(previous, Position));
+        }
+
+        /// <summary>
+        /// Advances the cursor from the right thumbstick, framerate independently.
+        /// </summary>
+        private static void UpdateControllerCursor()
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || !profile.ControllerEnabled)
+            {
+                _controllerSubPixel = Vector2.Zero;
+
+                return;
+            }
+
+            GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
+
+            if (!gamePadState.IsConnected)
+            {
+                _controllerSubPixel = Vector2.Zero;
+
+                return;
+            }
+
+            Vector2 stick = ControllerAxis.Process(
+                gamePadState.ThumbSticks.Right,
+                profile.ControllerDeadzoneInner,
+                profile.ControllerDeadzoneOuter,
+                profile.ControllerCursorCurve
+            );
+
+            if (stick == Vector2.Zero)
+            {
+                // Drop the carried fraction so a released stick cannot nudge the cursor on
+                // the next frame it is touched.
+                _controllerSubPixel = Vector2.Zero;
+
+                return;
+            }
+
+            float pixelsPerSecond = ControllerSensitivity * SensitivityReferenceFps;
+
+            // Thumbstick Y is positive up, screen Y is positive down.
+            _controllerSubPixel.X += stick.X * pixelsPerSecond * Time.Delta;
+            _controllerSubPixel.Y -= stick.Y * pixelsPerSecond * Time.Delta;
+
+            int stepX = (int)_controllerSubPixel.X;
+            int stepY = (int)_controllerSubPixel.Y;
+
+            if (stepX == 0 && stepY == 0)
+            {
+                // Sub-pixel motion this frame; keep accumulating rather than truncating it away.
+                return;
+            }
+
+            _controllerSubPixel.X -= stepX;
+            _controllerSubPixel.Y -= stepY;
+
+            Position.X += stepX;
+            Position.Y += stepY;
+
+            _isWarpingMouse = true;
+            SDL.SDL_WarpMouseInWindow(Client.Game.Window.Handle, Position.X, Position.Y);
+            _isWarpingMouse = false;
         }
     }
 }

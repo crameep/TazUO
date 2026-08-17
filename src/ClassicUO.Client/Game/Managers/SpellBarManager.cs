@@ -300,7 +300,37 @@ public class SpellBarManager
         if(spellBarSettings == null)
             spellBarSettings = new SpellBarSettings();
 
+        MigrateLegacyTriggerBindings();
+
         enabled = true;
+    }
+
+    /// <summary>
+    /// Rewrites spell bar slots that stored a trigger as the BACK / GUIDE button onto the
+    /// dedicated trigger identifiers, so bindings made before triggers became real axes
+    /// keep firing.
+    /// </summary>
+    private static void MigrateLegacyTriggerBindings()
+    {
+        int[][] slots = spellBarSettings?.ControllerButtons;
+
+        if (slots == null)
+            return;
+
+        foreach (int[] slot in slots)
+        {
+            if (slot == null)
+                continue;
+
+            for (int i = 0; i < slot.Length; i++)
+            {
+                // -1 is the "unset" sentinel and must not be passed through the map.
+                if (slot[i] < 0)
+                    continue;
+
+                slot[i] = (int)Controller.MigrateLegacyTriggerButton((SDL.SDL_GamepadButton)slot[i]);
+            }
+        }
     }
 
     public static void Unload()

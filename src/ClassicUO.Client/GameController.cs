@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using ClassicUO.Assets;
 using ClassicUO.Configuration;
@@ -1145,31 +1145,41 @@ namespace ClassicUO
                     }
                     break;
 
-                case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION when Scene is not null: //Work around because sdl doesn't see trigger buttons as buttons, they are axis probably for pressure support
-                                                                  //GameActions.Print(typeof(SDL_GamepadButton).GetEnumName((SDL_GamepadButton)sdlEvent->gbutton.button));
+                case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION when Scene is not null:
                     if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
                     {
                         break;
                     }
-                    if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_BACK || sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_GUIDE) //Left trigger BACK Right trigger GUIDE
+
+                    // SDL reports triggers as axes rather than buttons so pressure is available.
+                    // Controller records the analog travel and tells us when that crossed a
+                    // debounced threshold, at which point we dispatch it like any other button.
+                    if (Controller.TryUpdateTrigger(
+                            (SDL.SDL_GamepadAxis)sdlEvent->gaxis.axis,
+                            sdlEvent->gaxis.value,
+                            out SDL.SDL_GamepadButton triggerButton,
+                            out bool triggerPressed))
                     {
-                        if (sdlEvent->gaxis.value > 32000)
+                        SDL.SDL_GamepadButtonEvent triggerEvent = new()
                         {
-                            if (
-                                ((SDL.SDL_GamepadButton)sdlEvent->gbutton.button == SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_BACK && !Controller.Button_LeftTrigger)
-                                || ((SDL.SDL_GamepadButton)sdlEvent->gbutton.button == SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_GUIDE && !Controller.Button_RightTrigger)
-                                )
-                            {
-                                Controller.OnButtonDown(sdlEvent->gbutton);
-                                UIManager.KeyboardFocusControl?.InvokeControllerButtonDown((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
-                                Scene.OnControllerButtonDown(sdlEvent->gbutton);
-                            }
+                            type = triggerPressed
+                                ? SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                                : SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP,
+                            timestamp = sdlEvent->gaxis.timestamp,
+                            which = sdlEvent->gaxis.which,
+                            button = (byte)triggerButton,
+                            down = triggerPressed
+                        };
+
+                        if (triggerPressed)
+                        {
+                            UIManager.KeyboardFocusControl?.InvokeControllerButtonDown(triggerButton);
+                            Scene.OnControllerButtonDown(triggerEvent);
                         }
-                        else if (sdlEvent->gaxis.value < 5000)
+                        else
                         {
-                            Controller.OnButtonUp(sdlEvent->gbutton);
-                            UIManager.KeyboardFocusControl?.InvokeControllerButtonUp((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
-                            Scene.OnControllerButtonUp(sdlEvent->gbutton);
+                            UIManager.KeyboardFocusControl?.InvokeControllerButtonUp(triggerButton);
+                            Scene.OnControllerButtonUp(triggerEvent);
                         }
                     }
                     break;

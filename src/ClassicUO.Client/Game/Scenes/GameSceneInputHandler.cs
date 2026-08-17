@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using System.Linq;
@@ -97,60 +97,40 @@ namespace ClassicUO.Game.Scenes
 
         private bool MoveCharByController()
         {
-            if(!Client.Game.IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled) return false;
+            Profile profile = ProfileManager.CurrentProfile;
 
-            const float THRESHOLD = 0.3f;
-
-            Microsoft.Xna.Framework.Input.GamePadState gamePadState = Microsoft.Xna.Framework.Input.GamePad.GetState(PlayerIndex.One);
-
-            if (gamePadState.IsConnected && gamePadState.ThumbSticks.Left != Vector2.Zero && _world.InGame)
+            if (!Client.Game.IsActive || profile == null || !profile.ControllerEnabled || !_world.InGame)
             {
-                Vector2 dir = gamePadState.ThumbSticks.Left;
-                bool run = dir.X > 0.5 || dir.Y > 0.5 || dir.X < -0.5 || dir.Y < -0.5;
-
-                if (dir.X > THRESHOLD && dir.Y > THRESHOLD) // North
-                {
-                    _world.Player.Walk(Direction.North, run);
-                    return true;
-                }
-                if (dir.X < -THRESHOLD && dir.Y < -THRESHOLD) // South
-                {
-                    _world.Player.Walk(Direction.South, run);
-                    return true;
-                }
-                if (dir.X < -THRESHOLD && dir.Y > THRESHOLD) // Left
-                {
-                    _world.Player.Walk(Direction.West, run);
-                    return true;
-                }
-                if (dir.X > THRESHOLD && dir.Y < -THRESHOLD) // Left
-                {
-                    _world.Player.Walk(Direction.East, run);
-                    return true;
-                }
-
-                if (dir.X < THRESHOLD && dir.Y > THRESHOLD) //Up
-                {
-                    _world.Player.Walk(Direction.Up, run);
-                    return true;
-                }
-                if (dir.X < THRESHOLD && dir.Y < -THRESHOLD) //Down
-                {
-                    _world.Player.Walk(Direction.Down, run);
-                    return true;
-                }
-                if (dir.X > THRESHOLD && dir.Y < THRESHOLD) // Right
-                {
-                    _world.Player.Walk(Direction.Right, run);
-                    return true;
-                }
-                if (dir.X < -THRESHOLD && dir.Y < THRESHOLD) // Left
-                {
-                    _world.Player.Walk(Direction.Left, run);
-                    return true;
-                }
+                return false;
             }
-            return false;
+
+            Microsoft.Xna.Framework.Input.GamePadState gamePadState =
+                Microsoft.Xna.Framework.Input.GamePad.GetState(PlayerIndex.One);
+
+            if (!gamePadState.IsConnected)
+            {
+                return false;
+            }
+
+            // Radial deadzone, so the dead region is a circle and diagonals are treated the
+            // same as cardinals. The result is rescaled to 0..1 across the live range, which
+            // is what the run threshold is measured against.
+            Vector2 dir = ControllerAxis.ApplyRadialDeadzone(
+                gamePadState.ThumbSticks.Left,
+                profile.ControllerDeadzoneInner,
+                profile.ControllerDeadzoneOuter
+            );
+
+            if (dir == Vector2.Zero)
+            {
+                return false;
+            }
+
+            bool run = ControllerAxis.ShouldRun(dir, profile.ControllerRunThreshold);
+
+            _world.Player.Walk(ControllerAxis.ToOctant(dir), run);
+
+            return true;
         }
 
         private bool CanDragSelectOnObject(GameObject obj) => obj is null

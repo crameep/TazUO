@@ -92,6 +92,36 @@ public static class MovementTab
                         20,
                         new Accessor<float>(() => profile.ControllerMouseSensativity, f => profile.ControllerMouseSensativity = (int)f),
                         search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_mousesensitivity"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_sensitivity")])
+                    ),
+                    // The stick values are stored 0..1 but presented as percentages, because the
+                    // slider label only renders a single decimal place.
+                    Option.Slider(
+                        TazLang.Get("mog_movementtab_controller_deadzoneinner"),
+                        0f,
+                        50f,
+                        new Accessor<float>(() => profile.ControllerDeadzoneInner * 100f, f => profile.ControllerDeadzoneInner = f / 100f),
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_deadzoneinner"), Keywords: [TazLang.Get("mog_kw_controller")])
+                    ),
+                    Option.Slider(
+                        TazLang.Get("mog_movementtab_controller_deadzoneouter"),
+                        50f,
+                        100f,
+                        new Accessor<float>(() => profile.ControllerDeadzoneOuter * 100f, f => profile.ControllerDeadzoneOuter = f / 100f),
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_deadzoneouter"), Keywords: [TazLang.Get("mog_kw_controller")])
+                    ),
+                    Option.Slider(
+                        TazLang.Get("mog_movementtab_controller_runthreshold"),
+                        10f,
+                        100f,
+                        new Accessor<float>(() => profile.ControllerRunThreshold * 100f, f => profile.ControllerRunThreshold = f / 100f),
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_runthreshold"), Keywords: [TazLang.Get("mog_kw_controller")])
+                    ),
+                    Option.Slider(
+                        TazLang.Get("mog_movementtab_controller_curve"),
+                        1f,
+                        3f,
+                        new Accessor<float>(() => profile.ControllerCursorCurve, f => profile.ControllerCursorCurve = f),
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_curve"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_sensitivity")])
                     )
                 ).WithSearch(new SearchMetadata(TazLang.Get("mog_movementtab_controller_label"), Tags: [TazLang.Get("mog_kw_movement")], Keywords: [TazLang.Get("mog_kw_controller")]))
             )

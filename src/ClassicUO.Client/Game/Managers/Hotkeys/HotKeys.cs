@@ -285,7 +285,11 @@ namespace ClassicUO.Game.Managers.Hotkeys
             MouseButton = (MouseButtonType)dto.MouseButton,
             WheelScroll = dto.WheelScroll,
             WheelUp = dto.WheelUp,
-            ControllerButtons = dto.ControllerButtons == null ? null : dto.ControllerButtons.Select(x => (SDL.SDL_GamepadButton)x).ToArray()
+            // Triggers used to be persisted as the BACK / GUIDE buttons; rewrite them onto the
+            // dedicated trigger identifiers so existing bindings keep firing.
+            ControllerButtons = dto.ControllerButtons == null
+                ? null
+                : Controller.MigrateLegacyTriggerButtons(dto.ControllerButtons.Select(x => (SDL.SDL_GamepadButton)x).ToArray())
         };
     }
 }

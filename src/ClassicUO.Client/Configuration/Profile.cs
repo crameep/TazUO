@@ -865,6 +865,32 @@ namespace ClassicUO.Configuration
             }
         }
 
+        /// <summary>
+        /// Magnitude below which controller stick input is discarded, 0..1.
+        /// </summary>
+        /// <remarks>
+        /// Radial, so the dead region is a circle rather than a square. Shared by
+        /// character movement and cursor motion.
+        /// </remarks>
+        public float ControllerDeadzoneInner { get; set => SetProperty(ref field, value); } = 0.20f;
+
+        /// <summary>
+        /// Magnitude treated as full stick deflection, 0..1. Sticks frequently cannot
+        /// reach 1.0 into the corners, so this is slightly under.
+        /// </summary>
+        public float ControllerDeadzoneOuter { get; set => SetProperty(ref field, value); } = 0.95f;
+
+        /// <summary>
+        /// Response curve exponent for controller cursor motion. 1 is linear; higher
+        /// values give finer control near centre while still reaching full speed.
+        /// </summary>
+        public float ControllerCursorCurve { get; set => SetProperty(ref field, value); } = 2.0f;
+
+        /// <summary>
+        /// Stick magnitude at or above which the character runs rather than walks, 0..1.
+        /// </summary>
+        public float ControllerRunThreshold { get; set => SetProperty(ref field, value); } = 0.5f;
+
         [JsonConverter(typeof(Point2Converter))]
         public Point PlayerOffset { get; set => SetProperty(ref field, value); } = new Point(0, 0);
 
