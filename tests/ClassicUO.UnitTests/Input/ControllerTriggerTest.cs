@@ -171,6 +171,42 @@ namespace ClassicUO.UnitTests.Input
             Controller.MigrateLegacyTriggerButtons(null).Should().BeNull();
         }
 
+        // ------------------------------------------------------------------
+        // Reset
+        // ------------------------------------------------------------------
+
+        /// <summary>A pad unplugged mid-press would otherwise leave the button latched on.</summary>
+        [Fact]
+        public void Reset_Clears_Held_Buttons_And_Triggers()
+        {
+            Release(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
+            Push(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.9f, out _, out _);
+            Controller.OnButtonDown(new SDL.SDL_GamepadButtonEvent { button = (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_SOUTH });
+
+            Controller.Button_LeftTrigger.Should().BeTrue();
+            Controller.Button_A.Should().BeTrue();
+
+            Controller.ResetButtons();
+
+            Controller.Button_LeftTrigger.Should().BeFalse();
+            Controller.Button_A.Should().BeFalse();
+            Controller.LeftTrigger.Should().Be(0f);
+            Controller.RightTrigger.Should().Be(0f);
+            Controller.PressedButtons().Should().BeEmpty();
+        }
+
+        [Fact]
+        public void Reset_Then_Press_Fires_A_Fresh_Transition()
+        {
+            Push(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.9f, out _, out _);
+            Controller.ResetButtons();
+
+            // Without the reset clearing state this would be a no-op rather than a press.
+            Push(SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER, 0.9f, out _, out bool pressed)
+                .Should().BeTrue();
+            pressed.Should().BeTrue();
+        }
+
         [Fact]
         public void Trigger_Names_Are_Distinct_From_Back_And_Guide()
         {

@@ -282,7 +282,7 @@ namespace ClassicUO.Input
                 return Vector2.Zero;
             }
 
-            GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
+            GamePadState gamePadState = Controller.GetActiveState();
 
             if (!gamePadState.IsConnected)
             {

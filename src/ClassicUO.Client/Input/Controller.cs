@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using SDL3;
 
 namespace ClassicUO.Input
@@ -47,6 +49,81 @@ namespace ClassicUO.Input
         private const float AXIS_MAX = 32767f;
 
         public static Dictionary<SDL.SDL_GamepadButton, bool> ButtonStates = new();
+
+        // Highest player index FNA will report a pad on.
+        private const int MAX_PLAYER_INDEX = 4;
+
+        /// <summary>Pad currently driving input.</summary>
+        public static PlayerIndex ActivePlayerIndex { get; private set; } = PlayerIndex.One;
+
+        private static bool _hadConnectedPad;
+
+        /// <summary>
+        /// State of the active pad, re-scanning the other slots when it goes away.
+        /// </summary>
+        /// <remarks>
+        /// A pad is not always on index one: unplugging and replugging, or a wireless adapter
+        /// claiming a slot, can leave it on a later index where hardcoding index one sees nothing.
+        /// </remarks>
+        public static GamePadState GetActiveState()
+        {
+            GamePadState state = GamePad.GetState(ActivePlayerIndex);
+
+            if (state.IsConnected)
+            {
+                _hadConnectedPad = true;
+
+                return state;
+            }
+
+            for (int i = 0; i < MAX_PLAYER_INDEX; i++)
+            {
+                var index = (PlayerIndex)i;
+
+                if (index == ActivePlayerIndex)
+                {
+                    continue;
+                }
+
+                GamePadState candidate = GamePad.GetState(index);
+
+                if (!candidate.IsConnected)
+                {
+                    continue;
+                }
+
+                // Switching pads: whatever the old one was holding is no longer true.
+                ResetButtons();
+                ActivePlayerIndex = index;
+                _hadConnectedPad = true;
+
+                return candidate;
+            }
+
+            // Unplugged mid-press would otherwise leave the held button latched on forever.
+            if (_hadConnectedPad)
+            {
+                ResetButtons();
+                _hadConnectedPad = false;
+            }
+
+            return state;
+        }
+
+        /// <summary>Clears all held button and trigger state.</summary>
+        public static void ResetButtons()
+        {
+            ButtonStates.Clear();
+
+            Button_A = Button_B = Button_X = Button_Y = false;
+            Button_Left = Button_Right = Button_Up = Button_Down = false;
+            Button_LeftBumper = Button_RightBumper = false;
+            Button_LeftTrigger = Button_RightTrigger = false;
+            Button_LeftStick = Button_RightStick = false;
+
+            LeftTrigger = 0f;
+            RightTrigger = 0f;
+        }
 
         /// <summary>Fired when any controller button goes down. Used by hotkey capture in the UI.</summary>
         public static event Action<SDL.SDL_GamepadButton> ButtonDownEvent;

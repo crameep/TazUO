@@ -107,8 +107,7 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            Microsoft.Xna.Framework.Input.GamePadState gamePadState =
-                Microsoft.Xna.Framework.Input.GamePad.GetState(PlayerIndex.One);
+            Microsoft.Xna.Framework.Input.GamePadState gamePadState = Controller.GetActiveState();
 
             if (!gamePadState.IsConnected)
             {
