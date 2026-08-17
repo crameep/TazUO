@@ -24,6 +24,9 @@ namespace ClassicUO.Game.Scenes
 {
     public partial class GameScene
     {
+        /// <summary>Controller target selection for this scene.</summary>
+        internal ControllerTargetManager ControllerTargets { get; private set; }
+
         private bool _boatRun,
             _boatIsMoving;
         private readonly bool[] _flags = new bool[5];
@@ -130,6 +133,55 @@ namespace ClassicUO.Game.Scenes
             _world.Player.Walk(ControllerAxis.ToOctant(dir), run);
 
             return true;
+        }
+
+        /// <summary>Dispatches controller target-selection bindings; true when one consumed the press.</summary>
+        private bool HandleControllerTargeting()
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            if (profile == null || !profile.ControllerTargetSelection || ControllerTargets == null)
+            {
+                return false;
+            }
+
+            // A focused control gets the same button through InvokeControllerButtonDown, so leave
+            // it alone rather than acting twice on one press.
+            if (UIManager.KeyboardFocusControl != null)
+            {
+                return false;
+            }
+
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetNextId, false))
+            {
+                ControllerTargets.CycleTarget(1);
+                return true;
+            }
+
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetPrevId, false))
+            {
+                ControllerTargets.CycleTarget(-1);
+                return true;
+            }
+
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetFilterId, false))
+            {
+                ControllerTargets.CycleFilter(1);
+                return true;
+            }
+
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetConfirmId, false))
+            {
+                return ControllerTargets.ConfirmSelection();
+            }
+
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetCancelId, false))
+            {
+                ControllerTargets.Cancel();
+                return true;
+            }
+
+            return false;
         }
 
         private bool CanDragSelectOnObject(GameObject obj) => obj is null
@@ -1724,6 +1776,11 @@ namespace ClassicUO.Game.Scenes
         {
             base.OnControllerButtonDown(e);
             if (!_world.InGame)
+            {
+                return;
+            }
+
+            if (HandleControllerTargeting())
             {
                 return;
             }

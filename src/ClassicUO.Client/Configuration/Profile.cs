@@ -877,6 +877,9 @@ namespace ClassicUO.Configuration
         /// <summary>Stick magnitude at or above which the character runs rather than walks, 0..1.</summary>
         public float ControllerRunThreshold { get; set => SetProperty(ref field, value); } = 0.5f;
 
+        /// <summary>Enables bumper-cycled target selection on the controller.</summary>
+        public bool ControllerTargetSelection { get; set => SetProperty(ref field, value); } = true;
+
         [JsonConverter(typeof(Point2Converter))]
         public Point PlayerOffset { get; set => SetProperty(ref field, value); } = new Point(0, 0);
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+﻿// SPDX-License-Identifier: BSD-2-Clause
 
 
 using ClassicUO.Assets;
@@ -107,6 +107,7 @@ namespace ClassicUO.Game.Scenes
         {
             _world = world;
             _autoUnequipActionManager = new AutoUnequipActionManager(_world);
+            ControllerTargets = new ControllerTargetManager(_world);
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
 
@@ -986,6 +987,8 @@ namespace ClassicUO.Game.Scenes
             BandageManager.Instance.Update();
             GridHighlightData.ProcessQueue(_world);
             Profiler.ExitContext("Actions");
+
+            ControllerTargets.Update();
 
             Profiler.EnterContext("Movement");
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn && !MoveCharByController())

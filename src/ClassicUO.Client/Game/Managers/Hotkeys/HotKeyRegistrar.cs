@@ -1,4 +1,5 @@
-using ClassicUO.Configuration;
+﻿using ClassicUO.Configuration;
+using SDL3;
 
 namespace ClassicUO.Game.Managers.Hotkeys
 {
@@ -37,6 +38,14 @@ namespace ClassicUO.Game.Managers.Hotkeys
         public const string WorldMapPathfindAppendId = "worldmap.pathfind.append";
         #endregion
 
+        #region Controller
+        public const string ControllerTargetNextId = "controller.target.next";
+        public const string ControllerTargetPrevId = "controller.target.prev";
+        public const string ControllerTargetFilterId = "controller.target.filter";
+        public const string ControllerTargetConfirmId = "controller.target.confirm";
+        public const string ControllerTargetCancelId = "controller.target.cancel";
+        #endregion
+
         #region World interaction
         public const string FollowMobileId = "world.followmobile";
         public const string PathfindId = "world.pathfind";
@@ -56,7 +65,26 @@ namespace ClassicUO.Game.Managers.Hotkeys
             RegisterWorldMap();
             RegisterGumps();
             RegisterChat();
+            RegisterController();
         }
+
+        private static void RegisterController()
+        {
+            const string category = "Controller";
+
+            // Bumpers and face buttons are unassigned in the stock controller scheme, so they are
+            // safe defaults. A user who has bound them to a macro can rebind these in options.
+            // These are actions rather than held modifiers, so unlike ContextModifier they respect
+            // the global hotkey disable.
+            ControllerAction(ControllerTargetPrevId, "Select previous target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, category);
+            ControllerAction(ControllerTargetNextId, "Select next target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, category);
+            ControllerAction(ControllerTargetFilterId, "Cycle target filter", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP, category);
+            ControllerAction(ControllerTargetConfirmId, "Use or attack selected target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_SOUTH, category);
+            ControllerAction(ControllerTargetCancelId, "Cancel target or selection", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_EAST, category);
+        }
+
+        private static void ControllerAction(string id, string name, SDL.SDL_GamepadButton button, string category)
+            => HotKeys.Register(id, name, new HotkeyBinding { ControllerButtons = [button] }, category, checkConflicts: false);
 
         private static void RegisterChat()
         {

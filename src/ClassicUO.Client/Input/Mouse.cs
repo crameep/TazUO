@@ -306,6 +306,36 @@ namespace ClassicUO.Input
             _virtualCursor.X += stick.X * pixelsPerSecond * Time.Delta;
             _virtualCursor.Y -= stick.Y * pixelsPerSecond * Time.Delta;
 
+            ClampAndMirrorVirtualCursor();
+        }
+
+        /// <summary>Parks the cursor at a back buffer position and hands the pointer to the pad.</summary>
+        public static void SnapVirtualCursorTo(Point backBufferPosition)
+        {
+            Rectangle client = Client.Game.Window.ClientBounds;
+            int bufferWidth = Client.Game.GraphicManager.PreferredBackBufferWidth;
+            int bufferHeight = Client.Game.GraphicManager.PreferredBackBufferHeight;
+
+            if (bufferWidth <= 0 || bufferHeight <= 0)
+            {
+                return;
+            }
+
+            // Callers work in back buffer space; the virtual cursor is kept in window space.
+            _virtualCursor.X = backBufferPosition.X * ((float)client.Width / bufferWidth);
+            _virtualCursor.Y = backBufferPosition.Y * ((float)client.Height / bufferHeight);
+
+            ActiveSource = PointerSource.Controller;
+
+            ClampAndMirrorVirtualCursor();
+
+            Position.X = backBufferPosition.X;
+            Position.Y = backBufferPosition.Y;
+        }
+
+        /// <summary>Keeps the virtual cursor inside the window and mirrors it onto the OS cursor when visible.</summary>
+        private static void ClampAndMirrorVirtualCursor()
+        {
             Rectangle bounds = Client.Game.Window.ClientBounds;
 
             _virtualCursor.X = Math.Clamp(_virtualCursor.X, 0f, Math.Max(0f, bounds.Width - 1f));
