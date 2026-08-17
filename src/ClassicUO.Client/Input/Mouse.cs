@@ -234,7 +234,7 @@ namespace ClassicUO.Input
                 Point osPosition = new((int)x, (int)y);
                 Vector2 stick = ReadControllerStick();
 
-                if (osPosition != _lastOsPosition)
+                if (HasMovedMeaningfully(osPosition, _lastOsPosition))
                 {
                     _lastOsPosition = osPosition;
                     ActiveSource = PointerSource.Mouse;
@@ -300,6 +300,13 @@ namespace ClassicUO.Input
         /// <summary>Advances the client-owned cursor from the stick, clamped to the window.</summary>
         private static void AdvanceVirtualCursor(Vector2 stick)
         {
+            // An idle stick still reaches here while the pad holds the pointer; re-warping every
+            // frame to the same spot is pure waste and can make the cursor stutter.
+            if (stick == Vector2.Zero)
+            {
+                return;
+            }
+
             float pixelsPerSecond = ControllerSensitivity * SensitivityReferenceFps;
 
             // Thumbstick Y is positive up, screen Y is positive down.
@@ -308,6 +315,15 @@ namespace ClassicUO.Input
 
             ClampAndMirrorVirtualCursor();
         }
+
+        // Warps do not always read back at exactly the requested pixel (display scaling rounds), and
+        // an exact comparison would then see our own warp as physical movement and take the pointer
+        // off the pad every frame. Deliberate mouse movement clears this easily.
+        private const int MOUSE_MOVE_TOLERANCE = 2;
+
+        private static bool HasMovedMeaningfully(Point current, Point previous)
+            => Math.Abs(current.X - previous.X) > MOUSE_MOVE_TOLERANCE
+               || Math.Abs(current.Y - previous.Y) > MOUSE_MOVE_TOLERANCE;
 
         /// <summary>Parks the cursor at a back buffer position and hands the pointer to the pad.</summary>
         public static void SnapVirtualCursorTo(Point backBufferPosition)
