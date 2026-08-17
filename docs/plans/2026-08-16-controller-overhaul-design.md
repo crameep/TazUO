@@ -54,6 +54,48 @@ good shape, the **game feel** layer is not.
 
 ---
 
+## Implementation Status (2026-08-17)
+
+Work is on `feature/controller-overhaul`. Tests: 678 passing, up from a 604 baseline.
+
+**Phase 0 — complete.** Sections 1-5 all landed.
+
+**Phase 1 — largely complete.** Sections 6-8 landed. Section 9 (magnetic snap) was
+made redundant in practice: cycling parks the cursor directly on the selected
+entity, which is the effect snap was meant to approximate, so a separate
+attraction force has not been added and may not be needed.
+
+**Phase 2 — partial.** Section 10's scoring is implemented and tested as a pure
+function, but is *not yet wired to the d-pad*, so gump traversal does not work
+in game yet. Sections 11-12 not started.
+
+**Phase 3 — partial.** Device plumbing for multi-pad and hot-plug state landed.
+Button glyphs and rumble not started. Section 13 text entry still blocked on the
+open decision below.
+
+### Deviations from the original design
+
+**Warping could not simply be removed (section 6).** When
+`RunMouseInASeparateThread` is on — the default — the client hands the pointer
+graphic to SDL via `SDL_SetCursor`, so the OS cursor *is* the visible pointer.
+Removing the warp there would leave the drawn cursor frozen while an invisible
+position moved. The virtual cursor is now authoritative and warping mirrors it,
+which still buys clamping, arbitration and snapping. Fully eliminating the warp
+means drawing the cursor client-side in both modes; that is a larger change and
+is not done.
+
+**Sensitivity needed no migration.** Rather than rewriting the persisted value,
+`ControllerMouseSensativity` is scaled by a 60 FPS reference at the point of use,
+so existing profiles feel unchanged at the default framerate and become correct
+at every other one.
+
+**Trigger migration was wider than expected.** Rewriting BACK/GUIDE bindings had
+to cover the spell bar's own persisted `int[][]` as well as `HotkeyBinding`.
+Counter bar and script hotkeys needed nothing, as both read `HotkeyBinding`.
+
+**Analog movement speed is not achievable.** UO's movement protocol has only walk
+and run, so stick magnitude can drive the walk/run threshold and nothing finer.
+
 ## Design Principles
 
 **The pointer is the floor; selection is the accelerator.**
