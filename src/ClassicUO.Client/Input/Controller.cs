@@ -58,6 +58,13 @@ namespace ClassicUO.Input
 
         private static bool _hadConnectedPad;
 
+        // Rescanning every slot every frame costs a GetState per slot for anyone running with
+        // controller support on and no pad plugged in, which is the default. Hot-plug does not
+        // need frame accuracy.
+        private const uint RESCAN_INTERVAL_MS = 1000;
+
+        private static uint _nextRescanTicks;
+
         /// <summary>
         /// State of the active pad, re-scanning the other slots when it goes away.
         /// </summary>
@@ -75,6 +82,13 @@ namespace ClassicUO.Input
 
                 return state;
             }
+
+            if (Time.Ticks < _nextRescanTicks)
+            {
+                return state;
+            }
+
+            _nextRescanTicks = Time.Ticks + RESCAN_INTERVAL_MS;
 
             for (int i = 0; i < MAX_PLAYER_INDEX; i++)
             {
