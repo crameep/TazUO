@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -305,11 +305,7 @@ public class SpellBarManager
         enabled = true;
     }
 
-    /// <summary>
-    /// Rewrites spell bar slots that stored a trigger as the BACK / GUIDE button onto the
-    /// dedicated trigger identifiers, so bindings made before triggers became real axes
-    /// keep firing.
-    /// </summary>
+    /// <summary>Rewrites slots that stored a trigger as BACK/GUIDE onto the dedicated trigger ids.</summary>
     private static void MigrateLegacyTriggerBindings()
     {
         int[][] slots = spellBarSettings?.ControllerButtons;

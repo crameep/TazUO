@@ -26,22 +26,11 @@ namespace ClassicUO.Input
         public static bool Button_LeftStick { get; private set; }
         public static bool Button_RightStick { get; private set; }
 
-        /// <summary>
-        /// Synthetic button identifier for the left trigger.
-        /// </summary>
-        /// <remarks>
-        /// SDL reports triggers as axes, not buttons, so binding one requires an identifier
-        /// that fits in <see cref="SDL.SDL_GamepadButton"/>. Triggers previously borrowed
-        /// <c>BACK</c> and <c>GUIDE</c>, which works only because the trigger axis indices (4
-        /// and 5) happen to equal those button indices — at the cost of making Back and Guide
-        /// unbindable, since a real press of either was indistinguishable from a trigger pull.
-        /// These values sit above every real button (the highest is <c>MISC6</c> at 25) so
-        /// there is no collision. See <see cref="MigrateLegacyTriggerButton"/> for how
-        /// existing profiles are carried across.
-        /// </remarks>
+        // Synthetic button ids for the triggers, which SDL reports as axes rather than buttons.
+        // Sits above every real button (highest is MISC6 at 25) so bindings cannot collide.
+        // Triggers previously borrowed BACK and GUIDE, which worked only because the trigger axis
+        // indices happen to equal those button indices, and made Back and Guide unbindable.
         public const SDL.SDL_GamepadButton LeftTriggerButton = (SDL.SDL_GamepadButton)200;
-
-        /// <summary>Synthetic button identifier for the right trigger. See <see cref="LeftTriggerButton"/>.</summary>
         public const SDL.SDL_GamepadButton RightTriggerButton = (SDL.SDL_GamepadButton)201;
 
         /// <summary>Left trigger travel, 0..1.</summary>
@@ -50,17 +39,11 @@ namespace ClassicUO.Input
         /// <summary>Right trigger travel, 0..1.</summary>
         public static float RightTrigger { get; private set; }
 
-        /// <summary>Travel at which an unpressed trigger becomes pressed.</summary>
         private const float TRIGGER_PRESS_THRESHOLD = 0.65f;
 
-        /// <summary>
-        /// Travel at which a pressed trigger releases. Deliberately lower than the press
-        /// threshold: a single threshold makes a trigger held near the boundary chatter
-        /// between down and up every frame.
-        /// </summary>
+        // Lower than the press threshold; a single threshold makes a trigger held near it chatter.
         private const float TRIGGER_RELEASE_THRESHOLD = 0.35f;
 
-        /// <summary>Largest magnitude SDL reports for an axis.</summary>
         private const float AXIS_MAX = 32767f;
 
         public static Dictionary<SDL.SDL_GamepadButton, bool> ButtonStates = new();
@@ -76,17 +59,7 @@ namespace ClassicUO.Input
 
         public static void OnButtonUp(SDL.SDL_GamepadButtonEvent e) => SetButtonState((SDL.SDL_GamepadButton)e.button, false);
 
-        /// <summary>
-        /// Records analog trigger travel and reports whether that crossed a digital threshold.
-        /// </summary>
-        /// <param name="axis">The axis that moved; anything other than a trigger is ignored.</param>
-        /// <param name="rawValue">Raw SDL axis value.</param>
-        /// <param name="button">The synthetic trigger button whose state changed.</param>
-        /// <param name="pressed">The new digital state.</param>
-        /// <returns>
-        /// True when the digital state changed and the caller should dispatch a button event.
-        /// Analog travel is always recorded regardless of the return value.
-        /// </returns>
+        /// <summary>Records analog trigger travel; returns true when the debounced digital state changed.</summary>
         public static bool TryUpdateTrigger(SDL.SDL_GamepadAxis axis, short rawValue, out SDL.SDL_GamepadButton button, out bool pressed)
         {
             bool isLeft = axis == SDL.SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER;
@@ -134,15 +107,8 @@ namespace ClassicUO.Input
             return true;
         }
 
-        /// <summary>
-        /// Rewrites a persisted binding that used <c>BACK</c> or <c>GUIDE</c> as a trigger
-        /// stand-in onto the dedicated trigger identifiers.
-        /// </summary>
-        /// <remarks>
-        /// Safe to apply unconditionally to saved data: before this change a real Back or
-        /// Guide press was consumed by the trigger workaround and so could never be bound
-        /// deliberately, which means any stored occurrence of either must have meant a trigger.
-        /// </remarks>
+        // Rewrites bindings that stored a trigger as BACK/GUIDE. Safe unconditionally: those
+        // buttons were consumed by the old workaround so could never have been bound deliberately.
         public static SDL.SDL_GamepadButton MigrateLegacyTriggerButton(SDL.SDL_GamepadButton button) => button switch
         {
             SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_BACK => LeftTriggerButton,
@@ -150,7 +116,7 @@ namespace ClassicUO.Input
             _ => button
         };
 
-        /// <summary>Applies <see cref="MigrateLegacyTriggerButton"/> across an array, in place.</summary>
+        /// <summary>Applies the trigger migration across an array, in place.</summary>
         public static SDL.SDL_GamepadButton[] MigrateLegacyTriggerButtons(SDL.SDL_GamepadButton[] buttons)
         {
             if (buttons == null)

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -285,8 +285,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
             MouseButton = (MouseButtonType)dto.MouseButton,
             WheelScroll = dto.WheelScroll,
             WheelUp = dto.WheelUp,
-            // Triggers used to be persisted as the BACK / GUIDE buttons; rewrite them onto the
-            // dedicated trigger identifiers so existing bindings keep firing.
+            // Triggers were persisted as BACK/GUIDE; rewrite onto the dedicated trigger ids.
             ControllerButtons = dto.ControllerButtons == null
                 ? null
                 : Controller.MigrateLegacyTriggerButtons(dto.ControllerButtons.Select(x => (SDL.SDL_GamepadButton)x).ToArray())

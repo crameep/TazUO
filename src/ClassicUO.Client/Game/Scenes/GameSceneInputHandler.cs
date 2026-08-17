@@ -112,9 +112,8 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            // Radial deadzone, so the dead region is a circle and diagonals are treated the
-            // same as cardinals. The result is rescaled to 0..1 across the live range, which
-            // is what the run threshold is measured against.
+            // Radial, so diagonals and cardinals are treated alike; result is rescaled to 0..1
+            // across the live range, which is what the run threshold measures against.
             Vector2 dir = ControllerAxis.ApplyRadialDeadzone(
                 gamePadState.ThumbSticks.Left,
                 profile.ControllerDeadzoneInner,

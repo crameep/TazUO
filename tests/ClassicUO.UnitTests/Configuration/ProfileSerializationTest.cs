@@ -88,4 +88,45 @@ public class ProfileSerializationTest
         Assert.Equal(original.CombatMaxEvents, restored.CombatMaxEvents);
         Assert.Equal(original.CombatExportPath, restored.CombatExportPath);
     }
+
+    [Fact]
+    public void ControllerTuning_RoundTripsThroughProfileJson()
+    {
+        Profile original = new()
+        {
+            ControllerDeadzoneInner = 0.31f,
+            ControllerDeadzoneOuter = 0.87f,
+            ControllerCursorCurve = 2.4f,
+            ControllerRunThreshold = 0.62f
+        };
+
+        string json = JsonSerializer.Serialize(original, ProfileJsonContext.DefaultToUse.Profile);
+
+        // Same isolation as above: a full profile deserialize touches UI setters needing graphics.
+        string[] propertyNames =
+        [
+            nameof(Profile.ControllerDeadzoneInner),
+            nameof(Profile.ControllerDeadzoneOuter),
+            nameof(Profile.ControllerCursorCurve),
+            nameof(Profile.ControllerRunThreshold)
+        ];
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        Dictionary<string, JsonElement> customSettings = new();
+        foreach (string propertyName in propertyNames)
+        {
+            string jsonName = ProfileJsonContext.DefaultToUse.Options.PropertyNamingPolicy.ConvertName(propertyName);
+            Assert.True(document.RootElement.TryGetProperty(jsonName, out JsonElement value));
+            customSettings.Add(jsonName, value.Clone());
+        }
+
+        string customSettingsJson = JsonSerializer.Serialize(customSettings);
+        Profile restored = JsonSerializer.Deserialize(customSettingsJson, ProfileJsonContext.DefaultToUse.Profile);
+
+        Assert.NotNull(restored);
+        Assert.Equal(original.ControllerDeadzoneInner, restored.ControllerDeadzoneInner);
+        Assert.Equal(original.ControllerDeadzoneOuter, restored.ControllerDeadzoneOuter);
+        Assert.Equal(original.ControllerCursorCurve, restored.ControllerCursorCurve);
+        Assert.Equal(original.ControllerRunThreshold, restored.ControllerRunThreshold);
+    }
 }

@@ -187,28 +187,29 @@ namespace ClassicUO.Input
 
         public static int ControllerSensitivity { get; set; } = 10;
 
-        /// <summary>
-        /// Frames per second the legacy per-frame sensitivity value was implicitly tuned
-        /// against (<see cref="Configuration.Settings.FPS"/> defaults to 60).
-        /// </summary>
-        /// <remarks>
-        /// <see cref="ControllerSensitivity"/> is serialized in user profiles and used to mean
-        /// "pixels per frame", so its effective speed varied with framerate. Multiplying by
-        /// this constant reinterprets the stored value as pixels per second, which keeps the
-        /// familiar feel at 60 FPS while making it framerate independent everywhere else. This
-        /// avoids having to migrate the persisted value.
-        /// </remarks>
+        // ControllerSensitivity is persisted meaning "pixels per frame", so its speed varied with
+        // framerate. Scaling by the default 60 FPS reinterprets it as pixels per second, keeping
+        // the familiar feel at 60 without having to migrate the stored value.
         private const float SensitivityReferenceFps = 60f;
 
-        /// <summary>
-        /// Fractional pixels carried between frames.
-        /// </summary>
-        /// <remarks>
-        /// Cursor position is integral, but delta-time motion routinely produces sub-pixel
-        /// steps at low stick deflection. Truncating each frame would silently discard them
-        /// and the cursor would refuse to move slowly at all.
-        /// </remarks>
-        private static Vector2 _controllerSubPixel;
+        /// <summary>Which device last moved the pointer.</summary>
+        public enum PointerSource
+        {
+            Mouse,
+            Controller
+        }
+
+        // Whichever device moved most recently wins. Without this the two fight every frame: the
+        // stick advances the cursor and the stationary OS position immediately drags it back.
+        public static PointerSource ActiveSource { get; private set; } = PointerSource.Mouse;
+
+        // Client-owned cursor, in WINDOW coordinates. Float so sub-pixel motion accumulates rather
+        // than truncating away. Window coords deliberately: Position is rescaled to back buffer
+        // coords each Update, so persisting a scaled value would reapply the ratio and run away.
+        private static Vector2 _virtualCursor;
+
+        /// <summary>Last OS cursor position seen, used to detect real mouse movement.</summary>
+        private static Point _lastOsPosition;
 
         private static bool _isWarpingMouse = false;
 
@@ -229,9 +230,34 @@ namespace ClassicUO.Input
             else
             {
                 SDL.SDL_GetMouseState(out float x, out float y);
-                Position.X = (int)x;
-                Position.Y = (int)y;
-                UpdateControllerCursor();
+
+                Point osPosition = new((int)x, (int)y);
+                Vector2 stick = ReadControllerStick();
+
+                if (osPosition != _lastOsPosition)
+                {
+                    _lastOsPosition = osPosition;
+                    ActiveSource = PointerSource.Mouse;
+                }
+                else if (stick != Vector2.Zero)
+                {
+                    ActiveSource = PointerSource.Controller;
+                }
+
+                if (ActiveSource == PointerSource.Controller)
+                {
+                    AdvanceVirtualCursor(stick);
+                }
+                else
+                {
+                    // Track the real pointer so handing control back to the pad does not
+                    // teleport the cursor.
+                    _virtualCursor.X = osPosition.X;
+                    _virtualCursor.Y = osPosition.Y;
+                }
+
+                Position.X = (int)_virtualCursor.X;
+                Position.Y = (int)_virtualCursor.Y;
             }
 
             Position.X = (int)((double)Position.X * Client.Game.GraphicManager.PreferredBackBufferWidth / Client.Game.Window.ClientBounds.Width);
@@ -246,69 +272,63 @@ namespace ClassicUO.Input
                 Moved?.Invoke(null, new MouseMovedEventArgs(previous, Position));
         }
 
-        /// <summary>
-        /// Advances the cursor from the right thumbstick, framerate independently.
-        /// </summary>
-        private static void UpdateControllerCursor()
+        /// <summary>Reads the right thumbstick, deadzoned and shaped, or zero when unavailable.</summary>
+        private static Vector2 ReadControllerStick()
         {
             Profile profile = ProfileManager.CurrentProfile;
 
             if (profile == null || !profile.ControllerEnabled)
             {
-                _controllerSubPixel = Vector2.Zero;
-
-                return;
+                return Vector2.Zero;
             }
 
             GamePadState gamePadState = GamePad.GetState(PlayerIndex.One);
 
             if (!gamePadState.IsConnected)
             {
-                _controllerSubPixel = Vector2.Zero;
-
-                return;
+                return Vector2.Zero;
             }
 
-            Vector2 stick = ControllerAxis.Process(
+            return ControllerAxis.Process(
                 gamePadState.ThumbSticks.Right,
                 profile.ControllerDeadzoneInner,
                 profile.ControllerDeadzoneOuter,
                 profile.ControllerCursorCurve
             );
+        }
 
-            if (stick == Vector2.Zero)
-            {
-                // Drop the carried fraction so a released stick cannot nudge the cursor on
-                // the next frame it is touched.
-                _controllerSubPixel = Vector2.Zero;
-
-                return;
-            }
-
+        /// <summary>Advances the client-owned cursor from the stick, clamped to the window.</summary>
+        private static void AdvanceVirtualCursor(Vector2 stick)
+        {
             float pixelsPerSecond = ControllerSensitivity * SensitivityReferenceFps;
 
             // Thumbstick Y is positive up, screen Y is positive down.
-            _controllerSubPixel.X += stick.X * pixelsPerSecond * Time.Delta;
-            _controllerSubPixel.Y -= stick.Y * pixelsPerSecond * Time.Delta;
+            _virtualCursor.X += stick.X * pixelsPerSecond * Time.Delta;
+            _virtualCursor.Y -= stick.Y * pixelsPerSecond * Time.Delta;
 
-            int stepX = (int)_controllerSubPixel.X;
-            int stepY = (int)_controllerSubPixel.Y;
+            Rectangle bounds = Client.Game.Window.ClientBounds;
 
-            if (stepX == 0 && stepY == 0)
+            _virtualCursor.X = Math.Clamp(_virtualCursor.X, 0f, Math.Max(0f, bounds.Width - 1f));
+            _virtualCursor.Y = Math.Clamp(_virtualCursor.Y, 0f, Math.Max(0f, bounds.Height - 1f));
+
+            // With the mouse on its own thread the client hands the pointer graphic to SDL, so the
+            // OS cursor is what the player sees and must be moved to match. Otherwise the client
+            // draws its own cursor at Position and no warp is needed.
+            if (!Settings.GlobalSettings.RunMouseInASeparateThread)
             {
-                // Sub-pixel motion this frame; keep accumulating rather than truncating it away.
                 return;
             }
 
-            _controllerSubPixel.X -= stepX;
-            _controllerSubPixel.Y -= stepY;
-
-            Position.X += stepX;
-            Position.Y += stepY;
+            int warpX = (int)_virtualCursor.X;
+            int warpY = (int)_virtualCursor.Y;
 
             _isWarpingMouse = true;
-            SDL.SDL_WarpMouseInWindow(Client.Game.Window.Handle, Position.X, Position.Y);
+            SDL.SDL_WarpMouseInWindow(Client.Game.Window.Handle, warpX, warpY);
             _isWarpingMouse = false;
+
+            // Keep the baseline in step, or this warp reads back as physical mouse movement next
+            // frame and yanks control away from the pad.
+            _lastOsPosition = new Point(warpX, warpY);
         }
     }
 }
