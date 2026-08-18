@@ -5,6 +5,7 @@ using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps;
@@ -1092,21 +1093,10 @@ namespace ClassicUO
                     UIManager.KeyboardFocusControl?.InvokeControllerButtonDown((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
                     Scene.OnControllerButtonDown(sdlEvent->gbutton);
 
-                    if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_RIGHT_STICK)
-                    {
-                        SDL_Event e = new();
-                        e.type = (uint)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN;
-                        e.button.button = (byte)MouseButtonType.Left;
-                        SDL_PushEvent(ref e);
-                    }
-                    else if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_STICK)
-                    {
-                        SDL_Event e = new();
-                        e.type = (uint)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN;
-                        e.button.button = (byte)MouseButtonType.Right;
-                        SDL_PushEvent(ref e);
-                    }
-                    else if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_START && UO.World.InGame)
+                    PushControllerClickDown((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
+                    HandleControllerUINavigation((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
+
+                    if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_START && UO.World.InGame)
                     {
                         Gump g = UIManager.GetGump<ModernOptionsGump>();
                         if (g == null)
@@ -1129,20 +1119,7 @@ namespace ClassicUO
                     UIManager.KeyboardFocusControl?.InvokeControllerButtonUp((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
                     Scene.OnControllerButtonUp(sdlEvent->gbutton);
 
-                    if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_RIGHT_STICK)
-                    {
-                        SDL_Event e = new();
-                        e.type = (uint)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP;
-                        e.button.button = (byte)MouseButtonType.Left;
-                        SDL_PushEvent(ref e);
-                    }
-                    else if (sdlEvent->gbutton.button == (byte)SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_STICK)
-                    {
-                        SDL_Event e = new();
-                        e.type = (uint)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP;
-                        e.button.button = (byte)MouseButtonType.Right;
-                        SDL_PushEvent(ref e);
-                    }
+                    PushControllerClickUp((SDL.SDL_GamepadButton)sdlEvent->gbutton.button);
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION when Scene is not null:
@@ -1175,17 +1152,112 @@ namespace ClassicUO
                         {
                             UIManager.KeyboardFocusControl?.InvokeControllerButtonDown(triggerButton);
                             Scene.OnControllerButtonDown(triggerEvent);
+                            PushControllerClickDown(triggerButton);
                         }
                         else
                         {
                             UIManager.KeyboardFocusControl?.InvokeControllerButtonUp(triggerButton);
                             Scene.OnControllerButtonUp(triggerEvent);
+                            PushControllerClickUp(triggerButton);
                         }
                     }
                     break;
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// True when <paramref name="button"/> triggers the bound action. Pointer control has to keep
+        /// working where the hotkey registry cannot help: it is only populated once a game scene
+        /// loads, and polling it would also let a global hotkey disable strand a pad-only player with
+        /// no way to click. So an unregistered action falls back to its default button.
+        /// </summary>
+        private static bool MatchesControllerAction(string id, SDL.SDL_GamepadButton button, SDL.SDL_GamepadButton fallback)
+        {
+            SDL.SDL_GamepadButton[] bound = HotKeys.Get(id)?.Binding?.ControllerButtons;
+
+            if (bound == null || bound.Length == 0)
+            {
+                return button == fallback;
+            }
+
+            return Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: false);
+        }
+
+        // A focused control (a text box, or a gump that drives its own list with the d-pad) owns
+        // the d-pad while it has focus, so pointer navigation stays out of its way.
+        private static void HandleControllerUINavigation(SDL.SDL_GamepadButton button)
+        {
+            if (UIManager.KeyboardFocusControl != null)
+            {
+                return;
+            }
+
+            if (MatchesControllerAction(HotKeyRegistrar.ControllerUiUpId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP))
+            {
+                ControllerUINavigator.Navigate(NavDirection.Up);
+            }
+            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiDownId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN))
+            {
+                ControllerUINavigator.Navigate(NavDirection.Down);
+            }
+            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiLeftId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT))
+            {
+                ControllerUINavigator.Navigate(NavDirection.Left);
+            }
+            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiRightId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
+            {
+                ControllerUINavigator.Navigate(NavDirection.Right);
+            }
+        }
+
+        // Which controller button is currently holding a synthesised mouse button down, so the
+        // matching release can be sent even if the binding changes while it is held.
+        private SDL.SDL_GamepadButton? _clickSourceButton;
+        private MouseButtonType _clickSourceType;
+
+        private void PushControllerClickDown(SDL.SDL_GamepadButton button)
+        {
+            if (_clickSourceButton.HasValue)
+            {
+                return;
+            }
+
+            if (MatchesControllerAction(HotKeyRegistrar.ControllerClickLeftId, button, Controller.RightTriggerButton))
+            {
+                _clickSourceType = MouseButtonType.Left;
+            }
+            else if (MatchesControllerAction(HotKeyRegistrar.ControllerClickRightId, button, Controller.LeftTriggerButton))
+            {
+                _clickSourceType = MouseButtonType.Right;
+            }
+            else
+            {
+                return;
+            }
+
+            _clickSourceButton = button;
+            PushMouseButton(SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN, _clickSourceType);
+        }
+
+        private void PushControllerClickUp(SDL.SDL_GamepadButton button)
+        {
+            if (_clickSourceButton != button)
+            {
+                return;
+            }
+
+            _clickSourceButton = null;
+            PushMouseButton(SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP, _clickSourceType);
+        }
+
+        private static void PushMouseButton(SDL_EventType type, MouseButtonType button)
+        {
+            SDL_Event e = new();
+            e.type = (uint)type;
+            e.button.button = (byte)button;
+            SDL_PushEvent(ref e);
         }
 
         protected override void OnExiting(object sender, EventArgs args)

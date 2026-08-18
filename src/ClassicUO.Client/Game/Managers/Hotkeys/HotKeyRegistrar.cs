@@ -1,4 +1,5 @@
 ﻿using ClassicUO.Configuration;
+using ClassicUO.Input;
 using SDL3;
 
 namespace ClassicUO.Game.Managers.Hotkeys
@@ -44,6 +45,12 @@ namespace ClassicUO.Game.Managers.Hotkeys
         public const string ControllerTargetFilterId = "controller.target.filter";
         public const string ControllerTargetConfirmId = "controller.target.confirm";
         public const string ControllerTargetCancelId = "controller.target.cancel";
+        public const string ControllerClickLeftId = "controller.click.left";
+        public const string ControllerClickRightId = "controller.click.right";
+        public const string ControllerUiUpId = "controller.ui.up";
+        public const string ControllerUiDownId = "controller.ui.down";
+        public const string ControllerUiLeftId = "controller.ui.left";
+        public const string ControllerUiRightId = "controller.ui.right";
         #endregion
 
         #region World interaction
@@ -78,9 +85,19 @@ namespace ClassicUO.Game.Managers.Hotkeys
             // the global hotkey disable.
             ControllerAction(ControllerTargetPrevId, "Select previous target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, category);
             ControllerAction(ControllerTargetNextId, "Select next target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, category);
-            ControllerAction(ControllerTargetFilterId, "Cycle target filter", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP, category);
+            // Not Back or Guide: the legacy trigger migration rewrites those on every load. The stick
+            // clicks are free now that clicking is a rebindable action rather than hardwired.
+            ControllerAction(ControllerTargetFilterId, "Cycle target filter", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_STICK, category);
             ControllerAction(ControllerTargetConfirmId, "Use or attack selected target", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_SOUTH, category);
             ControllerAction(ControllerTargetCancelId, "Cancel target or selection", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_EAST, category);
+
+            ControllerAction(ControllerClickLeftId, "Left click", Controller.RightTriggerButton, category);
+            ControllerAction(ControllerClickRightId, "Right click", Controller.LeftTriggerButton, category);
+
+            ControllerAction(ControllerUiUpId, "Move UI focus up", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP, category);
+            ControllerAction(ControllerUiDownId, "Move UI focus down", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN, category);
+            ControllerAction(ControllerUiLeftId, "Move UI focus left", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT, category);
+            ControllerAction(ControllerUiRightId, "Move UI focus right", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT, category);
         }
 
         private static void ControllerAction(string id, string name, SDL.SDL_GamepadButton button, string category)
