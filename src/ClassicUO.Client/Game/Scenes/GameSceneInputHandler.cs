@@ -135,7 +135,7 @@ namespace ClassicUO.Game.Scenes
         }
 
         /// <summary>Dispatches controller target-selection bindings; true when one consumed the press.</summary>
-        private bool HandleControllerTargeting()
+        private bool HandleControllerTargeting(SDL.SDL_GamepadButton button)
         {
             Profile profile = ProfileManager.CurrentProfile;
 
@@ -144,40 +144,37 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            // Matching is deliberately not exact: on a pad the player is often already holding
-            // something, and an exact match would silently swallow the press.
-
-            // A focused control gets the same button through InvokeControllerButtonDown, so leave
-            // it alone rather than acting twice on one press.
-            if (UIManager.KeyboardFocusControl != null)
+            // Only a control actually taking typed input should hold these buttons; a text box
+            // ignores the bumpers anyway, and gating on mere focus disabled selection entirely.
+            if (ControllerInput.TextEntryHasFocus())
             {
                 return false;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetNextId))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerTargetNextId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER))
             {
                 ControllerTargets.CycleTarget(1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetPrevId))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerTargetPrevId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_SHOULDER))
             {
                 ControllerTargets.CycleTarget(-1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetFilterId))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerTargetFilterId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_LEFT_STICK))
             {
                 ControllerTargets.CycleFilter(1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetConfirmId))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerTargetConfirmId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_SOUTH))
             {
                 return ControllerTargets.ConfirmSelection();
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetCancelId))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerTargetCancelId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_EAST))
             {
                 return ControllerTargets.Cancel();
             }
@@ -1781,7 +1778,7 @@ namespace ClassicUO.Game.Scenes
                 return;
             }
 
-            if (HandleControllerTargeting())
+            if (HandleControllerTargeting((SDL.SDL_GamepadButton)e.button))
             {
                 return;
             }

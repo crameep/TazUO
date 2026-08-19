@@ -292,6 +292,9 @@ namespace ClassicUO.Game.UI
 
             }
         }
+        // Drives its own list with the d-pad, so pointer navigation must not also move on it.
+        public override bool HandlesControllerDPad => true;
+
         protected override void OnControllerButtonDown(SDL.SDL_GamepadButton button)
         {
             base.OnControllerButtonDown(button);

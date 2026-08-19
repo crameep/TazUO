@@ -31,7 +31,17 @@ namespace ClassicUO.Game.Managers
             }
 
             _candidates.Clear();
-            Collect(scope, _candidates);
+
+            // Myra windows (options, assistant) keep their own widget tree rather than IGui
+            // children, so walking Children finds nothing in them.
+            if (scope is UI.Controls.MyraControl myra)
+            {
+                myra.CollectControllerTargets(_candidates);
+            }
+            else
+            {
+                Collect(scope, _candidates);
+            }
 
             if (_candidates.Count == 0)
             {

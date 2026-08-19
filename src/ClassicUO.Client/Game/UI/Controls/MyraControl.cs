@@ -130,6 +130,58 @@ public class MyraControl : IGui
     public bool IsFocused { get; set; }
     public bool CanBeSaved { get; set; } = false;
     public bool AcceptKeyboardInput { get; set; } = true;
+
+    /// <summary>Myra windows lay out their own widgets, which pointer navigation walks directly.</summary>
+    public virtual bool HandlesControllerDPad => false;
+
+    // Anything a click would do something with. Myra has no equivalent of AcceptMouseInput, and the
+    // button hierarchy is split between a non-generic base and a generic one, so the generic side
+    // has to be matched by walking base types.
+    private static bool IsNavigable(Myra.Graphics2D.UI.Widget widget)
+    {
+        if (widget is Myra.Graphics2D.UI.ButtonBase2
+            or Myra.Graphics2D.UI.TextBox
+            or Myra.Graphics2D.UI.Slider
+            or Myra.Graphics2D.UI.SpinButton
+            or Myra.Graphics2D.UI.ComboBox
+            or Myra.Graphics2D.UI.ListBox)
+        {
+            return true;
+        }
+
+        for (System.Type t = widget.GetType(); t != null; t = t.BaseType)
+        {
+            if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Myra.Graphics2D.UI.ButtonBase<>))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Screen rectangles of the widgets controller focus can move between.</summary>
+    internal void CollectControllerTargets(System.Collections.Generic.List<Microsoft.Xna.Framework.Rectangle> results)
+    {
+        foreach (Myra.Graphics2D.UI.Widget widget in _rootWindow.GetChildren(recursive: true))
+        {
+            if (!widget.Visible || !widget.Enabled || !IsNavigable(widget))
+            {
+                continue;
+            }
+
+            Microsoft.Xna.Framework.Rectangle bounds = widget.Bounds;
+
+            if (bounds.Width < 4 || bounds.Height < 4)
+            {
+                continue;
+            }
+
+            Microsoft.Xna.Framework.Point origin = widget.ToGlobal(Microsoft.Xna.Framework.Point.Zero);
+
+            results.Add(new Microsoft.Xna.Framework.Rectangle(origin.X, origin.Y, bounds.Width, bounds.Height));
+        }
+    }
     public bool AcceptMouseInput { get; set; } = true;
     public bool HandlesKeyboardFocus { get; set; }
     public bool IsDisposed { get; private set; } = false;

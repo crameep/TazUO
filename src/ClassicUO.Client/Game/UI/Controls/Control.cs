@@ -115,6 +115,9 @@ namespace ClassicUO.Game.UI.Controls
 
     public bool HasTooltip => /*World.ClientFlags.TooltipsEnabled &&*/ Tooltip != null;
 
+    /// <inheritdoc />
+    public virtual bool HandlesControllerDPad => false;
+
     public virtual bool AcceptKeyboardInput
     {
         get => IsEnabled && !IsDisposed && IsVisible && _acceptKeyboardInput;

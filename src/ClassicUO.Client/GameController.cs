@@ -1167,46 +1167,26 @@ namespace ClassicUO
             return true;
         }
 
-        /// <summary>
-        /// True when <paramref name="button"/> triggers the bound action. Pointer control has to keep
-        /// working where the hotkey registry cannot help: it is only populated once a game scene
-        /// loads, and polling it would also let a global hotkey disable strand a pad-only player with
-        /// no way to click. So an unregistered action falls back to its default button.
-        /// </summary>
-        private static bool MatchesControllerAction(string id, SDL.SDL_GamepadButton button, SDL.SDL_GamepadButton fallback)
-        {
-            SDL.SDL_GamepadButton[] bound = HotKeys.Get(id)?.Binding?.ControllerButtons;
-
-            if (bound == null || bound.Length == 0)
-            {
-                return button == fallback;
-            }
-
-            return Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: false);
-        }
-
-        // A focused control (a text box, or a gump that drives its own list with the d-pad) owns
-        // the d-pad while it has focus, so pointer navigation stays out of its way.
         private static void HandleControllerUINavigation(SDL.SDL_GamepadButton button)
         {
-            if (UIManager.KeyboardFocusControl != null)
+            if (ControllerInput.DPadIsClaimed())
             {
                 return;
             }
 
-            if (MatchesControllerAction(HotKeyRegistrar.ControllerUiUpId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerUiUpId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP))
             {
                 ControllerUINavigator.Navigate(NavDirection.Up);
             }
-            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiDownId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN))
+            else if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerUiDownId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN))
             {
                 ControllerUINavigator.Navigate(NavDirection.Down);
             }
-            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiLeftId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT))
+            else if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerUiLeftId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT))
             {
                 ControllerUINavigator.Navigate(NavDirection.Left);
             }
-            else if (MatchesControllerAction(HotKeyRegistrar.ControllerUiRightId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
+            else if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerUiRightId, button, SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
             {
                 ControllerUINavigator.Navigate(NavDirection.Right);
             }
@@ -1224,11 +1204,11 @@ namespace ClassicUO
                 return;
             }
 
-            if (MatchesControllerAction(HotKeyRegistrar.ControllerClickLeftId, button, Controller.RightTriggerButton))
+            if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerClickLeftId, button, Controller.RightTriggerButton))
             {
                 _clickSourceType = MouseButtonType.Left;
             }
-            else if (MatchesControllerAction(HotKeyRegistrar.ControllerClickRightId, button, Controller.LeftTriggerButton))
+            else if (HotKeyRegistrar.ControllerActionPressed(HotKeyRegistrar.ControllerClickRightId, button, Controller.LeftTriggerButton))
             {
                 _clickSourceType = MouseButtonType.Right;
             }

@@ -12,6 +12,9 @@ public interface IGui
 {
     bool IsTopMost { get; set; }
     bool AcceptKeyboardInput { get; set; }
+
+    /// <summary>True when this control drives its own d-pad handling, so pointer navigation skips it.</summary>
+    bool HandlesControllerDPad { get; }
     bool AcceptMouseInput { get; set; }
     bool HandlesKeyboardFocus { get; set; }
     bool IsFocused { get; set; }

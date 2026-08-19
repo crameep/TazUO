@@ -76,6 +76,30 @@ namespace ClassicUO.Game.Managers.Hotkeys
             RegisterController();
         }
 
+
+        /// <summary>
+        /// True when <paramref name="button"/> triggers the bound controller action.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not <see cref="HotKeys.IsPressed"/>. The registry is only populated once a
+        /// game scene loads, so polling it leaves the pad dead at the login screen, and it honours
+        /// the global hotkey disable, which would strand a pad-only player with no way to click or
+        /// navigate. An unregistered action falls back to its default button. Matching is not exact
+        /// either: on a pad the player is often already holding something, and an exact match would
+        /// silently swallow the press.
+        /// </remarks>
+        public static bool ControllerActionPressed(string id, SDL.SDL_GamepadButton button, SDL.SDL_GamepadButton fallback)
+        {
+            SDL.SDL_GamepadButton[] bound = HotKeys.Get(id)?.Binding?.ControllerButtons;
+
+            if (bound == null || bound.Length == 0)
+            {
+                return button == fallback;
+            }
+
+            return System.Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: false);
+        }
+
         private static void RegisterController()
         {
             const string category = ControllerCategory;
