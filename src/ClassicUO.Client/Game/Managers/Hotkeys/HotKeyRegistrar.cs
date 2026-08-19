@@ -98,6 +98,40 @@ namespace ClassicUO.Game.Managers.Hotkeys
             ControllerAction(ControllerUiDownId, "Move UI focus down", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN, category);
             ControllerAction(ControllerUiLeftId, "Move UI focus left", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT, category);
             ControllerAction(ControllerUiRightId, "Move UI focus right", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT, category);
+
+            ReleaseDpadFromTargetFilter();
+        }
+
+
+        /// <summary>
+        /// Frees the d-pad on profiles saved before it drove UI focus.
+        /// </summary>
+        /// <remarks>
+        /// The filter cycle used to default to d-pad up, and every registered hotkey is persisted
+        /// whether or not the player chose it, so the saved binding would otherwise be restored on
+        /// top of the new default and fire alongside every focus move.
+        /// </remarks>
+        private static void ReleaseDpadFromTargetFilter()
+        {
+            HotKeyEntry entry = HotKeys.Get(ControllerTargetFilterId);
+            SDL.SDL_GamepadButton[] buttons = entry?.Binding?.ControllerButtons;
+
+            if (buttons == null)
+            {
+                return;
+            }
+
+            foreach (SDL.SDL_GamepadButton button in buttons)
+            {
+                if (button is SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_UP
+                    or SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN
+                    or SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT
+                    or SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                {
+                    entry.ResetToDefault();
+                    return;
+                }
+            }
         }
 
         private static void ControllerAction(string id, string name, SDL.SDL_GamepadButton button, string category)

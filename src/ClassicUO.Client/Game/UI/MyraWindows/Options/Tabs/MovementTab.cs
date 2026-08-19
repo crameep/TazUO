@@ -122,6 +122,13 @@ public static class MovementTab
                         3f,
                         new Accessor<float>(() => profile.ControllerCursorCurve, f => profile.ControllerCursorCurve = f),
                         search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_curve"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_sensitivity")])
+                    ),
+                    // Controller buttons are bound in the assistant alongside every other hotkey.
+                    // Players look for them here, so point at them rather than duplicate the list.
+                    Option.Button(
+                        TazLang.Get("mog_movementtab_controller_bindings"),
+                        () => AssistantWindow.Show(AssistantWindow.HotkeysTabName),
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_bindings"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_hotkeys")])
                     )
                 ).WithSearch(new SearchMetadata(TazLang.Get("mog_movementtab_controller_label"), Tags: [TazLang.Get("mog_kw_movement")], Keywords: [TazLang.Get("mog_kw_controller")]))
             )

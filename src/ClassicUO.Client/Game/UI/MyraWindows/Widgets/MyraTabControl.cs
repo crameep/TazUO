@@ -64,6 +64,19 @@ public class MyraTabControl : TabControl
             SelectedIndex = 0;
     }
 
+    /// <summary>Selects the tab with this header text; does nothing if there is no such tab.</summary>
+    public void SelectTab(string name)
+    {
+        for (int i = 0; i < Items.Count; i++)
+        {
+            if (string.Equals(Items[i].Text, name, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
     private void OnTabSelected(object? sender, EventArgs e)
     {
         if (SelectedItem == null || SelectedItem.Content != null) return;
