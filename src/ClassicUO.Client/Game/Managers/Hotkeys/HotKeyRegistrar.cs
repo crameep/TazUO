@@ -51,6 +51,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
         public const string ControllerUiDownId = "controller.ui.down";
         public const string ControllerUiLeftId = "controller.ui.left";
         public const string ControllerUiRightId = "controller.ui.right";
+        public const string ControllerCategory = "Controller";
         #endregion
 
         #region World interaction
@@ -77,7 +78,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
 
         private static void RegisterController()
         {
-            const string category = "Controller";
+            const string category = ControllerCategory;
 
             // Bumpers and face buttons are unassigned in the stock controller scheme, so they are
             // safe defaults. A user who has bound them to a macro can rebind these in options.
