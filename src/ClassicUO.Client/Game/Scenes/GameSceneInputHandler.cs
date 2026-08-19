@@ -144,6 +144,9 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
+            // Matching is deliberately not exact: on a pad the player is often already holding
+            // something, and an exact match would silently swallow the press.
+
             // A focused control gets the same button through InvokeControllerButtonDown, so leave
             // it alone rather than acting twice on one press.
             if (UIManager.KeyboardFocusControl != null)
@@ -151,33 +154,32 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetNextId, false))
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetNextId))
             {
                 ControllerTargets.CycleTarget(1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetPrevId, false))
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetPrevId))
             {
                 ControllerTargets.CycleTarget(-1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetFilterId, false))
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetFilterId))
             {
                 ControllerTargets.CycleFilter(1);
                 return true;
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetConfirmId, false))
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetConfirmId))
             {
                 return ControllerTargets.ConfirmSelection();
             }
 
-            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetCancelId, false))
+            if (HotKeys.IsPressed(HotKeyRegistrar.ControllerTargetCancelId))
             {
-                ControllerTargets.Cancel();
-                return true;
+                return ControllerTargets.Cancel();
             }
 
             return false;

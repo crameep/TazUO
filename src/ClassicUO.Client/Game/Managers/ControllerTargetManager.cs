@@ -27,7 +27,9 @@ namespace ClassicUO.Game.Managers
         /// <summary>Currently selected entity serial, or 0.</summary>
         public uint SelectedSerial { get; private set; }
 
-        public ScanTypeObject Filter { get; private set; } = ScanTypeObject.Hostile;
+        // Mobiles rather than Hostile: a filter that finds nothing standing in town reads as a
+        // broken button, and hostiles are one press away on the filter cycle.
+        public ScanTypeObject Filter { get; private set; } = ScanTypeObject.Mobiles;
 
         public Entity Selected => SelectedSerial == 0 ? null : _world.Get(SelectedSerial);
 
@@ -61,9 +63,18 @@ namespace ClassicUO.Game.Managers
         {
             BuildCandidates();
 
+            // Silence here is indistinguishable from an unbound button, so say why nothing moved.
+            if (_candidates.Count == 0)
+            {
+                GameActions.Print(_world, $"No {DescribeFilter()} nearby to select.", Constants.HUE_WARN);
+
+                return;
+            }
+
             SelectedSerial = ControllerTargetSelection.Cycle(_candidates, SelectedSerial, direction);
 
             SnapCursorToSelection();
+            AnnounceSelection();
         }
 
         /// <summary>Switches candidate category and selects the nearest match in it.</summary>
@@ -71,6 +82,8 @@ namespace ClassicUO.Game.Managers
         {
             Filter = ControllerTargetSelection.CycleFilter(Filter, direction);
             SelectedSerial = 0;
+
+            GameActions.Print(_world, $"Target filter: {DescribeFilter()}");
 
             CycleTarget(1);
         }
@@ -108,16 +121,46 @@ namespace ClassicUO.Game.Managers
         }
 
         /// <summary>Cancels an open target cursor, otherwise clears the selection.</summary>
-        public void Cancel()
+        /// <returns>False when there was nothing to cancel, so the button can still run a macro.</returns>
+        public bool Cancel()
         {
             if (_world.TargetManager.IsTargeting)
             {
                 _world.TargetManager.CancelTarget();
 
-                return;
+                return true;
+            }
+
+            if (SelectedSerial == 0)
+            {
+                return false;
             }
 
             SelectedSerial = 0;
+
+            return true;
+        }
+
+
+        private string DescribeFilter() => Filter switch
+        {
+            ScanTypeObject.Hostile => "hostiles",
+            ScanTypeObject.Objects => "items",
+            _ => "mobiles"
+        };
+
+        private void AnnounceSelection()
+        {
+            Entity entity = Selected;
+
+            if (entity == null)
+            {
+                return;
+            }
+
+            string name = string.IsNullOrEmpty(entity.Name) ? "Unknown" : entity.Name;
+
+            GameActions.Print(_world, $"Selected: {name}");
         }
 
         private void PreselectForTargeting()
