@@ -8,6 +8,9 @@ namespace ClassicUO.Game.Managers.Hotkeys
     /// </summary>
     public sealed class HotkeysFile
     {
+        /// <summary>Schema version, so one-off migrations run once instead of on every load.</summary>
+        public int Version { get; set; }
+
         public List<HotkeyEntryDto> Entries { get; set; } = new();
     }
 

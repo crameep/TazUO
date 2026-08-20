@@ -140,6 +140,13 @@ namespace ClassicUO.Game.Managers.Hotkeys
         /// </remarks>
         private static void ReleaseDpadFromTargetFilter()
         {
+            // Only for files predating the d-pad's new role, or a deliberate d-pad binding here
+            // would be undone on every load.
+            if (!HotKeys.NeedsLegacyMigration)
+            {
+                return;
+            }
+
             HotKeyEntry entry = HotKeys.Get(ControllerTargetFilterId);
             SDL.SDL_GamepadButton[] buttons = entry?.Binding?.ControllerButtons;
 

@@ -87,6 +87,9 @@ namespace ClassicUO.Game.Managers.Hotkeys
             _saved.Clear();
 
             HotkeysFile file = ConfigurationResolver.Load<HotkeysFile>(FilePath, HotkeysJsonContext.Default.HotkeysFile);
+
+            _migrateLegacyTriggers = (file?.Version ?? 0) < CURRENT_VERSION;
+
             if (file?.Entries != null)
             {
                 foreach (HotkeyEntryDto dto in file.Entries)
@@ -132,6 +135,9 @@ namespace ClassicUO.Game.Managers.Hotkeys
         }
 
         /// <summary>Returns the registered entry for <paramref name="id"/>, or null.</summary>
+        private static SDL.SDL_GamepadButton[] MigrateButtons(SDL.SDL_GamepadButton[] buttons)
+            => _migrateLegacyTriggers ? Controller.MigrateLegacyTriggerButtons(buttons) : buttons;
+
         public static HotKeyEntry Get(string id)
         {
             _entries.TryGetValue(id, out HotKeyEntry entry);
@@ -185,7 +191,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
         /// <summary>Write the currently-registered entries to disk, pruning any stale saved ids.</summary>
         public static void Save()
         {
-            var file = new HotkeysFile();
+            var file = new HotkeysFile { Version = CURRENT_VERSION };
 
             foreach (HotKeyEntry entry in _entries.Values)
             {
@@ -276,6 +282,15 @@ namespace ClassicUO.Game.Managers.Hotkeys
             };
         }
 
+        // Bumped when a load-time migration is added; files at or above this version skip them.
+        private const int CURRENT_VERSION = 1;
+
+        // Set while loading a file older than CURRENT_VERSION.
+        private static bool _migrateLegacyTriggers;
+
+        /// <summary>True when the loaded file predates the current schema and needs migrating.</summary>
+        internal static bool NeedsLegacyMigration => _migrateLegacyTriggers;
+
         private static HotkeyBinding FromDto(HotkeyEntryDto dto) => new()
         {
             Key = (SDL.SDL_Keycode)dto.Key,
@@ -285,10 +300,11 @@ namespace ClassicUO.Game.Managers.Hotkeys
             MouseButton = (MouseButtonType)dto.MouseButton,
             WheelScroll = dto.WheelScroll,
             WheelUp = dto.WheelUp,
-            // Triggers were persisted as BACK/GUIDE; rewrite onto the dedicated trigger ids.
+            // Triggers were once persisted as BACK/GUIDE. Rewriting them on every load would mean
+            // Back and Guide could never be bound deliberately, so this runs only for old files.
             ControllerButtons = dto.ControllerButtons == null
                 ? null
-                : Controller.MigrateLegacyTriggerButtons(dto.ControllerButtons.Select(x => (SDL.SDL_GamepadButton)x).ToArray())
+                : MigrateButtons(dto.ControllerButtons.Select(x => (SDL.SDL_GamepadButton)x).ToArray())
         };
     }
 }
