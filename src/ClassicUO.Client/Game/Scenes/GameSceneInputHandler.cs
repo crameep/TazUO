@@ -1805,13 +1805,15 @@ namespace ClassicUO.Game.Scenes
             }
 
             // The radial owns the pad while it is held, so nothing else should act on a press.
-            if (RadialMenu != null && HotKeyRegistrar.ControllerActionPressed(
+            // Only when it actually opens, though, or a button that fails to open it would be
+            // swallowed and could never reach a macro.
+            if (RadialMenu != null
+                && HotKeyRegistrar.ControllerActionPressed(
                     HotKeyRegistrar.ControllerRadialId,
                     (SDL.SDL_GamepadButton)e.button,
-                    SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH))
+                    SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH)
+                && RadialMenu.Open())
             {
-                RadialMenu.Open();
-
                 return;
             }
 

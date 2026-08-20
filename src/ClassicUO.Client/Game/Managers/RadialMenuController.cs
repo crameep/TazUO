@@ -23,11 +23,23 @@ namespace ClassicUO.Game.Managers
 
         public bool IsOpen => _gump is { IsDisposed: false };
 
-        /// <summary>Opens the menu, or does nothing when every slot is empty.</summary>
+        /// <summary>Opens the menu, explaining itself when there is nothing to show.</summary>
         public bool Open()
         {
-            if (IsOpen || !RadialMenuManager.HasAnySlot())
+            if (IsOpen)
             {
+                return false;
+            }
+
+            // An empty ring holding the pad hostage helps nobody, but silently doing nothing is
+            // indistinguishable from an unbound button, so say where the slots are set.
+            if (!RadialMenuManager.HasAnySlot())
+            {
+                GameActions.Print(
+                    _world,
+                    "Radial menu has no slots assigned. Set them in Options > Movement > Controller.",
+                    Constants.HUE_WARN);
+
                 return false;
             }
 
