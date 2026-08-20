@@ -27,6 +27,8 @@ namespace ClassicUO.Game.Scenes
         /// <summary>Controller target selection for this scene.</summary>
         internal ControllerTargetManager ControllerTargets { get; private set; }
 
+        internal RadialMenuController RadialMenu { get; private set; }
+
         private bool _boatRun,
             _boatIsMoving;
         private readonly bool[] _flags = new bool[5];
@@ -116,6 +118,11 @@ namespace ClassicUO.Game.Scenes
 
             // Radial, so diagonals and cardinals are treated alike; result is rescaled to 0..1
             // across the live range, which is what the run threshold measures against.
+            if (RadialMenu is { IsOpen: true })
+            {
+                return false;
+            }
+
             Vector2 dir = ControllerAxis.ApplyRadialDeadzone(
                 gamePadState.ThumbSticks.Left,
                 profile.ControllerDeadzoneInner,
@@ -1770,10 +1777,45 @@ namespace ClassicUO.Game.Scenes
             NameOverHeadManager.RegisterKeyUp(key);
         }
 
+        internal override void OnControllerButtonUp(SDL.SDL_GamepadButtonEvent e)
+        {
+            base.OnControllerButtonUp(e);
+
+            if (RadialMenu is not { IsOpen: true })
+            {
+                return;
+            }
+
+            // Releasing the button that opened it is what runs the aimed slot.
+            if (HotKeyRegistrar.ControllerActionPressed(
+                    HotKeyRegistrar.ControllerRadialId,
+                    (SDL.SDL_GamepadButton)e.button,
+                    SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH))
+            {
+                RadialMenu.Activate();
+            }
+        }
+
         internal override void OnControllerButtonDown(SDL.SDL_GamepadButtonEvent e)
         {
             base.OnControllerButtonDown(e);
             if (!_world.InGame)
+            {
+                return;
+            }
+
+            // The radial owns the pad while it is held, so nothing else should act on a press.
+            if (RadialMenu != null && HotKeyRegistrar.ControllerActionPressed(
+                    HotKeyRegistrar.ControllerRadialId,
+                    (SDL.SDL_GamepadButton)e.button,
+                    SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH))
+            {
+                RadialMenu.Open();
+
+                return;
+            }
+
+            if (RadialMenu is { IsOpen: true })
             {
                 return;
             }

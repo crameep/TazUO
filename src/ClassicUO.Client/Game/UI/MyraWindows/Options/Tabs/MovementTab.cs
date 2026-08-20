@@ -126,6 +126,10 @@ public static class MovementTab
                     Option.Custom(
                         ControllerBindingsOption.Build,
                         search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_bindings"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_hotkeys")])
+                    ),
+                    Option.Custom(
+                        RadialMenuOption.Build,
+                        search: new SearchMetadata(TazLang.Get("mog_movementtab_controller_radial"), Keywords: [TazLang.Get("mog_kw_controller"), TazLang.Get("mog_kw_macros")])
                     )
                 ).WithSearch(new SearchMetadata(TazLang.Get("mog_movementtab_controller_label"), Tags: [TazLang.Get("mog_kw_movement")], Keywords: [TazLang.Get("mog_kw_controller")]))
             )

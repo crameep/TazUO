@@ -51,6 +51,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
         public const string ControllerUiDownId = "controller.ui.down";
         public const string ControllerUiLeftId = "controller.ui.left";
         public const string ControllerUiRightId = "controller.ui.right";
+        public const string ControllerRadialId = "controller.radial";
         public const string ControllerCategory = "Controller";
         #endregion
 
@@ -125,6 +126,8 @@ namespace ClassicUO.Game.Managers.Hotkeys
             ControllerAction(ControllerUiDownId, "Move UI focus down", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_DOWN, category);
             ControllerAction(ControllerUiLeftId, "Move UI focus left", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_LEFT, category);
             ControllerAction(ControllerUiRightId, "Move UI focus right", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_DPAD_RIGHT, category);
+
+            ControllerAction(ControllerRadialId, "Hold for radial menu", SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH, category);
 
             ReleaseDpadFromTargetFilter();
         }

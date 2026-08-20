@@ -22,6 +22,7 @@ public static class ControllerBindingsOption
     // Presentation order, most-used first. Anything registered later falls in behind these.
     private static readonly string[] _order =
     {
+        HotKeyRegistrar.ControllerRadialId,
         HotKeyRegistrar.ControllerClickLeftId,
         HotKeyRegistrar.ControllerClickRightId,
         HotKeyRegistrar.ControllerUiUpId,

@@ -108,6 +108,7 @@ namespace ClassicUO.Game.Scenes
             _world = world;
             _autoUnequipActionManager = new AutoUnequipActionManager(_world);
             ControllerTargets = new ControllerTargetManager(_world);
+            RadialMenu = new RadialMenuController(_world);
 
             SDL.SDL_SetWindowMinimumSize(Client.Game.Window.Handle, 640, 480);
 
@@ -257,6 +258,7 @@ namespace ClassicUO.Game.Scenes
             OrganizerAgent.Load();
             GraphicsReplacement.Load();
             HotKeys.Load();
+            RadialMenuManager.Load();
             HotKeyRegistrar.RegisterAll();
             LegionScripting.ScriptHotkeysManager.RegisterAll();
             SpellBarManager.Load();
@@ -989,6 +991,7 @@ namespace ClassicUO.Game.Scenes
             Profiler.ExitContext("Actions");
 
             ControllerTargets.Update();
+            RadialMenu.Update();
 
             Profiler.EnterContext("Movement");
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn && !MoveCharByController())
