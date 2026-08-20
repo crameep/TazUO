@@ -275,9 +275,7 @@ namespace ClassicUO.Input
         /// <summary>Reads the right thumbstick, deadzoned and shaped, or zero when unavailable.</summary>
         private static Vector2 ReadControllerStick()
         {
-            Profile profile = ProfileManager.CurrentProfile;
-
-            if (profile == null || !profile.ControllerEnabled)
+            if (!ControllerInput.IsEnabled())
             {
                 return Vector2.Zero;
             }
@@ -289,11 +287,15 @@ namespace ClassicUO.Input
                 return Vector2.Zero;
             }
 
+            Profile profile = ProfileManager.CurrentProfile;
+
+            // Tuning lives in the profile, which does not exist yet on the login screen, so fall
+            // back to the same values a fresh profile starts with.
             return ControllerAxis.Process(
                 gamePadState.ThumbSticks.Right,
-                profile.ControllerDeadzoneInner,
-                profile.ControllerDeadzoneOuter,
-                profile.ControllerCursorCurve
+                profile?.ControllerDeadzoneInner ?? 0.20f,
+                profile?.ControllerDeadzoneOuter ?? 0.95f,
+                profile?.ControllerCursorCurve ?? 2.0f
             );
         }
 

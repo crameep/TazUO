@@ -1,3 +1,4 @@
+using ClassicUO.Configuration;
 using ClassicUO.Game.Managers;
 
 namespace ClassicUO.Input
@@ -5,6 +6,19 @@ namespace ClassicUO.Input
     /// <summary>Shared gates for controller actions.</summary>
     internal static class ControllerInput
     {
+        /// <summary>True when controller input should be acted on at all.</summary>
+        /// <remarks>
+        /// A profile only exists once a character logs in, so requiring one left the pad completely
+        /// dead on the title and login screens. Absent a profile the pad is live; a loaded profile
+        /// is the only thing that turns it off.
+        /// </remarks>
+        public static bool IsEnabled()
+        {
+            Profile profile = ProfileManager.CurrentProfile;
+
+            return profile == null || profile.ControllerEnabled;
+        }
+
         /// <summary>True while a control is actually consuming typed input.</summary>
         /// <remarks>
         /// Not a plain null check on the focused control. The system chat box takes keyboard focus

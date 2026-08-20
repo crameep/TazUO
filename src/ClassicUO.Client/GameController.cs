@@ -1085,7 +1085,7 @@ namespace ClassicUO
                     }
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_DOWN when Scene is not null:
-                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
+                    if (!IsActive || !ControllerInput.IsEnabled())
                     {
                         break;
                     }
@@ -1111,7 +1111,7 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP when Scene is not null:
-                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
+                    if (!IsActive || !ControllerInput.IsEnabled())
                     {
                         break;
                     }
@@ -1123,7 +1123,7 @@ namespace ClassicUO
                     break;
 
                 case SDL_EventType.SDL_EVENT_GAMEPAD_AXIS_MOTION when Scene is not null:
-                    if (!IsActive || ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled)
+                    if (!IsActive || !ControllerInput.IsEnabled())
                     {
                         break;
                     }
