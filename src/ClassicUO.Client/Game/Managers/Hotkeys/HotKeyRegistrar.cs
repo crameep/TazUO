@@ -84,9 +84,11 @@ namespace ClassicUO.Game.Managers.Hotkeys
         /// Deliberately not <see cref="HotKeys.IsPressed"/>. The registry is only populated once a
         /// game scene loads, so polling it leaves the pad dead at the login screen, and it honours
         /// the global hotkey disable, which would strand a pad-only player with no way to click or
-        /// navigate. An unregistered action falls back to its default button. Matching is not exact
-        /// either: on a pad the player is often already holding something, and an exact match would
-        /// silently swallow the press.
+        /// navigate. An unregistered action falls back to its default button.
+        ///
+        /// Matching is exact, matching how macros bind controller buttons: with only a handful of
+        /// buttons available, chords are how a pad reaches enough commands, and a non-exact match
+        /// would fire this action from a chord's component button and shadow the chord.
         /// </remarks>
         public static bool ControllerActionPressed(string id, SDL.SDL_GamepadButton button, SDL.SDL_GamepadButton fallback)
         {
@@ -97,7 +99,7 @@ namespace ClassicUO.Game.Managers.Hotkeys
                 return button == fallback;
             }
 
-            return System.Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: false);
+            return System.Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: true);
         }
 
         private static void RegisterController()
