@@ -103,6 +103,38 @@ namespace ClassicUO.Game.Managers.Hotkeys
             return System.Array.IndexOf(bound, button) >= 0 && Controller.AreButtonsPressed(bound, exact: true);
         }
 
+
+        /// <summary>True when <paramref name="button"/> belongs to the action's binding.</summary>
+        /// <remarks>
+        /// For release handling only. <see cref="ControllerActionPressed"/> asks whether the buttons
+        /// are currently held, which is always false by the time a button-up is dispatched, so using
+        /// it there means the release is never recognised.
+        /// </remarks>
+        public static bool ControllerActionReleased(string id, SDL.SDL_GamepadButton button, SDL.SDL_GamepadButton fallback)
+        {
+            SDL.SDL_GamepadButton[] bound = HotKeys.Get(id)?.Binding?.ControllerButtons;
+
+            if (bound == null || bound.Length == 0)
+            {
+                return button == fallback;
+            }
+
+            return System.Array.IndexOf(bound, button) >= 0;
+        }
+
+        /// <summary>True while the action's buttons are still held, whichever arrived last.</summary>
+        public static bool ControllerActionHeld(string id, SDL.SDL_GamepadButton fallback)
+        {
+            SDL.SDL_GamepadButton[] bound = HotKeys.Get(id)?.Binding?.ControllerButtons;
+
+            if (bound == null || bound.Length == 0)
+            {
+                return Controller.IsButtonPressed(fallback);
+            }
+
+            return Controller.AreButtonsPressed(bound, exact: false);
+        }
+
         private static void RegisterController()
         {
             const string category = ControllerCategory;

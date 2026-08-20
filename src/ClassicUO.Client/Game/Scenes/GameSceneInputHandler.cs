@@ -1787,7 +1787,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             // Releasing the button that opened it is what runs the aimed slot.
-            if (HotKeyRegistrar.ControllerActionPressed(
+            if (HotKeyRegistrar.ControllerActionReleased(
                     HotKeyRegistrar.ControllerRadialId,
                     (SDL.SDL_GamepadButton)e.button,
                     SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH))

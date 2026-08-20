@@ -1,8 +1,10 @@
 using ClassicUO.Configuration;
+using ClassicUO.Game.Managers.Hotkeys;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using SDL3;
 
 namespace ClassicUO.Game.Managers
 {
@@ -122,6 +124,15 @@ namespace ClassicUO.Game.Managers
                 profile?.ControllerDeadzoneOuter ?? 0.95f);
 
             _gump.Aim(stick);
+
+            // Belt and braces: a button-up that never arrives (window focus loss, a pad
+            // reconnecting) would otherwise strand the ring on screen with the pad half-captured.
+            if (!HotKeyRegistrar.ControllerActionHeld(
+                    HotKeyRegistrar.ControllerRadialId,
+                    SDL.SDL_GamepadButton.SDL_GAMEPAD_BUTTON_NORTH))
+            {
+                Activate();
+            }
         }
     }
 }
